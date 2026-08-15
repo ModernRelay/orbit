@@ -35,7 +35,7 @@ npm install @modernrelay/orbit-react @modernrelay/orbit-core @modernrelay/orbit-
 |---|---|
 | `@modernrelay/orbit-core` | Headless core: validation, reconciliation, projection, the instance + store. Subpaths: `/engine` (the `GraphEngine` contract), `/testing` (`FakeEngine`, worker double). No React or engine imports. |
 | `@modernrelay/orbit-react` | `<Graph/>`, `GraphProvider`, 13 packaged UI components, hooks, ref API. React 18+ peer. |
-| `@modernrelay/orbit-engine-cosmos` | `CosmosEngine` — the only package that imports `@cosmos.gl/graph` (lazy-loaded at mount). |
+| `@modernrelay/orbit-engine-cosmos` | The default rendering engine: WebGL drawing and GPU force simulation, built on [cosmos.gl](https://github.com/cosmosgl/graph). Loaded lazily when the graph mounts. |
 | `@modernrelay/orbit-data` | Prepared-data adapters: rows/CSV/JSON in the root entry; Arrow and Parquet as isolated subpath entries that never reach the root bundle. |
 | `@modernrelay/orbit-omnigraph` | Omnigraph server adapter: streamed export loader, `.pg` schema tooling, search service. |
 
