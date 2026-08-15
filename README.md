@@ -14,7 +14,7 @@ Handles 100K+ node graphs. UI components included: search, tables, histograms, a
 
 ## Why orbit
 
-| Benefit | Why it matters |
+| Pillar | Why it matters |
 |---|---|
 | **Declarative end to end** | The graph is a prop — rendering, force layout, transitions, selection, and undo/redo are handled. No imperative canvas code. |
 | **Built for large graphs** | GPU rendering holds 100K+ nodes interactive; incremental filtering keeps the core's per-brush cost near 1 ms at that scale, measured on a disclosed reference machine. |
