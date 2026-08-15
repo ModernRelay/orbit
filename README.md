@@ -71,14 +71,14 @@ Packaged components — each ships as its own entry point
 
 ## Features
 
-- **Data & identity** — typed snapshots (plain objects or columnar typed arrays with transferable buffers), streaming ingest with atomic commit, batched validation diagnostics, stable id-based identity across updates.
-- **Layout & simulation** — GPU force layout (cosmos.gl) or fixed coordinates, live tunables, pause/resume, zero rAF at rest.
-- **Interaction** — node and edge picking, hover, drag, lasso, pins, context menus (right-click and long-press), full keyboard navigation with a11y announcements.
-- **Exploration** — scope/isolate, node expansion, groups and `groupBy` with collapse to super-nodes and meta-edges, folds, semantic zoom, path emphasis, search.
-- **Filtering & analytics** — crossfilter brushing with incremental O(Δ) recompute, hide/dim masks, degree metrics plus async metric columns, scales and legends.
-- **Appearance** — hot-swappable dark/light themes, node image sprites, edge arrows, animated transitions.
-- **Persistence & export** — deep-linkable view state, undo/redo, SVG / streamed JSON / PNG exports.
-- **Scale** — measured performance gates on a disclosed real-GPU protocol, telemetry snapshots, a degradation ladder with hysteresis, and off-main-thread columnar acceptance (`execution: 'auto'`).
+- **Data & identity**: typed snapshots (objects or columnar), streaming ingest, validation diagnostics, stable identity across updates.
+- **Layout & simulation**: GPU force layout or fixed coordinates, live tunables, pause/resume, zero rAF at rest.
+- **Interaction**: node/edge picking, drag, lasso, pins, context menus, full keyboard navigation with a11y.
+- **Exploration**: scope/isolate, node expansion, groups with collapse, folds, semantic zoom, path emphasis, search.
+- **Filtering & analytics**: incremental crossfilter brushing, hide/dim masks, metrics, scales and legends.
+- **Appearance**: hot-swappable dark/light themes, node image sprites, edge arrows, animated transitions.
+- **Persistence & export**: deep-linkable view state, undo/redo, SVG / streamed JSON / PNG exports.
+- **Scale**: measured performance gates, telemetry snapshots, degradation ladder, off-main-thread data acceptance.
 
 ## Hooks & imperative API
 
