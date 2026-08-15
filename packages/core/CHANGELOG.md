@@ -1,5 +1,24 @@
 # @modernrelay/orbit-core
 
+## 0.14.0
+
+### Minor Changes
+
+- First public release. The source repository is now open at
+  github.com/ModernRelay/orbit: single-history public tree, restructured
+  documentation (docs/core for consumer guides, docs/dev for the engineering
+  rules contributors are reviewed against), contributor and security policies,
+  and CI with required status checks. Package behavior is unchanged from
+  0.13.6 apart from the documentation rewording shipped in this release's
+  patch notes.
+
+### Patch Changes
+
+- e018c16: Documentation scrub: internal specification/register anchors removed from
+  all published surfaces — package READMEs, code comments, diagnostic message
+  strings, and the codegen output header (regenerated golden). No behavioral
+  changes beyond the reworded diagnostic/codegen strings.
+
 ## 0.13.6
 
 ### Patch Changes

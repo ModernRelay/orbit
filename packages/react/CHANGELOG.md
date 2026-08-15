@@ -1,5 +1,17 @@
 # @modernrelay/orbit-react
 
+## 0.14.0
+
+### Patch Changes
+
+- e018c16: Documentation scrub: internal specification/register anchors removed from
+  all published surfaces — package READMEs, code comments, diagnostic message
+  strings, and the codegen output header (regenerated golden). No behavioral
+  changes beyond the reworded diagnostic/codegen strings.
+- Updated dependencies [e018c16]
+- Updated dependencies
+  - @modernrelay/orbit-core@0.14.0
+
 ## 0.13.6
 
 ### Patch Changes
