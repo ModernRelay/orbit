@@ -39,14 +39,6 @@ npm install @modernrelay/orbit-react @modernrelay/orbit-core @modernrelay/orbit-
 | `@modernrelay/orbit-data` | Prepared-data adapters: rows/CSV/JSON in the root entry; Arrow and Parquet as isolated subpath entries that never reach the root bundle. |
 | `@modernrelay/orbit-omnigraph` | Omnigraph server adapter: streamed export loader, `.pg` schema tooling, search service. |
 
-## Adapters
-
-Graph database adapters feed orbit's snapshot and streaming-ingest lanes:
-
-- **Available**: [Omnigraph](https://www.npmjs.com/package/@modernrelay/orbit-omnigraph)
-- **In progress**: Neo4j, ArangoDB, HelixDB, Memgraph, FalkorDB, Dgraph, TigerGraph,
-  Amazon Neptune, Spanner Graph, Ladybug, TypeDB, PuppyGraph, SurrealDB
-
 ## UI components
 
 Built into `<Graph/>` itself — no extra imports:
