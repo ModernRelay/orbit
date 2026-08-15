@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="public/orbit.png" alt="orbit — a graph rendered by orbit" width="800" />
-</p>
-
 # orbit
 
 [![npm](https://img.shields.io/npm/v/%40modernrelay%2Forbit-react)](https://www.npmjs.com/package/@modernrelay/orbit-react)
@@ -11,6 +7,10 @@
 
 **A typed, declarative React library for rendering and exploring graphs with WebGL.**
 Handles 100K+ node graphs. UI components included: search, tables, histograms, and more.
+
+<p align="center">
+  <img src="public/orbit.png" alt="orbit — a graph rendered by orbit" width="800" />
+</p>
 
 ## Why orbit
 
