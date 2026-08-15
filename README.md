@@ -1,28 +1,32 @@
+<p align="center">
+  <img src="public/orbit.png" alt="orbit — a graph rendered by orbit" width="800" />
+</p>
+
 # orbit
 
-**A typed, declarative React library for rendering and exploring graphs with WebGL.**
+[![npm](https://img.shields.io/npm/v/%40modernrelay%2Forbit-react)](https://www.npmjs.com/package/@modernrelay/orbit-react)
+[![npm downloads](https://img.shields.io/npm/dm/%40modernrelay%2Forbit-react)](https://www.npmjs.com/package/@modernrelay/orbit-react)
+[![CI](https://github.com/ModernRelay/orbit/actions/workflows/ci.yml/badge.svg)](https://github.com/ModernRelay/orbit/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/%40modernrelay%2Forbit-react)](./LICENSE)
 
+**A typed, declarative React library for rendering and exploring graphs with WebGL.**
 Handles 100K+ node graphs. UI components included: search, tables, histograms, and more.
 
-Why orbit:
+## Why orbit
 
-- **Declarative end to end** — the graph is a prop. Rendering, force layout, transitions,
-  selection, and undo/redo are handled; there is no imperative canvas code to write.
-- **Built for large graphs** — GPU rendering holds 100K+ nodes interactive, and
-  incremental O(Δ) filtering keeps the core's per-brush cost near 1 ms at that scale,
-  measured on a disclosed reference machine with a real-GPU-only protocol.
-- **Analyst UI included** — 13 packaged components: search, minimap, tables, histograms,
-  timelines, legends, inspectors, and more. Headless-styleable, one import each.
-- **Testable without WebGL** — a headless core and an engine seam with a `FakeEngine`
-  double; your integration tests run in plain jsdom.
-- **Typed and honest at the boundaries** — malformed data degrades with batched
-  diagnostics, never throws mid-render.
+| | |
+|---|---|
+| **Declarative end to end** | The graph is a prop — rendering, force layout, transitions, selection, and undo/redo are handled. No imperative canvas code. |
+| **Built for large graphs** | GPU rendering holds 100K+ nodes interactive; incremental filtering keeps the core's per-brush cost near 1 ms at that scale, measured on a disclosed reference machine. |
+| **Analyst UI included** | 13 packaged components — search, minimap, tables, histograms, timelines, legends, inspectors, and more. Headless-styleable, one import each. |
+| **Testable without WebGL** | A headless core and an engine seam with a `FakeEngine` double; integration tests run in plain jsdom. |
+| **Typed, honest boundaries** | Malformed data degrades with batched diagnostics — never throws mid-render. |
 
 ```bash
 npm install @modernrelay/orbit-react @modernrelay/orbit-core @modernrelay/orbit-engine-cosmos
 ```
 
-**Status:** `0.13.6` on npm — all five packages release in lockstep. See
+**Status:** `0.14.0` on npm — all five packages release in lockstep. See
 [Releases](https://github.com/ModernRelay/orbit/releases) for changelogs.
 
 ## Packages
@@ -67,45 +71,14 @@ Packaged components — each ships as its own entry point
 
 ## Features
 
-- **Data & identity**
-  - Typed snapshots in two lanes: plain objects, or columnar (typed arrays,
-    dictionary-encoded strings, transferable buffers with `borrowed`/`transfer` ownership)
-  - Validation with batched diagnostics — malformed rows drop loudly, never throw
-  - Streaming ingest sessions (replace and overlay) with atomic commit
-  - Stable id-based identity: positions, selection, and history survive data updates
-- **Layout & simulation**
-  - GPU force layout (cosmos.gl) and fixed coordinates, switchable at runtime
-  - Live simulation tunables, pause/resume, reheat on structural change
-  - Quiescence: zero rAF at rest, measured and gated
-- **Interaction**
-  - Node and native edge picking (click, hover, drag), lasso, pins
-  - Context menus on desktop right-click and touch long-press
-  - Full keyboard navigation with accessible labels and live announcements
-- **Exploration**
-  - Hard scope / isolate selection, service-backed node expansion
-  - Manual groups and derived `groupBy` with collapse to super-nodes and meta-edges
-  - Node folds (containment), parallel-edge bundling, semantic zoom
-  - Path emphasis between endpoints, search across ids and configured attrs
-- **Filtering & analytics**
-  - Crossfilter dimensions with O(Δ) brushing — pointer-speed filtering at 100K+ nodes
-  - Hide or dim soft masks, predicate/expression filters
-  - Built-in degree metrics plus async metric columns joined by revision
-  - Categorical and sequential scales with domain policies, rendered by `GraphLegend`
-- **Appearance**
-  - Dark/light themes as one token object, hot-swappable
-  - Node image sprites via a texture atlas, edge arrows, animated transitions
-- **Persistence & export**
-  - `GraphViewState` deep links: camera, selection, folds, layout, filters in one payload
-  - Undo/redo history across exploration steps
-  - Exports: SVG snapshot, JSON/NDJSON data (streamed, memory-bounded), PNG screenshot
-- **Scale**
-  - Performance gates measured on a disclosed reference profile (real GPU only,
-    n≥3 runs, variance-qualified): the S-tier first-paint gate passes; the L-tier
-    active-frame gate is a tracked open miss
-  - Telemetry: `getPerfSnapshot()` + throttled `onPerfSample` (never raw data or ids)
-  - Degradation ladder with hysteresis (label caps, deferred picking, batched histograms)
-  - Worker lane: columnar acceptance runs off the main thread (`execution: 'auto'`)
-  - Ranged buffer patches for engines that declare them
+- **Data & identity** — typed snapshots (plain objects or columnar typed arrays with transferable buffers), streaming ingest with atomic commit, batched validation diagnostics, stable id-based identity across updates.
+- **Layout & simulation** — GPU force layout (cosmos.gl) or fixed coordinates, live tunables, pause/resume, zero rAF at rest.
+- **Interaction** — node and edge picking, hover, drag, lasso, pins, context menus (right-click and long-press), full keyboard navigation with a11y announcements.
+- **Exploration** — scope/isolate, node expansion, groups and `groupBy` with collapse to super-nodes and meta-edges, folds, semantic zoom, path emphasis, search.
+- **Filtering & analytics** — crossfilter brushing with incremental O(Δ) recompute, hide/dim masks, degree metrics plus async metric columns, scales and legends.
+- **Appearance** — hot-swappable dark/light themes, node image sprites, edge arrows, animated transitions.
+- **Persistence & export** — deep-linkable view state, undo/redo, SVG / streamed JSON / PNG exports.
+- **Scale** — measured performance gates on a disclosed real-GPU protocol, telemetry snapshots, a degradation ladder with hysteresis, and off-main-thread columnar acceptance (`execution: 'auto'`).
 
 ## Hooks & imperative API
 
