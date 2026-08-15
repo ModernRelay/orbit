@@ -1,0 +1,80 @@
+// Orbit fixture schema — adapted from omnigraph's context.pg test fixture
+// (decisions, the people behind them, the evidence trail, and market signals).
+//
+// Extended so the recorded export/query fixtures cover every wire encoding in
+// the adapter's wire encodings:
+//   Date            Actor.joined_at, Signal.observed_at, Artifact.created_at
+//   Date?           Decision.decided_at
+//   DateTime        Decision.updated_at, Trace.recorded_at
+//   enum(...)       Decision.status/.urgency, Trace.kind, Signal.category, Artifact.kind
+//   F64             Signal.strength, Correlates.confidence
+//   F64?            Supports.weight (edge property)
+//   I64             Trace.word_count, Artifact.revision
+//   String?         Actor.email, Decision.body, Trace.source, Signal.source, Artifact.url
+
+// ── Nodes ────────────────────────────────────────────
+
+node Actor {
+    slug: String @key
+    name: String
+    email: String? @unique
+    joined_at: Date
+}
+
+node Decision {
+    slug: String @key
+    title: String @index
+    body: String?
+    status: enum(proposed, accepted, rejected, superseded)
+    urgency: enum(low, normal, high, critical)
+    decided_at: Date?
+    updated_at: DateTime
+}
+
+node Trace {
+    slug: String @key
+    title: String @index
+    body: String?
+    kind: enum(note, discussion, experiment, review, meeting, document)
+    recorded_at: DateTime
+    word_count: I64
+    source: String?
+}
+
+node Signal {
+    slug: String @key
+    title: String @index
+    body: String?
+    category: enum(competitor, market, regulatory, technology, customer)
+    strength: F64
+    observed_at: Date
+    source: String?
+}
+
+node Artifact {
+    slug: String @key
+    title: String @index
+    kind: enum(doc, presentation, proposal, spec, report, memo)
+    url: String?
+    created_at: Date
+    revision: I64
+}
+
+// ── Edges ────────────────────────────────────────────
+
+edge OwnedBy: Decision -> Actor @card(1..1)
+
+edge ParticipatedIn: Actor -> Decision
+
+edge RecordedBy: Trace -> Actor @card(1..1)
+
+edge Supports: Trace -> Decision {
+    weight: F64?
+}
+
+edge Triggered: Signal -> Decision
+
+edge Correlates: Signal -> Signal {
+    confidence: F64
+    @unique(src, dst)
+}

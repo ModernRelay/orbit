@@ -1,0 +1,16 @@
+# Orbit fixture cluster — the smallest valid cluster config that serves one
+# graph ("demo") from this directory. Applied by scripts/omnigraph-fixture.mjs
+# via `omnigraph cluster import` + `omnigraph cluster apply`, then served with
+# `omnigraph-server --cluster <this dir> --unauthenticated`.
+#
+# Deliberately minimal: no embedding provider, no Cedar policies, no stored
+# queries — the recorded fixtures exercise only the read surface the
+# @modernrelay/omnigraph SDK uses (healthz, schema, commits, snapshot, export).
+version: 1
+metadata:
+  name: orbit-fixture
+state:
+  backend: cluster
+graphs:
+  demo:
+    schema: demo.pg

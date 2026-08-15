@@ -1,0 +1,5 @@
+# Generated graph state — recreated from cluster.yaml + demo.pg + seed.ndjson
+# by scripts/omnigraph-fixture.mjs. Never commit; the recorded/ HTTP bodies
+# are the committed artifact.
+cluster/graphs/
+cluster/__cluster/

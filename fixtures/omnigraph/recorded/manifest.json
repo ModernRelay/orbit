@@ -1,0 +1,24 @@
+{
+  "recordedAt": "2026-08-10T12:37:23.095Z",
+  "serverVersion": "0.9.0",
+  "graphId": "demo",
+  "branch": "main",
+  "headBefore": "01KZNTTYMKET9AJ9E2N0TKN9S5",
+  "headAfter": "01KZNTTYMKET9AJ9E2N0TKN9S5",
+  "rowCounts": {
+    "edge:Correlates": 50,
+    "edge:OwnedBy": 60,
+    "edge:ParticipatedIn": 120,
+    "edge:RecordedBy": 90,
+    "edge:Supports": 110,
+    "edge:Triggered": 70,
+    "node:Actor": 30,
+    "node:Artifact": 60,
+    "node:Decision": 60,
+    "node:Signal": 60,
+    "node:Trace": 90
+  },
+  "exportLineCount": 800,
+  "edgeLinesBeforeNodeLines": true,
+  "notes": "Raw HTTP bodies recorded verbatim from omnigraph-server against the requests the @modernrelay/omnigraph SDK issues (graph-scoped paths under /graphs/demo). export.ndjson streams tables in lexicographic table-key order, so all edge:* lines precede node:* lines (verified). headBefore == headAfter: the branch was quiescent across the export, the stable case for the source revision stamp."
+}

@@ -1,0 +1,47 @@
+# Release pipe. Two-phase, human-in-the-loop:
+#
+# 1. Changesets pending on main → this workflow opens/updates ONE
+# "Version Packages" PR (bumps + aggregated changelogs + lockfile).
+# 2. MERGING that PR is the publish trigger: the same workflow then runs
+# `pnpm run release`, which refuses to publish unless build AND the
+# pack-smoke gate (publint --strict, attw, tarball-import parity,
+# tree-shake fixtures) pass in the same invocation.
+#
+# First publish requires the NPM_TOKEN repository secret (npm automation
+# token for the @modernrelay scope). Until it exists, phase 1 still works —
+# only the publish step needs it, so the Version PR can sit ready.
+#
+# `id-token: write` enables npm provenance when the registry supports it.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency: release-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Version PR or publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version
+          publish: pnpm run release
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

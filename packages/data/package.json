@@ -1,0 +1,64 @@
+{
+  "name": "@modernrelay/orbit-data",
+  "version": "0.13.6",
+  "description": "Data preparation for Orbit: streaming CSV, JSON paths, Arrow and Parquet into typed graph snapshots.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ModernRelay/orbit.git",
+    "directory": "packages/data"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./arrow": "./src/arrow.ts",
+    "./parquet": "./src/parquet.ts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./arrow": {
+        "types": "./dist/arrow.d.ts",
+        "default": "./dist/arrow.js"
+      },
+      "./parquet": {
+        "types": "./dist/parquet.d.ts",
+        "default": "./dist/parquet.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modernrelay/orbit-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "apache-arrow": ">=17.0.0",
+    "hyparquet": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "apache-arrow": {
+      "optional": true
+    },
+    "hyparquet": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "apache-arrow": "^21.2.0",
+    "hyparquet": "^1.26.2",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

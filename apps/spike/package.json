@@ -1,0 +1,20 @@
+{
+  "name": "orbit-spike",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "probe": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"spike has no unit tests; use pnpm probe\" && exit 0"
+  },
+  "dependencies": {
+    "@cosmos.gl/graph": "3.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
+  }
+}

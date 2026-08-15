@@ -1,0 +1,800 @@
+{"type":"Actor","data":{"slug":"actor-001","name":"Søren Nguyễn","email":"user1@example.test","joined_at":"2022-08-06"}}
+{"type":"Actor","data":{"slug":"actor-002","name":"田中 Ó Briain","email":"user2@example.test","joined_at":"2020-04-06"}}
+{"type":"Actor","data":{"slug":"actor-003","name":"Ada 太郎","email":null,"joined_at":"2019-09-11"}}
+{"type":"Actor","data":{"slug":"actor-004","name":"Ada Lovelace","email":"user4@example.test","joined_at":"2026-01-03"}}
+{"type":"Actor","data":{"slug":"actor-005","name":"Łukasz Þórsdóttir","email":"user5@example.test","joined_at":"2016-06-23"}}
+{"type":"Actor","data":{"slug":"actor-006","name":"Søren Dijkstra","email":"user6@example.test","joined_at":"2023-12-02"}}
+{"type":"Actor","data":{"slug":"actor-007","name":"Søren Þórsdóttir","email":"user7@example.test","joined_at":"2020-08-02"}}
+{"type":"Actor","data":{"slug":"actor-008","name":"Edsger 太郎","email":null,"joined_at":"2023-12-04"}}
+{"type":"Actor","data":{"slug":"actor-009","name":"Alan Dijkstra","email":"user9@example.test","joined_at":"2018-09-18"}}
+{"type":"Actor","data":{"slug":"actor-010","name":"Chidi al-Zahra","email":"user10@example.test","joined_at":"2019-06-27"}}
+{"type":"Actor","data":{"slug":"actor-011","name":"Alan Nguyễn","email":"user11@example.test","joined_at":"2022-10-13"}}
+{"type":"Actor","data":{"slug":"actor-012","name":"Björk 太郎","email":"user12@example.test","joined_at":"2023-09-25"}}
+{"type":"Actor","data":{"slug":"actor-013","name":"Nadia Liskov","email":"user13@example.test","joined_at":"2015-07-12"}}
+{"type":"Actor","data":{"slug":"actor-014","name":"Barbara Liskov","email":"user14@example.test","joined_at":"2016-01-07"}}
+{"type":"Actor","data":{"slug":"actor-015","name":"Søren al-Zahra","email":"user15@example.test","joined_at":"2015-11-28"}}
+{"type":"Actor","data":{"slug":"actor-016","name":"Barbara Kierkegaard","email":null,"joined_at":"2024-03-05"}}
+{"type":"Actor","data":{"slug":"actor-017","name":"Nadia Nguyễn","email":"user17@example.test","joined_at":"2018-05-23"}}
+{"type":"Actor","data":{"slug":"actor-018","name":"Meera 太郎","email":null,"joined_at":"2015-08-11"}}
+{"type":"Actor","data":{"slug":"actor-019","name":"Łukasz García","email":"user19@example.test","joined_at":"2021-07-04"}}
+{"type":"Actor","data":{"slug":"actor-020","name":"Alan Dijkstra","email":"user20@example.test","joined_at":"2018-03-17"}}
+{"type":"Actor","data":{"slug":"actor-021","name":"Zoë García","email":"user21@example.test","joined_at":"2017-12-02"}}
+{"type":"Actor","data":{"slug":"actor-022","name":"José Liskov","email":"user22@example.test","joined_at":"2015-09-04"}}
+{"type":"Actor","data":{"slug":"actor-023","name":"Zoë Turing","email":null,"joined_at":"2024-05-21"}}
+{"type":"Actor","data":{"slug":"actor-024","name":"José Müller","email":null,"joined_at":"2026-09-23"}}
+{"type":"Actor","data":{"slug":"actor-025","name":"Barbara Þórsdóttir","email":"user25@example.test","joined_at":"2025-05-02"}}
+{"type":"Actor","data":{"slug":"actor-026","name":"Fatima Ó Briain","email":null,"joined_at":"2023-01-25"}}
+{"type":"Actor","data":{"slug":"actor-027","name":"Edsger Turing","email":null,"joined_at":"2017-06-13"}}
+{"type":"Actor","data":{"slug":"actor-028","name":"Alan 太郎","email":null,"joined_at":"2026-08-13"}}
+{"type":"Actor","data":{"slug":"actor-029","name":"Приёмов Okafor","email":"user29@example.test","joined_at":"2024-11-09"}}
+{"type":"Actor","data":{"slug":"actor-030","name":"José Kierkegaard","email":"user30@example.test","joined_at":"2021-04-25"}}
+{"type":"Decision","data":{"slug":"decision-001","title":"Decide on category scales — 图例 (#1)","body":"Rationale for decision-001: revision stamps.","status":"rejected","urgency":"high","decided_at":null,"updated_at":"2022-09-05T22:49:57.244Z"}}
+{"type":"Decision","data":{"slug":"decision-002","title":"Decide on wire encodings (#2)","body":"Rationale for decision-002: legend domains.","status":"rejected","urgency":"high","decided_at":"2024-08-07","updated_at":"2022-12-10T19:55:02.134Z"}}
+{"type":"Decision","data":{"slug":"decision-003","title":"Decide on edge identity (#3)","body":"Rationale for decision-003: export streaming.","status":"rejected","urgency":"critical","decided_at":"2023-05-25","updated_at":"2015-09-21T08:10:52.595Z"}}
+{"type":"Decision","data":{"slug":"decision-004","title":"Decide on crème-fraîche caching (#4)","body":null,"status":"accepted","urgency":"normal","decided_at":null,"updated_at":"2018-03-20T04:05:24.150Z"}}
+{"type":"Decision","data":{"slug":"decision-005","title":"Decide on legend domains (#5)","body":"Rationale for decision-005: schema drift.","status":"superseded","urgency":"low","decided_at":"2015-03-23","updated_at":"2016-11-20T19:08:38.418Z"}}
+{"type":"Decision","data":{"slug":"decision-006","title":"Decide on revision stamps (#6)","body":"Rationale for decision-006: search admission.","status":"accepted","urgency":"normal","decided_at":"2023-09-12","updated_at":"2019-11-24T02:20:11.599Z"}}
+{"type":"Decision","data":{"slug":"decision-007","title":"Decide on ingestion backpressure (#7)","body":"Rationale for decision-007: typed attrs.","status":"accepted","urgency":"high","decided_at":"2018-03-01","updated_at":"2016-07-17T16:01:30.413Z"}}
+{"type":"Decision","data":{"slug":"decision-008","title":"Decide on legend domains (#8)","body":"Rationale for decision-008: typed attrs.","status":"accepted","urgency":"critical","decided_at":"2019-08-20","updated_at":"2019-02-26T06:00:58.067Z"}}
+{"type":"Decision","data":{"slug":"decision-009","title":"Decide on edge identity (#9)","body":"Rationale for decision-009: Ω-bounds.","status":"proposed","urgency":"high","decided_at":"2021-04-14","updated_at":"2015-03-14T02:00:30.502Z"}}
+{"type":"Decision","data":{"slug":"decision-010","title":"Decide on naïve dedupe (#10)","body":"Rationale for decision-010: wire encodings.","status":"superseded","urgency":"normal","decided_at":"2018-05-04","updated_at":"2024-03-05T17:41:54.385Z"}}
+{"type":"Decision","data":{"slug":"decision-011","title":"Decide on graph overlays (#11)","body":null,"status":"accepted","urgency":"critical","decided_at":"2015-10-04","updated_at":"2020-03-24T00:14:34.948Z"}}
+{"type":"Decision","data":{"slug":"decision-012","title":"Decide on search admission (#12)","body":"Rationale for decision-012: category scales — 图例.","status":"rejected","urgency":"critical","decided_at":"2024-09-07","updated_at":"2016-06-13T10:32:23.204Z"}}
+{"type":"Decision","data":{"slug":"decision-013","title":"Adopt <script>alert(\"orbit-xss\")</script> immediately","body":"Rationale for decision-013: Ω-bounds.","status":"rejected","urgency":"critical","decided_at":"2018-08-23","updated_at":"2026-02-28T03:04:27.939Z"}}
+{"type":"Decision","data":{"slug":"decision-014","title":"Decide on revision stamps (#14)","body":null,"status":"proposed","urgency":"normal","decided_at":"2015-08-04","updated_at":"2026-02-25T07:20:31.315Z"}}
+{"type":"Decision","data":{"slug":"decision-015","title":"Decide on search admission (#15)","body":"Rationale for decision-015: Ω-bounds.","status":"accepted","urgency":"normal","decided_at":"2019-12-09","updated_at":"2018-08-06T05:23:19.303Z"}}
+{"type":"Decision","data":{"slug":"decision-016","title":"Decide on export streaming (#16)","body":null,"status":"proposed","urgency":"low","decided_at":null,"updated_at":"2020-03-12T02:22:05.360Z"}}
+{"type":"Decision","data":{"slug":"decision-017","title":"Decide on graph overlays (#17)","body":"Rationale for decision-017: search admission.","status":"proposed","urgency":"low","decided_at":"2016-11-02","updated_at":"2016-04-07T14:45:57.405Z"}}
+{"type":"Decision","data":{"slug":"decision-018","title":"Decide on search admission (#18)","body":null,"status":"proposed","urgency":"low","decided_at":null,"updated_at":"2015-05-19T20:43:05.851Z"}}
+{"type":"Decision","data":{"slug":"decision-019","title":"Decide on export streaming (#19)","body":null,"status":"rejected","urgency":"normal","decided_at":null,"updated_at":"2016-10-27T15:05:59.250Z"}}
+{"type":"Decision","data":{"slug":"decision-020","title":"Decide on edge identity (#20)","body":"Rationale for decision-020: typed attrs.","status":"rejected","urgency":"high","decided_at":"2015-02-09","updated_at":"2018-04-20T02:01:03.329Z"}}
+{"type":"Decision","data":{"slug":"decision-021","title":"Decide on crème-fraîche caching (#21)","body":"Rationale for decision-021: Ω-bounds.","status":"accepted","urgency":"high","decided_at":"2018-08-01","updated_at":"2016-01-25T18:21:45.762Z"}}
+{"type":"Decision","data":{"slug":"decision-022","title":"Decide on naïve dedupe (#22)","body":null,"status":"superseded","urgency":"normal","decided_at":null,"updated_at":"2017-07-17T00:41:34.061Z"}}
+{"type":"Decision","data":{"slug":"decision-023","title":"Decide on category scales — 图例 (#23)","body":"Rationale for decision-023: wire encodings.","status":"rejected","urgency":"low","decided_at":"2023-12-02","updated_at":"2016-08-18T21:09:57.371Z"}}
+{"type":"Decision","data":{"slug":"decision-024","title":"Decide on Ω-bounds (#24)","body":"Rationale for decision-024: branch quiescence.","status":"accepted","urgency":"normal","decided_at":"2025-07-25","updated_at":"2019-03-17T04:49:00.538Z"}}
+{"type":"Decision","data":{"slug":"decision-025","title":"Decide on graph overlays (#25)","body":null,"status":"superseded","urgency":"low","decided_at":"2021-03-10","updated_at":"2025-08-01T19:54:43.323Z"}}
+{"type":"Decision","data":{"slug":"decision-026","title":"Decide on graph overlays (#26)","body":"Rationale for decision-026: branch quiescence.","status":"superseded","urgency":"low","decided_at":"2023-11-19","updated_at":"2025-12-10T15:42:32.276Z"}}
+{"type":"Decision","data":{"slug":"decision-027","title":"Quote \"everything\" & <b>escape</b> \\ backslash — ok?","body":null,"status":"superseded","urgency":"normal","decided_at":"2023-10-25","updated_at":"2020-02-21T20:41:54.662Z"}}
+{"type":"Decision","data":{"slug":"decision-028","title":"Decide on crème-fraîche caching (#28)","body":null,"status":"superseded","urgency":"critical","decided_at":"2018-08-19","updated_at":"2019-05-11T18:32:01.665Z"}}
+{"type":"Decision","data":{"slug":"decision-029","title":"Decide on category scales — 图例 (#29)","body":"Rationale for decision-029: legend domains.","status":"rejected","urgency":"normal","decided_at":null,"updated_at":"2020-06-17T10:14:43.067Z"}}
+{"type":"Decision","data":{"slug":"decision-030","title":"Decide on edge identity (#30)","body":"Rationale for decision-030: search admission.","status":"proposed","urgency":"high","decided_at":"2017-11-21","updated_at":"2023-10-28T04:00:47.839Z"}}
+{"type":"Decision","data":{"slug":"decision-031","title":"Decide on schema drift (#31)","body":"Rationale for decision-031: ingestion backpressure.","status":"proposed","urgency":"critical","decided_at":"2025-08-23","updated_at":"2019-08-28T11:47:59.280Z"}}
+{"type":"Decision","data":{"slug":"decision-032","title":"Decide on export streaming (#32)","body":null,"status":"accepted","urgency":"critical","decided_at":"2022-11-08","updated_at":"2020-10-12T06:50:28.464Z"}}
+{"type":"Decision","data":{"slug":"decision-033","title":"Decide on category scales — 图例 (#33)","body":"Rationale for decision-033: search admission.","status":"rejected","urgency":"high","decided_at":"2016-02-13","updated_at":"2019-03-09T14:39:05.894Z"}}
+{"type":"Decision","data":{"slug":"decision-034","title":"Decide on category scales — 图例 (#34)","body":"Rationale for decision-034: edge identity.","status":"rejected","urgency":"normal","decided_at":null,"updated_at":"2019-05-24T10:21:21.069Z"}}
+{"type":"Decision","data":{"slug":"decision-035","title":"Decide on category scales — 图例 (#35)","body":"Rationale for decision-035: search admission.","status":"accepted","urgency":"critical","decided_at":null,"updated_at":"2023-03-23T14:53:20.724Z"}}
+{"type":"Decision","data":{"slug":"decision-036","title":"Decide on schema drift (#36)","body":"Rationale for decision-036: ingestion backpressure.","status":"accepted","urgency":"normal","decided_at":"2017-09-21","updated_at":"2023-03-16T14:53:32.910Z"}}
+{"type":"Decision","data":{"slug":"decision-037","title":"Decide on category scales — 图例 (#37)","body":"Rationale for decision-037: Ω-bounds.","status":"accepted","urgency":"normal","decided_at":"2020-07-28","updated_at":"2023-11-09T17:45:37.639Z"}}
+{"type":"Decision","data":{"slug":"decision-038","title":"Decide on Ω-bounds (#38)","body":null,"status":"rejected","urgency":"high","decided_at":"2020-02-11","updated_at":"2023-02-23T01:50:25.095Z"}}
+{"type":"Decision","data":{"slug":"decision-039","title":"Decide on graph overlays (#39)","body":"Rationale for decision-039: crème-fraîche caching.","status":"rejected","urgency":"normal","decided_at":"2022-07-20","updated_at":"2015-10-23T17:30:47.080Z"}}
+{"type":"Decision","data":{"slug":"decision-040","title":"Decide on crème-fraîche caching (#40)","body":"Rationale for decision-040: edge identity.","status":"proposed","urgency":"normal","decided_at":"2021-04-27","updated_at":"2021-09-06T04:13:23.613Z"}}
+{"type":"Decision","data":{"slug":"decision-041","title":"Decide on crème-fraîche caching (#41)","body":"Rationale for decision-041: naïve dedupe.","status":"proposed","urgency":"normal","decided_at":"2016-06-27","updated_at":"2016-12-01T09:57:40.555Z"}}
+{"type":"Decision","data":{"slug":"decision-042","title":"Decide on naïve dedupe (#42)","body":null,"status":"rejected","urgency":"high","decided_at":null,"updated_at":"2015-10-26T13:41:13.814Z"}}
+{"type":"Decision","data":{"slug":"decision-043","title":"Decide on naïve dedupe (#43)","body":"Rationale for decision-043: export streaming.","status":"rejected","urgency":"critical","decided_at":"2025-09-19","updated_at":"2024-06-02T19:42:58.092Z"}}
+{"type":"Decision","data":{"slug":"decision-044","title":"Decide on crème-fraîche caching (#44)","body":null,"status":"accepted","urgency":"normal","decided_at":null,"updated_at":"2026-09-21T19:41:20.646Z"}}
+{"type":"Decision","data":{"slug":"decision-045","title":"Decide on crème-fraîche caching (#45)","body":null,"status":"superseded","urgency":"low","decided_at":"2017-06-07","updated_at":"2016-12-19T13:21:26.420Z"}}
+{"type":"Decision","data":{"slug":"decision-046","title":"Decide on columnar snapshots (#46)","body":"Rationale for decision-046: branch quiescence.","status":"proposed","urgency":"normal","decided_at":"2019-09-24","updated_at":"2023-04-15T16:45:07.167Z"}}
+{"type":"Decision","data":{"slug":"decision-047","title":"Decide on edge identity (#47)","body":"Rationale for decision-047: ingestion backpressure.","status":"rejected","urgency":"low","decided_at":null,"updated_at":"2017-07-19T14:01:38.194Z"}}
+{"type":"Decision","data":{"slug":"decision-048","title":"Decide on schema drift (#48)","body":"Rationale for decision-048: wire encodings.","status":"superseded","urgency":"normal","decided_at":"2015-07-13","updated_at":"2015-03-18T20:48:25.437Z"}}
+{"type":"Decision","data":{"slug":"decision-049","title":"Decide on branch quiescence (#49)","body":"Rationale for decision-049: branch quiescence.","status":"superseded","urgency":"critical","decided_at":null,"updated_at":"2024-12-11T03:45:46.020Z"}}
+{"type":"Decision","data":{"slug":"decision-050","title":"Decide on category scales — 图例 (#50)","body":"Rationale for decision-050: schema drift.","status":"proposed","urgency":"normal","decided_at":"2023-08-05","updated_at":"2021-12-21T19:17:47.105Z"}}
+{"type":"Decision","data":{"slug":"decision-051","title":"Decide on columnar snapshots (#51)","body":"Rationale for decision-051: branch quiescence.","status":"superseded","urgency":"normal","decided_at":null,"updated_at":"2016-01-18T16:33:23.495Z"}}
+{"type":"Decision","data":{"slug":"decision-052","title":"Decide on columnar snapshots (#52)","body":null,"status":"superseded","urgency":"normal","decided_at":"2025-07-19","updated_at":"2024-12-01T12:37:05.070Z"}}
+{"type":"Decision","data":{"slug":"decision-053","title":"Decide on graph overlays (#53)","body":"Rationale for decision-053: typed attrs.","status":"superseded","urgency":"high","decided_at":null,"updated_at":"2020-09-23T21:56:41.872Z"}}
+{"type":"Decision","data":{"slug":"decision-054","title":"Decide on naïve dedupe (#54)","body":"Rationale for decision-054: ingestion backpressure.","status":"superseded","urgency":"normal","decided_at":"2019-05-13","updated_at":"2021-08-12T01:36:09.559Z"}}
+{"type":"Decision","data":{"slug":"decision-055","title":"Decide on edge identity (#55)","body":null,"status":"proposed","urgency":"normal","decided_at":"2024-08-19","updated_at":"2021-09-07T10:11:52.391Z"}}
+{"type":"Decision","data":{"slug":"decision-056","title":"Decide on graph overlays (#56)","body":"Rationale for decision-056: export streaming.","status":"rejected","urgency":"high","decided_at":"2017-09-14","updated_at":"2023-02-09T20:56:49.218Z"}}
+{"type":"Decision","data":{"slug":"decision-057","title":"Decide on category scales — 图例 (#57)","body":null,"status":"proposed","urgency":"low","decided_at":null,"updated_at":"2021-10-12T09:04:28.595Z"}}
+{"type":"Decision","data":{"slug":"decision-058","title":"Decide on crème-fraîche caching (#58)","body":null,"status":"superseded","urgency":"critical","decided_at":"2021-04-24","updated_at":"2020-05-14T16:12:26.280Z"}}
+{"type":"Decision","data":{"slug":"decision-059","title":"Decide on search admission (#59)","body":null,"status":"superseded","urgency":"critical","decided_at":"2022-04-22","updated_at":"2017-03-08T21:02:51.199Z"}}
+{"type":"Decision","data":{"slug":"decision-060","title":"Decide on export streaming (#60)","body":"Rationale for decision-060: legend domains.","status":"proposed","urgency":"normal","decided_at":"2021-09-28","updated_at":"2025-06-07T14:56:12.558Z"}}
+{"type":"Trace","data":{"slug":"trace-001","title":"Trace 1: branch quiescence","body":"Observed category scales — 图例 during document.","kind":"document","recorded_at":"2017-05-04T20:30:31.346Z","word_count":19112,"source":null}}
+{"type":"Trace","data":{"slug":"trace-002","title":"Trace 2: category scales — 图例","body":"Observed wire encodings during note.","kind":"discussion","recorded_at":"2016-12-04T22:45:45.084Z","word_count":1386,"source":"https://example.test/traces/trace-002"}}
+{"type":"Trace","data":{"slug":"trace-003","title":"Trace 3: edge identity","body":null,"kind":"note","recorded_at":"2019-12-14T08:06:01.236Z","word_count":8577,"source":"https://example.test/traces/trace-003"}}
+{"type":"Trace","data":{"slug":"trace-004","title":"Trace 4: edge identity","body":null,"kind":"meeting","recorded_at":"2020-05-13T12:53:00.278Z","word_count":16947,"source":"https://example.test/traces/trace-004"}}
+{"type":"Trace","data":{"slug":"trace-005","title":"Trace 5: columnar snapshots","body":null,"kind":"note","recorded_at":"2023-04-09T11:48:40.184Z","word_count":625,"source":null}}
+{"type":"Trace","data":{"slug":"trace-006","title":"Trace 6: wire encodings","body":"Observed category scales — 图例 during experiment.","kind":"note","recorded_at":"2025-07-08T18:58:58.684Z","word_count":13155,"source":null}}
+{"type":"Trace","data":{"slug":"trace-007","title":"Trace 7: columnar snapshots","body":"Observed ingestion backpressure during note.","kind":"discussion","recorded_at":"2015-09-22T10:09:00.747Z","word_count":3943,"source":null}}
+{"type":"Trace","data":{"slug":"trace-008","title":"Trace 8: branch quiescence","body":null,"kind":"note","recorded_at":"2023-09-24T03:57:49.061Z","word_count":3981,"source":"https://example.test/traces/trace-008"}}
+{"type":"Trace","data":{"slug":"trace-009","title":"Trace 9: crème-fraîche caching","body":"Observed graph overlays during discussion.","kind":"document","recorded_at":"2021-05-25T05:17:11.489Z","word_count":18887,"source":"https://example.test/traces/trace-009"}}
+{"type":"Trace","data":{"slug":"trace-010","title":"Trace 10: graph overlays","body":"Observed branch quiescence during meeting.","kind":"review","recorded_at":"2026-01-03T13:12:38.408Z","word_count":13887,"source":"https://example.test/traces/trace-010"}}
+{"type":"Trace","data":{"slug":"trace-011","title":"Trace 11: category scales — 图例","body":"Observed search admission during review.","kind":"discussion","recorded_at":"2017-02-20T18:23:27.905Z","word_count":18645,"source":"https://example.test/traces/trace-011"}}
+{"type":"Trace","data":{"slug":"trace-012","title":"Trace 12: branch quiescence","body":"Observed crème-fraîche caching during discussion.","kind":"note","recorded_at":"2023-10-12T12:41:09.651Z","word_count":9887,"source":null}}
+{"type":"Trace","data":{"slug":"trace-013","title":"Trace 13: ingestion backpressure","body":null,"kind":"document","recorded_at":"2025-06-20T20:19:18.324Z","word_count":17994,"source":null}}
+{"type":"Trace","data":{"slug":"trace-014","title":"Trace 14: edge identity","body":null,"kind":"review","recorded_at":"2024-10-02T10:10:50.164Z","word_count":6831,"source":null}}
+{"type":"Trace","data":{"slug":"trace-015","title":"Trace 15: export streaming","body":"Observed naïve dedupe during experiment.","kind":"experiment","recorded_at":"2019-12-17T16:33:14.831Z","word_count":17082,"source":null}}
+{"type":"Trace","data":{"slug":"trace-016","title":"Trace 16: crème-fraîche caching","body":"Observed branch quiescence during discussion.","kind":"discussion","recorded_at":"2023-03-07T19:46:01.263Z","word_count":16761,"source":null}}
+{"type":"Trace","data":{"slug":"trace-017","title":"Trace 17: wire encodings","body":"Observed wire encodings during discussion.","kind":"review","recorded_at":"2018-05-18T09:21:45.075Z","word_count":10543,"source":"https://example.test/traces/trace-017"}}
+{"type":"Trace","data":{"slug":"trace-018","title":"Trace 18: legend domains","body":"Observed revision stamps during experiment.","kind":"experiment","recorded_at":"2025-05-09T12:01:10.805Z","word_count":5601,"source":"https://example.test/traces/trace-018"}}
+{"type":"Trace","data":{"slug":"trace-019","title":"Trace 19: columnar snapshots","body":"Observed ingestion backpressure during discussion.","kind":"experiment","recorded_at":"2016-02-12T12:15:27.052Z","word_count":11238,"source":null}}
+{"type":"Trace","data":{"slug":"trace-020","title":"Trace 20: typed attrs","body":null,"kind":"document","recorded_at":"2022-03-13T19:44:37.765Z","word_count":9694,"source":"https://example.test/traces/trace-020"}}
+{"type":"Trace","data":{"slug":"trace-021","title":"Trace 21: ingestion backpressure","body":null,"kind":"experiment","recorded_at":"2017-11-19T12:07:49.068Z","word_count":13171,"source":"https://example.test/traces/trace-021"}}
+{"type":"Trace","data":{"slug":"trace-022","title":"Trace 22: crème-fraîche caching","body":null,"kind":"document","recorded_at":"2023-11-26T10:45:30.538Z","word_count":14143,"source":"https://example.test/traces/trace-022"}}
+{"type":"Trace","data":{"slug":"trace-023","title":"Trace 23: edge identity","body":"Observed category scales — 图例 during meeting.","kind":"document","recorded_at":"2019-09-15T10:37:12.750Z","word_count":15242,"source":null}}
+{"type":"Trace","data":{"slug":"trace-024","title":"Trace 24: revision stamps","body":"Observed branch quiescence during note.","kind":"discussion","recorded_at":"2016-01-15T00:28:08.986Z","word_count":4558,"source":null}}
+{"type":"Trace","data":{"slug":"trace-025","title":"Trace 25: export streaming","body":null,"kind":"experiment","recorded_at":"2022-10-09T19:46:08.245Z","word_count":7096,"source":"https://example.test/traces/trace-025"}}
+{"type":"Trace","data":{"slug":"trace-026","title":"Trace 26: Ω-bounds","body":"Observed crème-fraîche caching during note.","kind":"experiment","recorded_at":"2024-11-05T22:22:51.155Z","word_count":375,"source":null}}
+{"type":"Trace","data":{"slug":"trace-027","title":"Trace 27: typed attrs","body":"Observed search admission during meeting.","kind":"review","recorded_at":"2018-12-23T23:06:48.792Z","word_count":6553,"source":null}}
+{"type":"Trace","data":{"slug":"trace-028","title":"Trace 28: category scales — 图例","body":"Observed search admission during experiment.","kind":"note","recorded_at":"2018-04-21T13:38:44.370Z","word_count":6099,"source":"https://example.test/traces/trace-028"}}
+{"type":"Trace","data":{"slug":"trace-029","title":"Trace 29: crème-fraîche caching","body":null,"kind":"experiment","recorded_at":"2026-04-04T11:34:05.075Z","word_count":3501,"source":null}}
+{"type":"Trace","data":{"slug":"trace-030","title":"Trace 30: category scales — 图例","body":"Observed columnar snapshots during document.","kind":"discussion","recorded_at":"2015-08-03T17:39:03.684Z","word_count":18145,"source":null}}
+{"type":"Trace","data":{"slug":"trace-031","title":"Trace 31: graph overlays","body":"Observed Ω-bounds during meeting.","kind":"note","recorded_at":"2025-09-23T01:13:09.179Z","word_count":12181,"source":"https://example.test/traces/trace-031"}}
+{"type":"Trace","data":{"slug":"trace-032","title":"Trace 32: Ω-bounds","body":null,"kind":"review","recorded_at":"2025-01-12T23:02:26.572Z","word_count":9880,"source":"https://example.test/traces/trace-032"}}
+{"type":"Trace","data":{"slug":"trace-033","title":"Trace 33: Ω-bounds","body":null,"kind":"note","recorded_at":"2024-05-12T12:34:52.105Z","word_count":12913,"source":null}}
+{"type":"Trace","data":{"slug":"trace-034","title":"Trace 34: wire encodings","body":null,"kind":"review","recorded_at":"2018-01-02T14:13:10.417Z","word_count":12939,"source":null}}
+{"type":"Trace","data":{"slug":"trace-035","title":"Trace 35: category scales — 图例","body":null,"kind":"meeting","recorded_at":"2023-06-15T06:17:45.464Z","word_count":13149,"source":null}}
+{"type":"Trace","data":{"slug":"trace-036","title":"Trace 36: branch quiescence","body":null,"kind":"review","recorded_at":"2019-07-14T12:26:13.217Z","word_count":13958,"source":"https://example.test/traces/trace-036"}}
+{"type":"Trace","data":{"slug":"trace-037","title":"Trace 37: naïve dedupe","body":null,"kind":"meeting","recorded_at":"2016-04-09T00:10:58.894Z","word_count":16142,"source":null}}
+{"type":"Trace","data":{"slug":"trace-038","title":"Trace 38: edge identity","body":"Observed crème-fraîche caching during experiment.","kind":"meeting","recorded_at":"2023-01-26T19:48:19.455Z","word_count":11214,"source":"https://example.test/traces/trace-038"}}
+{"type":"Trace","data":{"slug":"trace-039","title":"Trace 39: export streaming","body":"Observed Ω-bounds during discussion.","kind":"review","recorded_at":"2016-01-11T03:54:54.063Z","word_count":15373,"source":null}}
+{"type":"Trace","data":{"slug":"trace-040","title":"Trace 40: ingestion backpressure","body":"Observed schema drift during document.","kind":"document","recorded_at":"2018-11-13T19:03:32.839Z","word_count":1358,"source":"https://example.test/traces/trace-040"}}
+{"type":"Trace","data":{"slug":"trace-041","title":"Trace 41: edge identity","body":null,"kind":"meeting","recorded_at":"2023-10-17T09:32:32.548Z","word_count":6879,"source":"https://example.test/traces/trace-041"}}
+{"type":"Trace","data":{"slug":"trace-042","title":"Trace 42: wire encodings","body":null,"kind":"meeting","recorded_at":"2015-02-11T13:34:57.172Z","word_count":9007199254740991,"source":null}}
+{"type":"Trace","data":{"slug":"trace-043","title":"Trace 43: category scales — 图例","body":null,"kind":"note","recorded_at":"2026-11-18T17:56:41.300Z","word_count":8749,"source":"https://example.test/traces/trace-043"}}
+{"type":"Trace","data":{"slug":"trace-044","title":"Trace 44: graph overlays","body":null,"kind":"note","recorded_at":"2016-05-21T16:07:22.978Z","word_count":2233,"source":"https://example.test/traces/trace-044"}}
+{"type":"Trace","data":{"slug":"trace-045","title":"Trace 45: Ω-bounds","body":"Observed legend domains during meeting.","kind":"experiment","recorded_at":"2017-12-21T21:25:38.349Z","word_count":3016,"source":"https://example.test/traces/trace-045"}}
+{"type":"Trace","data":{"slug":"trace-046","title":"Trace 46: columnar snapshots","body":null,"kind":"discussion","recorded_at":"2017-07-09T05:17:41.694Z","word_count":1531,"source":"https://example.test/traces/trace-046"}}
+{"type":"Trace","data":{"slug":"trace-047","title":"Trace 47: wire encodings","body":null,"kind":"experiment","recorded_at":"2021-07-14T01:17:02.509Z","word_count":8090,"source":"https://example.test/traces/trace-047"}}
+{"type":"Trace","data":{"slug":"trace-048","title":"Trace 48: naïve dedupe","body":null,"kind":"review","recorded_at":"2021-10-20T20:47:12.147Z","word_count":2925,"source":null}}
+{"type":"Trace","data":{"slug":"trace-049","title":"Trace 49: columnar snapshots","body":"Observed ingestion backpressure during meeting.","kind":"document","recorded_at":"2019-03-16T05:46:38.686Z","word_count":12372,"source":"https://example.test/traces/trace-049"}}
+{"type":"Trace","data":{"slug":"trace-050","title":"Trace 50: category scales — 图例","body":"Observed wire encodings during meeting.","kind":"review","recorded_at":"2024-09-12T15:40:45.302Z","word_count":488,"source":null}}
+{"type":"Trace","data":{"slug":"trace-051","title":"Trace 51: legend domains","body":null,"kind":"document","recorded_at":"2017-09-05T18:56:52.740Z","word_count":7809,"source":"https://example.test/traces/trace-051"}}
+{"type":"Trace","data":{"slug":"trace-052","title":"Trace 52: columnar snapshots","body":"Observed branch quiescence during note.","kind":"review","recorded_at":"2024-02-25T10:02:18.978Z","word_count":9732,"source":null}}
+{"type":"Trace","data":{"slug":"trace-053","title":"Trace 53: crème-fraîche caching","body":null,"kind":"note","recorded_at":"2021-02-02T19:59:45.936Z","word_count":18833,"source":null}}
+{"type":"Trace","data":{"slug":"trace-054","title":"Trace 54: category scales — 图例","body":null,"kind":"review","recorded_at":"2024-08-13T09:46:15.897Z","word_count":18330,"source":null}}
+{"type":"Trace","data":{"slug":"trace-055","title":"Trace 55: wire encodings","body":"Observed typed attrs during meeting.","kind":"review","recorded_at":"2015-04-21T03:30:15.431Z","word_count":15318,"source":"https://example.test/traces/trace-055"}}
+{"type":"Trace","data":{"slug":"trace-056","title":"Trace 56: naïve dedupe","body":null,"kind":"note","recorded_at":"2017-08-13T13:55:07.508Z","word_count":14781,"source":"https://example.test/traces/trace-056"}}
+{"type":"Trace","data":{"slug":"trace-057","title":"Trace 57: schema drift","body":"Observed wire encodings during experiment.","kind":"discussion","recorded_at":"2018-11-08T16:57:00.937Z","word_count":3911,"source":"https://example.test/traces/trace-057"}}
+{"type":"Trace","data":{"slug":"trace-058","title":"Trace 58: export streaming","body":null,"kind":"meeting","recorded_at":"2019-07-21T06:52:45.371Z","word_count":9047,"source":"https://example.test/traces/trace-058"}}
+{"type":"Trace","data":{"slug":"trace-059","title":"Trace 59: branch quiescence","body":"Observed crème-fraîche caching during review.","kind":"review","recorded_at":"2023-01-06T01:37:08.531Z","word_count":7857,"source":"https://example.test/traces/trace-059"}}
+{"type":"Trace","data":{"slug":"trace-060","title":"Trace 60: category scales — 图例","body":null,"kind":"note","recorded_at":"2018-11-24T06:09:24.361Z","word_count":1843,"source":"https://example.test/traces/trace-060"}}
+{"type":"Trace","data":{"slug":"trace-061","title":"Trace 61: wire encodings","body":"Observed category scales — 图例 during discussion.","kind":"review","recorded_at":"2021-02-17T12:42:03.739Z","word_count":8109,"source":null}}
+{"type":"Trace","data":{"slug":"trace-062","title":"Trace 62: columnar snapshots","body":"Observed category scales — 图例 during experiment.","kind":"meeting","recorded_at":"2015-04-03T11:19:43.964Z","word_count":14136,"source":"https://example.test/traces/trace-062"}}
+{"type":"Trace","data":{"slug":"trace-063","title":"Trace 63: schema drift","body":null,"kind":"discussion","recorded_at":"2023-01-19T05:24:09.244Z","word_count":8649,"source":null}}
+{"type":"Trace","data":{"slug":"trace-064","title":"Trace 64: legend domains","body":"Observed Ω-bounds during review.","kind":"document","recorded_at":"2021-05-08T23:02:07.813Z","word_count":1796,"source":"https://example.test/traces/trace-064"}}
+{"type":"Trace","data":{"slug":"trace-065","title":"Trace 65: legend domains","body":null,"kind":"experiment","recorded_at":"2024-11-20T23:51:23.765Z","word_count":5868,"source":"https://example.test/traces/trace-065"}}
+{"type":"Trace","data":{"slug":"trace-066","title":"Trace 66: revision stamps","body":null,"kind":"discussion","recorded_at":"2023-06-08T07:16:11.764Z","word_count":2014,"source":null}}
+{"type":"Trace","data":{"slug":"trace-067","title":"Trace 67: search admission","body":"Observed Ω-bounds during experiment.","kind":"discussion","recorded_at":"2017-03-10T15:00:17.480Z","word_count":16993,"source":null}}
+{"type":"Trace","data":{"slug":"trace-068","title":"Trace 68: naïve dedupe","body":null,"kind":"meeting","recorded_at":"2020-06-14T15:21:04.375Z","word_count":12322,"source":"https://example.test/traces/trace-068"}}
+{"type":"Trace","data":{"slug":"trace-069","title":"Trace 69: edge identity","body":"Observed category scales — 图例 during document.","kind":"review","recorded_at":"2020-04-07T18:19:25.257Z","word_count":12656,"source":"https://example.test/traces/trace-069"}}
+{"type":"Trace","data":{"slug":"trace-070","title":"Trace 70: Ω-bounds","body":"Observed schema drift during discussion.","kind":"document","recorded_at":"2015-11-19T22:40:49.674Z","word_count":11694,"source":null}}
+{"type":"Trace","data":{"slug":"trace-071","title":"Trace 71: edge identity","body":null,"kind":"note","recorded_at":"2022-01-18T02:49:16.677Z","word_count":8903,"source":"https://example.test/traces/trace-071"}}
+{"type":"Trace","data":{"slug":"trace-072","title":"Trace 72: graph overlays","body":"Observed branch quiescence during document.","kind":"document","recorded_at":"2024-10-09T17:59:19.521Z","word_count":16253,"source":"https://example.test/traces/trace-072"}}
+{"type":"Trace","data":{"slug":"trace-073","title":"Trace 73: export streaming","body":"Observed schema drift during note.","kind":"note","recorded_at":"2019-09-28T18:02:01.621Z","word_count":1880,"source":"https://example.test/traces/trace-073"}}
+{"type":"Trace","data":{"slug":"trace-074","title":"Trace 74: edge identity","body":"Observed crème-fraîche caching during experiment.","kind":"experiment","recorded_at":"2021-03-14T21:15:18.160Z","word_count":18845,"source":"https://example.test/traces/trace-074"}}
+{"type":"Trace","data":{"slug":"trace-075","title":"Trace 75: Ω-bounds","body":"Observed legend domains during document.","kind":"experiment","recorded_at":"2015-08-02T14:52:09.343Z","word_count":17545,"source":null}}
+{"type":"Trace","data":{"slug":"trace-076","title":"Trace 76: edge identity","body":"Observed naïve dedupe during review.","kind":"meeting","recorded_at":"2020-05-04T11:03:59.408Z","word_count":16881,"source":"https://example.test/traces/trace-076"}}
+{"type":"Trace","data":{"slug":"trace-077","title":"Trace 77: columnar snapshots","body":"Observed Ω-bounds during meeting.","kind":"discussion","recorded_at":"2025-03-26T04:27:58.246Z","word_count":14789,"source":null}}
+{"type":"Trace","data":{"slug":"trace-078","title":"Trace 78: Ω-bounds","body":"Observed naïve dedupe during document.","kind":"note","recorded_at":"2021-04-17T11:03:13.358Z","word_count":420,"source":"https://example.test/traces/trace-078"}}
+{"type":"Trace","data":{"slug":"trace-079","title":"Trace 79: graph overlays","body":"Observed graph overlays during meeting.","kind":"experiment","recorded_at":"2018-01-01T20:05:16.363Z","word_count":5293,"source":null}}
+{"type":"Trace","data":{"slug":"trace-080","title":"Trace 80: naïve dedupe","body":"Observed schema drift during experiment.","kind":"note","recorded_at":"2024-11-05T19:51:53.419Z","word_count":8889,"source":null}}
+{"type":"Trace","data":{"slug":"trace-081","title":"Trace 81: edge identity","body":null,"kind":"discussion","recorded_at":"2025-05-02T19:57:19.107Z","word_count":19823,"source":"https://example.test/traces/trace-081"}}
+{"type":"Trace","data":{"slug":"trace-082","title":"Trace 82: typed attrs","body":null,"kind":"review","recorded_at":"2020-07-12T00:03:47.974Z","word_count":8678,"source":"https://example.test/traces/trace-082"}}
+{"type":"Trace","data":{"slug":"trace-083","title":"Trace 83: Ω-bounds","body":"Observed schema drift during review.","kind":"note","recorded_at":"2020-04-24T01:17:00.308Z","word_count":13572,"source":"https://example.test/traces/trace-083"}}
+{"type":"Trace","data":{"slug":"trace-084","title":"Trace 84: search admission","body":"Observed graph overlays during document.","kind":"document","recorded_at":"2017-03-22T15:18:44.798Z","word_count":14589,"source":null}}
+{"type":"Trace","data":{"slug":"trace-085","title":"Trace 85: columnar snapshots","body":null,"kind":"discussion","recorded_at":"2020-08-19T19:44:07.983Z","word_count":12376,"source":"https://example.test/traces/trace-085"}}
+{"type":"Trace","data":{"slug":"trace-086","title":"Trace 86: columnar snapshots","body":"Observed branch quiescence during document.","kind":"review","recorded_at":"2026-11-09T19:16:25.032Z","word_count":7605,"source":"https://example.test/traces/trace-086"}}
+{"type":"Trace","data":{"slug":"trace-087","title":"Trace 87: export streaming","body":"Observed revision stamps during discussion.","kind":"note","recorded_at":"2018-11-11T10:05:23.270Z","word_count":11648,"source":"https://example.test/traces/trace-087"}}
+{"type":"Trace","data":{"slug":"trace-088","title":"Trace 88: crème-fraîche caching","body":null,"kind":"experiment","recorded_at":"2019-03-05T05:08:50.832Z","word_count":4945,"source":"https://example.test/traces/trace-088"}}
+{"type":"Trace","data":{"slug":"trace-089","title":"Trace 89: search admission","body":"Observed legend domains during discussion.","kind":"meeting","recorded_at":"2015-05-07T18:12:21.792Z","word_count":17785,"source":null}}
+{"type":"Trace","data":{"slug":"trace-090","title":"Trace 90: search admission","body":null,"kind":"document","recorded_at":"2016-06-17T12:00:48.869Z","word_count":1339,"source":null}}
+{"type":"Signal","data":{"slug":"signal-001","title":"Signal 1: search admission","body":"Market movement around wire encodings.","category":"customer","strength":0,"observed_at":"2017-06-09","source":null}}
+{"type":"Signal","data":{"slug":"signal-002","title":"Signal 2: columnar snapshots","body":"Market movement around typed attrs.","category":"technology","strength":1e-9,"observed_at":"2021-05-28","source":null}}
+{"type":"Signal","data":{"slug":"signal-003","title":"Signal 3: naïve dedupe","body":"Market movement around category scales — 图例.","category":"regulatory","strength":0.479163,"observed_at":"2026-02-05","source":"https://example.test/signals/3"}}
+{"type":"Signal","data":{"slug":"signal-004","title":"Signal 4: naïve dedupe","body":"Market movement around category scales — 图例.","category":"technology","strength":0.519988,"observed_at":"2016-12-28","source":null}}
+{"type":"Signal","data":{"slug":"signal-005","title":"Signal 5: branch quiescence","body":"Market movement around legend domains.","category":"regulatory","strength":0.691345,"observed_at":"2017-10-09","source":null}}
+{"type":"Signal","data":{"slug":"signal-006","title":"Signal 6: Ω-bounds","body":"Market movement around graph overlays.","category":"market","strength":0.551137,"observed_at":"2018-02-22","source":"https://example.test/signals/6"}}
+{"type":"Signal","data":{"slug":"signal-007","title":"Signal 7: category scales — 图例","body":"Market movement around typed attrs.","category":"technology","strength":0.512544,"observed_at":"2022-04-23","source":"https://example.test/signals/7"}}
+{"type":"Signal","data":{"slug":"signal-008","title":"Signal 8: legend domains","body":"Market movement around legend domains.","category":"market","strength":0.869861,"observed_at":"2023-06-20","source":"https://example.test/signals/8"}}
+{"type":"Signal","data":{"slug":"signal-009","title":"Signal 9: revision stamps","body":null,"category":"competitor","strength":0.497684,"observed_at":"2023-09-28","source":"https://example.test/signals/9"}}
+{"type":"Signal","data":{"slug":"signal-010","title":"Signal 10: revision stamps","body":null,"category":"customer","strength":0.096162,"observed_at":"2015-09-22","source":"https://example.test/signals/10"}}
+{"type":"Signal","data":{"slug":"signal-011","title":"Signal 11: legend domains","body":"Market movement around legend domains.","category":"regulatory","strength":0.472962,"observed_at":"2022-05-12","source":"https://example.test/signals/11"}}
+{"type":"Signal","data":{"slug":"signal-012","title":"Signal 12: naïve dedupe","body":"Market movement around naïve dedupe.","category":"customer","strength":0.506528,"observed_at":"2026-04-07","source":null}}
+{"type":"Signal","data":{"slug":"signal-013","title":"Signal 13: legend domains","body":"Market movement around revision stamps.","category":"customer","strength":0.422065,"observed_at":"2019-02-07","source":"https://example.test/signals/13"}}
+{"type":"Signal","data":{"slug":"signal-014","title":"Signal 14: naïve dedupe","body":null,"category":"market","strength":0.398996,"observed_at":"2026-10-18","source":"https://example.test/signals/14"}}
+{"type":"Signal","data":{"slug":"signal-015","title":"Signal 15: ingestion backpressure","body":"Market movement around export streaming.","category":"competitor","strength":0.758282,"observed_at":"2025-01-21","source":null}}
+{"type":"Signal","data":{"slug":"signal-016","title":"Signal 16: typed attrs","body":"Market movement around branch quiescence.","category":"customer","strength":0.472056,"observed_at":"2020-12-07","source":null}}
+{"type":"Signal","data":{"slug":"signal-017","title":"Signal 17: revision stamps","body":null,"category":"customer","strength":0.083839,"observed_at":"2025-01-07","source":"https://example.test/signals/17"}}
+{"type":"Signal","data":{"slug":"signal-018","title":"Signal 18: columnar snapshots","body":null,"category":"technology","strength":0.937273,"observed_at":"2015-09-14","source":null}}
+{"type":"Signal","data":{"slug":"signal-019","title":"Signal 19: revision stamps","body":null,"category":"customer","strength":0.469585,"observed_at":"2018-06-24","source":null}}
+{"type":"Signal","data":{"slug":"signal-020","title":"Signal 20: edge identity","body":"Market movement around columnar snapshots.","category":"technology","strength":0.753215,"observed_at":"2024-06-08","source":"https://example.test/signals/20"}}
+{"type":"Signal","data":{"slug":"signal-021","title":"Signal 21: Ω-bounds","body":"Market movement around ingestion backpressure.","category":"competitor","strength":0.735278,"observed_at":"2024-06-06","source":"https://example.test/signals/21"}}
+{"type":"Signal","data":{"slug":"signal-022","title":"Signal 22: revision stamps","body":null,"category":"regulatory","strength":0.846439,"observed_at":"2015-06-20","source":"https://example.test/signals/22"}}
+{"type":"Signal","data":{"slug":"signal-023","title":"Signal 23: export streaming","body":null,"category":"regulatory","strength":0.086616,"observed_at":"2016-12-27","source":"https://example.test/signals/23"}}
+{"type":"Signal","data":{"slug":"signal-024","title":"Signal 24: columnar snapshots","body":null,"category":"market","strength":0.040446,"observed_at":"2025-02-18","source":"https://example.test/signals/24"}}
+{"type":"Signal","data":{"slug":"signal-025","title":"Signal 25: ingestion backpressure","body":"Market movement around branch quiescence.","category":"market","strength":0.861196,"observed_at":"2018-10-02","source":"https://example.test/signals/25"}}
+{"type":"Signal","data":{"slug":"signal-026","title":"Signal 26: search admission","body":"Market movement around naïve dedupe.","category":"competitor","strength":0.280003,"observed_at":"2016-11-16","source":null}}
+{"type":"Signal","data":{"slug":"signal-027","title":"Signal 27: naïve dedupe","body":"Market movement around schema drift.","category":"regulatory","strength":0.175595,"observed_at":"2025-09-25","source":"https://example.test/signals/27"}}
+{"type":"Signal","data":{"slug":"signal-028","title":"Signal 28: category scales — 图例","body":null,"category":"regulatory","strength":0.831339,"observed_at":"2024-08-25","source":"https://example.test/signals/28"}}
+{"type":"Signal","data":{"slug":"signal-029","title":"Signal 29: export streaming","body":"Market movement around revision stamps.","category":"technology","strength":0.39148,"observed_at":"2017-02-02","source":"https://example.test/signals/29"}}
+{"type":"Signal","data":{"slug":"signal-030","title":"Signal 30: crème-fraîche caching","body":null,"category":"customer","strength":0.17736,"observed_at":"2021-01-26","source":"https://example.test/signals/30"}}
+{"type":"Signal","data":{"slug":"signal-031","title":"Signal 31: legend domains","body":"Market movement around columnar snapshots.","category":"regulatory","strength":0.302954,"observed_at":"2023-11-09","source":"https://example.test/signals/31"}}
+{"type":"Signal","data":{"slug":"signal-032","title":"Signal 32: edge identity","body":null,"category":"customer","strength":0.644454,"observed_at":"2017-02-16","source":"https://example.test/signals/32"}}
+{"type":"Signal","data":{"slug":"signal-033","title":"Signal 33: search admission","body":"Market movement around category scales — 图例.","category":"customer","strength":0.386967,"observed_at":"2024-09-18","source":"https://example.test/signals/33"}}
+{"type":"Signal","data":{"slug":"signal-034","title":"Signal 34: typed attrs","body":null,"category":"market","strength":0.026825,"observed_at":"2024-01-15","source":"https://example.test/signals/34"}}
+{"type":"Signal","data":{"slug":"signal-035","title":"Signal 35: ingestion backpressure","body":"Market movement around crème-fraîche caching.","category":"technology","strength":0.937112,"observed_at":"2017-06-12","source":"https://example.test/signals/35"}}
+{"type":"Signal","data":{"slug":"signal-036","title":"Signal 36: search admission","body":"Market movement around graph overlays.","category":"market","strength":0.369431,"observed_at":"2020-10-12","source":null}}
+{"type":"Signal","data":{"slug":"signal-037","title":"Signal 37: wire encodings","body":"Market movement around typed attrs.","category":"technology","strength":0.883798,"observed_at":"2015-11-08","source":"https://example.test/signals/37"}}
+{"type":"Signal","data":{"slug":"signal-038","title":"Signal 38: edge identity","body":"Market movement around naïve dedupe.","category":"market","strength":0.241285,"observed_at":"2024-04-22","source":null}}
+{"type":"Signal","data":{"slug":"signal-039","title":"Signal 39: crème-fraîche caching","body":"Market movement around export streaming.","category":"customer","strength":0.537504,"observed_at":"2021-01-18","source":null}}
+{"type":"Signal","data":{"slug":"signal-040","title":"Signal 40: ingestion backpressure","body":null,"category":"technology","strength":0.944124,"observed_at":"2016-05-12","source":null}}
+{"type":"Signal","data":{"slug":"signal-041","title":"Signal 41: search admission","body":"Market movement around graph overlays.","category":"customer","strength":0.551587,"observed_at":"2021-12-08","source":"https://example.test/signals/41"}}
+{"type":"Signal","data":{"slug":"signal-042","title":"Signal 42: branch quiescence","body":"Market movement around crème-fraîche caching.","category":"customer","strength":0.799856,"observed_at":"2026-06-28","source":null}}
+{"type":"Signal","data":{"slug":"signal-043","title":"Signal 43: columnar snapshots","body":null,"category":"market","strength":0.206987,"observed_at":"2018-02-19","source":null}}
+{"type":"Signal","data":{"slug":"signal-044","title":"Signal 44: crème-fraîche caching","body":null,"category":"regulatory","strength":0.825437,"observed_at":"2022-04-19","source":"https://example.test/signals/44"}}
+{"type":"Signal","data":{"slug":"signal-045","title":"Signal 45: schema drift","body":null,"category":"technology","strength":0.597921,"observed_at":"2023-10-22","source":null}}
+{"type":"Signal","data":{"slug":"signal-046","title":"Signal 46: crème-fraîche caching","body":null,"category":"regulatory","strength":0.028038,"observed_at":"2020-08-06","source":"https://example.test/signals/46"}}
+{"type":"Signal","data":{"slug":"signal-047","title":"Signal 47: typed attrs","body":null,"category":"technology","strength":0.107928,"observed_at":"2016-09-05","source":"https://example.test/signals/47"}}
+{"type":"Signal","data":{"slug":"signal-048","title":"Signal 48: ingestion backpressure","body":"Market movement around schema drift.","category":"regulatory","strength":0.291874,"observed_at":"2020-07-11","source":"https://example.test/signals/48"}}
+{"type":"Signal","data":{"slug":"signal-049","title":"Signal 49: revision stamps","body":"Market movement around columnar snapshots.","category":"regulatory","strength":0.467257,"observed_at":"2021-10-10","source":null}}
+{"type":"Signal","data":{"slug":"signal-050","title":"Signal 50: ingestion backpressure","body":"Market movement around edge identity.","category":"customer","strength":0.385888,"observed_at":"2024-07-16","source":"https://example.test/signals/50"}}
+{"type":"Signal","data":{"slug":"signal-051","title":"Signal 51: revision stamps","body":"Market movement around typed attrs.","category":"regulatory","strength":0.43061,"observed_at":"2019-01-27","source":"https://example.test/signals/51"}}
+{"type":"Signal","data":{"slug":"signal-052","title":"Signal 52: Ω-bounds","body":null,"category":"regulatory","strength":0.712629,"observed_at":"2024-06-20","source":"https://example.test/signals/52"}}
+{"type":"Signal","data":{"slug":"signal-053","title":"Signal 53: legend domains","body":null,"category":"market","strength":0.037462,"observed_at":"2022-03-19","source":null}}
+{"type":"Signal","data":{"slug":"signal-054","title":"Signal 54: export streaming","body":null,"category":"competitor","strength":0.558492,"observed_at":"2015-08-06","source":"https://example.test/signals/54"}}
+{"type":"Signal","data":{"slug":"signal-055","title":"Signal 55: legend domains","body":"Market movement around category scales — 图例.","category":"competitor","strength":0.837372,"observed_at":"2019-02-06","source":"https://example.test/signals/55"}}
+{"type":"Signal","data":{"slug":"signal-056","title":"Signal 56: naïve dedupe","body":"Market movement around schema drift.","category":"regulatory","strength":0.308975,"observed_at":"2018-10-03","source":null}}
+{"type":"Signal","data":{"slug":"signal-057","title":"Signal 57: edge identity","body":null,"category":"competitor","strength":0.195232,"observed_at":"2015-02-08","source":"https://example.test/signals/57"}}
+{"type":"Signal","data":{"slug":"signal-058","title":"Signal 58: graph overlays","body":null,"category":"competitor","strength":0.106871,"observed_at":"2024-10-15","source":"https://example.test/signals/58"}}
+{"type":"Signal","data":{"slug":"signal-059","title":"Signal 59: columnar snapshots","body":null,"category":"regulatory","strength":0.008096,"observed_at":"2015-06-11","source":"https://example.test/signals/59"}}
+{"type":"Signal","data":{"slug":"signal-060","title":"Signal 60: crème-fraîche caching","body":"Market movement around crème-fraîche caching.","category":"technology","strength":0.117169,"observed_at":"2020-08-12","source":null}}
+{"type":"Artifact","data":{"slug":"artifact-001","title":"Artifact 1: category scales — 图例","kind":"report","url":"https://example.test/artifacts/naïve-1?q=图","created_at":"2021-12-26","revision":39}}
+{"type":"Artifact","data":{"slug":"artifact-002","title":"Artifact 2: naïve dedupe","kind":"presentation","url":"https://example.test/artifacts/naïve-2?q=图","created_at":"2016-03-21","revision":24}}
+{"type":"Artifact","data":{"slug":"artifact-003","title":"Artifact 3: edge identity","kind":"doc","url":null,"created_at":"2021-12-07","revision":9}}
+{"type":"Artifact","data":{"slug":"artifact-004","title":"Artifact 4: graph overlays","kind":"spec","url":"https://example.test/artifacts/naïve-4?q=图","created_at":"2019-11-15","revision":1}}
+{"type":"Artifact","data":{"slug":"artifact-005","title":"Artifact 5: ingestion backpressure","kind":"memo","url":"https://example.test/artifacts/naïve-5?q=图","created_at":"2024-07-16","revision":28}}
+{"type":"Artifact","data":{"slug":"artifact-006","title":"Artifact 6: ingestion backpressure","kind":"report","url":"https://example.test/artifacts/naïve-6?q=图","created_at":"2015-09-09","revision":27}}
+{"type":"Artifact","data":{"slug":"artifact-007","title":"Artifact 7: export streaming","kind":"doc","url":null,"created_at":"2023-02-05","revision":40}}
+{"type":"Artifact","data":{"slug":"artifact-008","title":"Artifact 8: typed attrs","kind":"spec","url":"https://example.test/artifacts/naïve-8?q=图","created_at":"2020-07-23","revision":33}}
+{"type":"Artifact","data":{"slug":"artifact-009","title":"Artifact 9: wire encodings","kind":"doc","url":"https://example.test/artifacts/naïve-9?q=图","created_at":"2018-02-03","revision":30}}
+{"type":"Artifact","data":{"slug":"artifact-010","title":"Artifact 10: naïve dedupe","kind":"report","url":"https://example.test/artifacts/naïve-10?q=图","created_at":"2021-02-06","revision":21}}
+{"type":"Artifact","data":{"slug":"artifact-011","title":"Artifact 11: schema drift","kind":"report","url":null,"created_at":"2023-05-10","revision":9}}
+{"type":"Artifact","data":{"slug":"artifact-012","title":"Artifact 12: wire encodings","kind":"proposal","url":null,"created_at":"2015-03-10","revision":1}}
+{"type":"Artifact","data":{"slug":"artifact-013","title":"Artifact 13: Ω-bounds","kind":"report","url":"https://example.test/artifacts/naïve-13?q=图","created_at":"2022-03-05","revision":35}}
+{"type":"Artifact","data":{"slug":"artifact-014","title":"Artifact 14: edge identity","kind":"report","url":"https://example.test/artifacts/naïve-14?q=图","created_at":"2022-10-07","revision":3}}
+{"type":"Artifact","data":{"slug":"artifact-015","title":"Artifact 15: schema drift","kind":"memo","url":"https://example.test/artifacts/naïve-15?q=图","created_at":"2023-12-01","revision":14}}
+{"type":"Artifact","data":{"slug":"artifact-016","title":"Artifact 16: graph overlays","kind":"memo","url":"https://example.test/artifacts/naïve-16?q=图","created_at":"2018-06-24","revision":26}}
+{"type":"Artifact","data":{"slug":"artifact-017","title":"Artifact 17: export streaming","kind":"report","url":"https://example.test/artifacts/naïve-17?q=图","created_at":"2015-03-24","revision":30}}
+{"type":"Artifact","data":{"slug":"artifact-018","title":"Artifact 18: crème-fraîche caching","kind":"report","url":null,"created_at":"2020-01-02","revision":9}}
+{"type":"Artifact","data":{"slug":"artifact-019","title":"Artifact 19: category scales — 图例","kind":"spec","url":"https://example.test/artifacts/naïve-19?q=图","created_at":"2020-04-05","revision":11}}
+{"type":"Artifact","data":{"slug":"artifact-020","title":"Artifact 20: category scales — 图例","kind":"doc","url":"https://example.test/artifacts/naïve-20?q=图","created_at":"2022-08-06","revision":12}}
+{"type":"Artifact","data":{"slug":"artifact-021","title":"Artifact 21: ingestion backpressure","kind":"spec","url":"https://example.test/artifacts/naïve-21?q=图","created_at":"2019-06-23","revision":17}}
+{"type":"Artifact","data":{"slug":"artifact-022","title":"Artifact 22: export streaming","kind":"proposal","url":null,"created_at":"2025-09-08","revision":9}}
+{"type":"Artifact","data":{"slug":"artifact-023","title":"Artifact 23: columnar snapshots","kind":"report","url":null,"created_at":"2021-01-11","revision":27}}
+{"type":"Artifact","data":{"slug":"artifact-024","title":"Artifact 24: typed attrs","kind":"spec","url":"https://example.test/artifacts/naïve-24?q=图","created_at":"2015-10-03","revision":8}}
+{"type":"Artifact","data":{"slug":"artifact-025","title":"Artifact 25: export streaming","kind":"doc","url":null,"created_at":"2024-11-22","revision":14}}
+{"type":"Artifact","data":{"slug":"artifact-026","title":"Artifact 26: revision stamps","kind":"proposal","url":"https://example.test/artifacts/naïve-26?q=图","created_at":"2020-06-19","revision":30}}
+{"type":"Artifact","data":{"slug":"artifact-027","title":"Artifact 27: branch quiescence","kind":"report","url":"https://example.test/artifacts/naïve-27?q=图","created_at":"2023-10-09","revision":31}}
+{"type":"Artifact","data":{"slug":"artifact-028","title":"Artifact 28: branch quiescence","kind":"spec","url":null,"created_at":"2019-03-22","revision":23}}
+{"type":"Artifact","data":{"slug":"artifact-029","title":"Artifact 29: export streaming","kind":"report","url":"https://example.test/artifacts/naïve-29?q=图","created_at":"2015-10-26","revision":19}}
+{"type":"Artifact","data":{"slug":"artifact-030","title":"Artifact 30: export streaming","kind":"doc","url":"https://example.test/artifacts/naïve-30?q=图","created_at":"2026-02-05","revision":34}}
+{"type":"Artifact","data":{"slug":"artifact-031","title":"Artifact 31: branch quiescence","kind":"presentation","url":"https://example.test/artifacts/naïve-31?q=图","created_at":"2019-09-14","revision":37}}
+{"type":"Artifact","data":{"slug":"artifact-032","title":"Artifact 32: search admission","kind":"spec","url":"https://example.test/artifacts/naïve-32?q=图","created_at":"2018-01-07","revision":18}}
+{"type":"Artifact","data":{"slug":"artifact-033","title":"Artifact 33: typed attrs","kind":"proposal","url":"https://example.test/artifacts/naïve-33?q=图","created_at":"2026-04-11","revision":19}}
+{"type":"Artifact","data":{"slug":"artifact-034","title":"Artifact 34: graph overlays","kind":"spec","url":"https://example.test/artifacts/naïve-34?q=图","created_at":"2022-11-04","revision":8}}
+{"type":"Artifact","data":{"slug":"artifact-035","title":"Artifact 35: category scales — 图例","kind":"spec","url":"https://example.test/artifacts/naïve-35?q=图","created_at":"2020-03-22","revision":34}}
+{"type":"Artifact","data":{"slug":"artifact-036","title":"Artifact 36: category scales — 图例","kind":"doc","url":"https://example.test/artifacts/naïve-36?q=图","created_at":"2020-09-26","revision":32}}
+{"type":"Artifact","data":{"slug":"artifact-037","title":"Artifact 37: graph overlays","kind":"doc","url":"https://example.test/artifacts/naïve-37?q=图","created_at":"2025-01-22","revision":28}}
+{"type":"Artifact","data":{"slug":"artifact-038","title":"Artifact 38: edge identity","kind":"memo","url":null,"created_at":"2023-10-14","revision":39}}
+{"type":"Artifact","data":{"slug":"artifact-039","title":"Artifact 39: columnar snapshots","kind":"memo","url":"https://example.test/artifacts/naïve-39?q=图","created_at":"2026-07-24","revision":26}}
+{"type":"Artifact","data":{"slug":"artifact-040","title":"Artifact 40: typed attrs","kind":"memo","url":"https://example.test/artifacts/naïve-40?q=图","created_at":"2025-02-25","revision":39}}
+{"type":"Artifact","data":{"slug":"artifact-041","title":"Artifact 41: graph overlays","kind":"proposal","url":null,"created_at":"2022-03-10","revision":40}}
+{"type":"Artifact","data":{"slug":"artifact-042","title":"Artifact 42: Ω-bounds","kind":"proposal","url":"https://example.test/artifacts/naïve-42?q=图","created_at":"2017-11-20","revision":26}}
+{"type":"Artifact","data":{"slug":"artifact-043","title":"Artifact 43: search admission","kind":"presentation","url":null,"created_at":"2019-03-09","revision":8}}
+{"type":"Artifact","data":{"slug":"artifact-044","title":"Artifact 44: Ω-bounds","kind":"report","url":null,"created_at":"2016-03-21","revision":4}}
+{"type":"Artifact","data":{"slug":"artifact-045","title":"Artifact 45: branch quiescence","kind":"memo","url":null,"created_at":"2017-09-27","revision":6}}
+{"type":"Artifact","data":{"slug":"artifact-046","title":"Artifact 46: search admission","kind":"proposal","url":"https://example.test/artifacts/naïve-46?q=图","created_at":"2015-12-09","revision":13}}
+{"type":"Artifact","data":{"slug":"artifact-047","title":"Artifact 47: branch quiescence","kind":"memo","url":"https://example.test/artifacts/naïve-47?q=图","created_at":"2025-11-26","revision":2}}
+{"type":"Artifact","data":{"slug":"artifact-048","title":"Artifact 48: ingestion backpressure","kind":"presentation","url":"https://example.test/artifacts/naïve-48?q=图","created_at":"2025-05-14","revision":8}}
+{"type":"Artifact","data":{"slug":"artifact-049","title":"Artifact 49: graph overlays","kind":"doc","url":null,"created_at":"2016-02-04","revision":14}}
+{"type":"Artifact","data":{"slug":"artifact-050","title":"Artifact 50: typed attrs","kind":"memo","url":"https://example.test/artifacts/naïve-50?q=图","created_at":"2017-11-07","revision":31}}
+{"type":"Artifact","data":{"slug":"artifact-051","title":"Artifact 51: wire encodings","kind":"presentation","url":"https://example.test/artifacts/naïve-51?q=图","created_at":"2023-07-12","revision":30}}
+{"type":"Artifact","data":{"slug":"artifact-052","title":"Artifact 52: Ω-bounds","kind":"spec","url":null,"created_at":"2025-12-03","revision":2}}
+{"type":"Artifact","data":{"slug":"artifact-053","title":"Artifact 53: naïve dedupe","kind":"spec","url":"https://example.test/artifacts/naïve-53?q=图","created_at":"2022-10-08","revision":6}}
+{"type":"Artifact","data":{"slug":"artifact-054","title":"Artifact 54: category scales — 图例","kind":"proposal","url":"https://example.test/artifacts/naïve-54?q=图","created_at":"2026-05-18","revision":2}}
+{"type":"Artifact","data":{"slug":"artifact-055","title":"Artifact 55: edge identity","kind":"proposal","url":"https://example.test/artifacts/naïve-55?q=图","created_at":"2025-12-06","revision":20}}
+{"type":"Artifact","data":{"slug":"artifact-056","title":"Artifact 56: crème-fraîche caching","kind":"memo","url":null,"created_at":"2015-02-01","revision":2}}
+{"type":"Artifact","data":{"slug":"artifact-057","title":"Artifact 57: search admission","kind":"spec","url":"https://example.test/artifacts/naïve-57?q=图","created_at":"2021-08-07","revision":18}}
+{"type":"Artifact","data":{"slug":"artifact-058","title":"Artifact 58: columnar snapshots","kind":"doc","url":"https://example.test/artifacts/naïve-58?q=图","created_at":"2017-05-13","revision":36}}
+{"type":"Artifact","data":{"slug":"artifact-059","title":"Artifact 59: columnar snapshots","kind":"doc","url":"https://example.test/artifacts/naïve-59?q=图","created_at":"2015-06-23","revision":39}}
+{"type":"Artifact","data":{"slug":"artifact-060","title":"Artifact 60: Ω-bounds","kind":"spec","url":"https://example.test/artifacts/naïve-60?q=图","created_at":"2022-04-12","revision":39}}
+{"edge":"OwnedBy","from":"decision-001","to":"actor-001","data":{"id":"own-0001"}}
+{"edge":"OwnedBy","from":"decision-002","to":"actor-002","data":{"id":"own-0002"}}
+{"edge":"OwnedBy","from":"decision-003","to":"actor-003","data":{"id":"own-0003"}}
+{"edge":"OwnedBy","from":"decision-004","to":"actor-004","data":{"id":"own-0004"}}
+{"edge":"OwnedBy","from":"decision-005","to":"actor-005","data":{"id":"own-0005"}}
+{"edge":"OwnedBy","from":"decision-006","to":"actor-006","data":{"id":"own-0006"}}
+{"edge":"OwnedBy","from":"decision-007","to":"actor-007","data":{"id":"own-0007"}}
+{"edge":"OwnedBy","from":"decision-008","to":"actor-008","data":{"id":"own-0008"}}
+{"edge":"OwnedBy","from":"decision-009","to":"actor-009","data":{"id":"own-0009"}}
+{"edge":"OwnedBy","from":"decision-010","to":"actor-010","data":{"id":"own-0010"}}
+{"edge":"OwnedBy","from":"decision-011","to":"actor-011","data":{"id":"own-0011"}}
+{"edge":"OwnedBy","from":"decision-012","to":"actor-012","data":{"id":"own-0012"}}
+{"edge":"OwnedBy","from":"decision-013","to":"actor-013","data":{"id":"own-0013"}}
+{"edge":"OwnedBy","from":"decision-014","to":"actor-014","data":{"id":"own-0014"}}
+{"edge":"OwnedBy","from":"decision-015","to":"actor-015","data":{"id":"own-0015"}}
+{"edge":"OwnedBy","from":"decision-016","to":"actor-016","data":{"id":"own-0016"}}
+{"edge":"OwnedBy","from":"decision-017","to":"actor-017","data":{"id":"own-0017"}}
+{"edge":"OwnedBy","from":"decision-018","to":"actor-018","data":{"id":"own-0018"}}
+{"edge":"OwnedBy","from":"decision-019","to":"actor-019","data":{"id":"own-0019"}}
+{"edge":"OwnedBy","from":"decision-020","to":"actor-020","data":{"id":"own-0020"}}
+{"edge":"OwnedBy","from":"decision-021","to":"actor-021","data":{"id":"own-0021"}}
+{"edge":"OwnedBy","from":"decision-022","to":"actor-022","data":{"id":"own-0022"}}
+{"edge":"OwnedBy","from":"decision-023","to":"actor-023","data":{"id":"own-0023"}}
+{"edge":"OwnedBy","from":"decision-024","to":"actor-024","data":{"id":"own-0024"}}
+{"edge":"OwnedBy","from":"decision-025","to":"actor-025","data":{"id":"own-0025"}}
+{"edge":"OwnedBy","from":"decision-026","to":"actor-026","data":{"id":"own-0026"}}
+{"edge":"OwnedBy","from":"decision-027","to":"actor-027","data":{"id":"own-0027"}}
+{"edge":"OwnedBy","from":"decision-028","to":"actor-028","data":{"id":"own-0028"}}
+{"edge":"OwnedBy","from":"decision-029","to":"actor-029","data":{"id":"own-0029"}}
+{"edge":"OwnedBy","from":"decision-030","to":"actor-030","data":{"id":"own-0030"}}
+{"edge":"OwnedBy","from":"decision-031","to":"actor-001","data":{"id":"own-0031"}}
+{"edge":"OwnedBy","from":"decision-032","to":"actor-002","data":{"id":"own-0032"}}
+{"edge":"OwnedBy","from":"decision-033","to":"actor-003","data":{"id":"own-0033"}}
+{"edge":"OwnedBy","from":"decision-034","to":"actor-004","data":{"id":"own-0034"}}
+{"edge":"OwnedBy","from":"decision-035","to":"actor-005","data":{"id":"own-0035"}}
+{"edge":"OwnedBy","from":"decision-036","to":"actor-006","data":{"id":"own-0036"}}
+{"edge":"OwnedBy","from":"decision-037","to":"actor-007","data":{"id":"own-0037"}}
+{"edge":"OwnedBy","from":"decision-038","to":"actor-008","data":{"id":"own-0038"}}
+{"edge":"OwnedBy","from":"decision-039","to":"actor-009","data":{"id":"own-0039"}}
+{"edge":"OwnedBy","from":"decision-040","to":"actor-010","data":{"id":"own-0040"}}
+{"edge":"OwnedBy","from":"decision-041","to":"actor-011","data":{"id":"own-0041"}}
+{"edge":"OwnedBy","from":"decision-042","to":"actor-012","data":{"id":"own-0042"}}
+{"edge":"OwnedBy","from":"decision-043","to":"actor-013","data":{"id":"own-0043"}}
+{"edge":"OwnedBy","from":"decision-044","to":"actor-014","data":{"id":"own-0044"}}
+{"edge":"OwnedBy","from":"decision-045","to":"actor-015","data":{"id":"own-0045"}}
+{"edge":"OwnedBy","from":"decision-046","to":"actor-016","data":{"id":"own-0046"}}
+{"edge":"OwnedBy","from":"decision-047","to":"actor-017","data":{"id":"own-0047"}}
+{"edge":"OwnedBy","from":"decision-048","to":"actor-018","data":{"id":"own-0048"}}
+{"edge":"OwnedBy","from":"decision-049","to":"actor-019","data":{"id":"own-0049"}}
+{"edge":"OwnedBy","from":"decision-050","to":"actor-020","data":{"id":"own-0050"}}
+{"edge":"OwnedBy","from":"decision-051","to":"actor-021","data":{"id":"own-0051"}}
+{"edge":"OwnedBy","from":"decision-052","to":"actor-022","data":{"id":"own-0052"}}
+{"edge":"OwnedBy","from":"decision-053","to":"actor-023","data":{"id":"own-0053"}}
+{"edge":"OwnedBy","from":"decision-054","to":"actor-024","data":{"id":"own-0054"}}
+{"edge":"OwnedBy","from":"decision-055","to":"actor-025","data":{"id":"own-0055"}}
+{"edge":"OwnedBy","from":"decision-056","to":"actor-026","data":{"id":"own-0056"}}
+{"edge":"OwnedBy","from":"decision-057","to":"actor-027","data":{"id":"own-0057"}}
+{"edge":"OwnedBy","from":"decision-058","to":"actor-028","data":{"id":"own-0058"}}
+{"edge":"OwnedBy","from":"decision-059","to":"actor-029","data":{"id":"own-0059"}}
+{"edge":"OwnedBy","from":"decision-060","to":"actor-030","data":{"id":"own-0060"}}
+{"edge":"RecordedBy","from":"trace-001","to":"actor-001","data":{"id":"rec-0001"}}
+{"edge":"RecordedBy","from":"trace-002","to":"actor-008","data":{"id":"rec-0002"}}
+{"edge":"RecordedBy","from":"trace-003","to":"actor-015","data":{"id":"rec-0003"}}
+{"edge":"RecordedBy","from":"trace-004","to":"actor-022","data":{"id":"rec-0004"}}
+{"edge":"RecordedBy","from":"trace-005","to":"actor-029","data":{"id":"rec-0005"}}
+{"edge":"RecordedBy","from":"trace-006","to":"actor-006","data":{"id":"rec-0006"}}
+{"edge":"RecordedBy","from":"trace-007","to":"actor-013","data":{"id":"rec-0007"}}
+{"edge":"RecordedBy","from":"trace-008","to":"actor-020","data":{"id":"rec-0008"}}
+{"edge":"RecordedBy","from":"trace-009","to":"actor-027","data":{"id":"rec-0009"}}
+{"edge":"RecordedBy","from":"trace-010","to":"actor-004","data":{"id":"rec-0010"}}
+{"edge":"RecordedBy","from":"trace-011","to":"actor-011","data":{"id":"rec-0011"}}
+{"edge":"RecordedBy","from":"trace-012","to":"actor-018","data":{"id":"rec-0012"}}
+{"edge":"RecordedBy","from":"trace-013","to":"actor-025","data":{"id":"rec-0013"}}
+{"edge":"RecordedBy","from":"trace-014","to":"actor-002","data":{"id":"rec-0014"}}
+{"edge":"RecordedBy","from":"trace-015","to":"actor-009","data":{"id":"rec-0015"}}
+{"edge":"RecordedBy","from":"trace-016","to":"actor-016","data":{"id":"rec-0016"}}
+{"edge":"RecordedBy","from":"trace-017","to":"actor-023","data":{"id":"rec-0017"}}
+{"edge":"RecordedBy","from":"trace-018","to":"actor-030","data":{"id":"rec-0018"}}
+{"edge":"RecordedBy","from":"trace-019","to":"actor-007","data":{"id":"rec-0019"}}
+{"edge":"RecordedBy","from":"trace-020","to":"actor-014","data":{"id":"rec-0020"}}
+{"edge":"RecordedBy","from":"trace-021","to":"actor-021","data":{"id":"rec-0021"}}
+{"edge":"RecordedBy","from":"trace-022","to":"actor-028","data":{"id":"rec-0022"}}
+{"edge":"RecordedBy","from":"trace-023","to":"actor-005","data":{"id":"rec-0023"}}
+{"edge":"RecordedBy","from":"trace-024","to":"actor-012","data":{"id":"rec-0024"}}
+{"edge":"RecordedBy","from":"trace-025","to":"actor-019","data":{"id":"rec-0025"}}
+{"edge":"RecordedBy","from":"trace-026","to":"actor-026","data":{"id":"rec-0026"}}
+{"edge":"RecordedBy","from":"trace-027","to":"actor-003","data":{"id":"rec-0027"}}
+{"edge":"RecordedBy","from":"trace-028","to":"actor-010","data":{"id":"rec-0028"}}
+{"edge":"RecordedBy","from":"trace-029","to":"actor-017","data":{"id":"rec-0029"}}
+{"edge":"RecordedBy","from":"trace-030","to":"actor-024","data":{"id":"rec-0030"}}
+{"edge":"RecordedBy","from":"trace-031","to":"actor-001","data":{"id":"rec-0031"}}
+{"edge":"RecordedBy","from":"trace-032","to":"actor-008","data":{"id":"rec-0032"}}
+{"edge":"RecordedBy","from":"trace-033","to":"actor-015","data":{"id":"rec-0033"}}
+{"edge":"RecordedBy","from":"trace-034","to":"actor-022","data":{"id":"rec-0034"}}
+{"edge":"RecordedBy","from":"trace-035","to":"actor-029","data":{"id":"rec-0035"}}
+{"edge":"RecordedBy","from":"trace-036","to":"actor-006","data":{"id":"rec-0036"}}
+{"edge":"RecordedBy","from":"trace-037","to":"actor-013","data":{"id":"rec-0037"}}
+{"edge":"RecordedBy","from":"trace-038","to":"actor-020","data":{"id":"rec-0038"}}
+{"edge":"RecordedBy","from":"trace-039","to":"actor-027","data":{"id":"rec-0039"}}
+{"edge":"RecordedBy","from":"trace-040","to":"actor-004","data":{"id":"rec-0040"}}
+{"edge":"RecordedBy","from":"trace-041","to":"actor-011","data":{"id":"rec-0041"}}
+{"edge":"RecordedBy","from":"trace-042","to":"actor-018","data":{"id":"rec-0042"}}
+{"edge":"RecordedBy","from":"trace-043","to":"actor-025","data":{"id":"rec-0043"}}
+{"edge":"RecordedBy","from":"trace-044","to":"actor-002","data":{"id":"rec-0044"}}
+{"edge":"RecordedBy","from":"trace-045","to":"actor-009","data":{"id":"rec-0045"}}
+{"edge":"RecordedBy","from":"trace-046","to":"actor-016","data":{"id":"rec-0046"}}
+{"edge":"RecordedBy","from":"trace-047","to":"actor-023","data":{"id":"rec-0047"}}
+{"edge":"RecordedBy","from":"trace-048","to":"actor-030","data":{"id":"rec-0048"}}
+{"edge":"RecordedBy","from":"trace-049","to":"actor-007","data":{"id":"rec-0049"}}
+{"edge":"RecordedBy","from":"trace-050","to":"actor-014","data":{"id":"rec-0050"}}
+{"edge":"RecordedBy","from":"trace-051","to":"actor-021","data":{"id":"rec-0051"}}
+{"edge":"RecordedBy","from":"trace-052","to":"actor-028","data":{"id":"rec-0052"}}
+{"edge":"RecordedBy","from":"trace-053","to":"actor-005","data":{"id":"rec-0053"}}
+{"edge":"RecordedBy","from":"trace-054","to":"actor-012","data":{"id":"rec-0054"}}
+{"edge":"RecordedBy","from":"trace-055","to":"actor-019","data":{"id":"rec-0055"}}
+{"edge":"RecordedBy","from":"trace-056","to":"actor-026","data":{"id":"rec-0056"}}
+{"edge":"RecordedBy","from":"trace-057","to":"actor-003","data":{"id":"rec-0057"}}
+{"edge":"RecordedBy","from":"trace-058","to":"actor-010","data":{"id":"rec-0058"}}
+{"edge":"RecordedBy","from":"trace-059","to":"actor-017","data":{"id":"rec-0059"}}
+{"edge":"RecordedBy","from":"trace-060","to":"actor-024","data":{"id":"rec-0060"}}
+{"edge":"RecordedBy","from":"trace-061","to":"actor-001","data":{"id":"rec-0061"}}
+{"edge":"RecordedBy","from":"trace-062","to":"actor-008","data":{"id":"rec-0062"}}
+{"edge":"RecordedBy","from":"trace-063","to":"actor-015","data":{"id":"rec-0063"}}
+{"edge":"RecordedBy","from":"trace-064","to":"actor-022","data":{"id":"rec-0064"}}
+{"edge":"RecordedBy","from":"trace-065","to":"actor-029","data":{"id":"rec-0065"}}
+{"edge":"RecordedBy","from":"trace-066","to":"actor-006","data":{"id":"rec-0066"}}
+{"edge":"RecordedBy","from":"trace-067","to":"actor-013","data":{"id":"rec-0067"}}
+{"edge":"RecordedBy","from":"trace-068","to":"actor-020","data":{"id":"rec-0068"}}
+{"edge":"RecordedBy","from":"trace-069","to":"actor-027","data":{"id":"rec-0069"}}
+{"edge":"RecordedBy","from":"trace-070","to":"actor-004","data":{"id":"rec-0070"}}
+{"edge":"RecordedBy","from":"trace-071","to":"actor-011","data":{"id":"rec-0071"}}
+{"edge":"RecordedBy","from":"trace-072","to":"actor-018","data":{"id":"rec-0072"}}
+{"edge":"RecordedBy","from":"trace-073","to":"actor-025","data":{"id":"rec-0073"}}
+{"edge":"RecordedBy","from":"trace-074","to":"actor-002","data":{"id":"rec-0074"}}
+{"edge":"RecordedBy","from":"trace-075","to":"actor-009","data":{"id":"rec-0075"}}
+{"edge":"RecordedBy","from":"trace-076","to":"actor-016","data":{"id":"rec-0076"}}
+{"edge":"RecordedBy","from":"trace-077","to":"actor-023","data":{"id":"rec-0077"}}
+{"edge":"RecordedBy","from":"trace-078","to":"actor-030","data":{"id":"rec-0078"}}
+{"edge":"RecordedBy","from":"trace-079","to":"actor-007","data":{"id":"rec-0079"}}
+{"edge":"RecordedBy","from":"trace-080","to":"actor-014","data":{"id":"rec-0080"}}
+{"edge":"RecordedBy","from":"trace-081","to":"actor-021","data":{"id":"rec-0081"}}
+{"edge":"RecordedBy","from":"trace-082","to":"actor-028","data":{"id":"rec-0082"}}
+{"edge":"RecordedBy","from":"trace-083","to":"actor-005","data":{"id":"rec-0083"}}
+{"edge":"RecordedBy","from":"trace-084","to":"actor-012","data":{"id":"rec-0084"}}
+{"edge":"RecordedBy","from":"trace-085","to":"actor-019","data":{"id":"rec-0085"}}
+{"edge":"RecordedBy","from":"trace-086","to":"actor-026","data":{"id":"rec-0086"}}
+{"edge":"RecordedBy","from":"trace-087","to":"actor-003","data":{"id":"rec-0087"}}
+{"edge":"RecordedBy","from":"trace-088","to":"actor-010","data":{"id":"rec-0088"}}
+{"edge":"RecordedBy","from":"trace-089","to":"actor-017","data":{"id":"rec-0089"}}
+{"edge":"RecordedBy","from":"trace-090","to":"actor-024","data":{"id":"rec-0090"}}
+{"edge":"ParticipatedIn","from":"actor-021","to":"decision-046","data":{"id":"part-0001"}}
+{"edge":"ParticipatedIn","from":"actor-017","to":"decision-015","data":{"id":"part-0002"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-038","data":{"id":"part-0003"}}
+{"edge":"ParticipatedIn","from":"actor-010","to":"decision-018","data":{"id":"part-0004"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-027","data":{"id":"part-0005"}}
+{"edge":"ParticipatedIn","from":"actor-012","to":"decision-046","data":{"id":"part-0006"}}
+{"edge":"ParticipatedIn","from":"actor-025","to":"decision-019","data":{"id":"part-0007"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-036","data":{"id":"part-0008"}}
+{"edge":"ParticipatedIn","from":"actor-008","to":"decision-024","data":{"id":"part-0009"}}
+{"edge":"ParticipatedIn","from":"actor-015","to":"decision-012","data":{"id":"part-0010"}}
+{"edge":"ParticipatedIn","from":"actor-008","to":"decision-022","data":{"id":"part-0011"}}
+{"edge":"ParticipatedIn","from":"actor-003","to":"decision-001","data":{"id":"part-0012"}}
+{"edge":"ParticipatedIn","from":"actor-016","to":"decision-039","data":{"id":"part-0013"}}
+{"edge":"ParticipatedIn","from":"actor-027","to":"decision-007","data":{"id":"part-0014"}}
+{"edge":"ParticipatedIn","from":"actor-014","to":"decision-022","data":{"id":"part-0015"}}
+{"edge":"ParticipatedIn","from":"actor-002","to":"decision-031","data":{"id":"part-0016"}}
+{"edge":"ParticipatedIn","from":"actor-023","to":"decision-035","data":{"id":"part-0017"}}
+{"edge":"ParticipatedIn","from":"actor-002","to":"decision-025","data":{"id":"part-0018"}}
+{"edge":"ParticipatedIn","from":"actor-014","to":"decision-053","data":{"id":"part-0019"}}
+{"edge":"ParticipatedIn","from":"actor-015","to":"decision-005","data":{"id":"part-0020"}}
+{"edge":"ParticipatedIn","from":"actor-023","to":"decision-011","data":{"id":"part-0021"}}
+{"edge":"ParticipatedIn","from":"actor-004","to":"decision-043","data":{"id":"part-0022"}}
+{"edge":"ParticipatedIn","from":"actor-027","to":"decision-032","data":{"id":"part-0023"}}
+{"edge":"ParticipatedIn","from":"actor-023","to":"decision-042","data":{"id":"part-0024"}}
+{"edge":"ParticipatedIn","from":"actor-023","to":"decision-024","data":{"id":"part-0025"}}
+{"edge":"ParticipatedIn","from":"actor-016","to":"decision-054","data":{"id":"part-0026"}}
+{"edge":"ParticipatedIn","from":"actor-012","to":"decision-026","data":{"id":"part-0027"}}
+{"edge":"ParticipatedIn","from":"actor-008","to":"decision-022","data":{"id":"part-0028"}}
+{"edge":"ParticipatedIn","from":"actor-024","to":"decision-005","data":{"id":"part-0029"}}
+{"edge":"ParticipatedIn","from":"actor-008","to":"decision-014","data":{"id":"part-0030"}}
+{"edge":"ParticipatedIn","from":"actor-004","to":"decision-019","data":{"id":"part-0031"}}
+{"edge":"ParticipatedIn","from":"actor-011","to":"decision-046","data":{"id":"part-0032"}}
+{"edge":"ParticipatedIn","from":"actor-021","to":"decision-022","data":{"id":"part-0033"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-045","data":{"id":"part-0034"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-031","data":{"id":"part-0035"}}
+{"edge":"ParticipatedIn","from":"actor-014","to":"decision-029","data":{"id":"part-0036"}}
+{"edge":"ParticipatedIn","from":"actor-005","to":"decision-004","data":{"id":"part-0037"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-059","data":{"id":"part-0038"}}
+{"edge":"ParticipatedIn","from":"actor-022","to":"decision-039","data":{"id":"part-0039"}}
+{"edge":"ParticipatedIn","from":"actor-013","to":"decision-031","data":{"id":"part-0040"}}
+{"edge":"ParticipatedIn","from":"actor-001","to":"decision-048","data":{"id":"part-0041"}}
+{"edge":"ParticipatedIn","from":"actor-012","to":"decision-011","data":{"id":"part-0042"}}
+{"edge":"ParticipatedIn","from":"actor-014","to":"decision-019","data":{"id":"part-0043"}}
+{"edge":"ParticipatedIn","from":"actor-005","to":"decision-028","data":{"id":"part-0044"}}
+{"edge":"ParticipatedIn","from":"actor-025","to":"decision-011","data":{"id":"part-0045"}}
+{"edge":"ParticipatedIn","from":"actor-012","to":"decision-052","data":{"id":"part-0046"}}
+{"edge":"ParticipatedIn","from":"actor-023","to":"decision-020","data":{"id":"part-0047"}}
+{"edge":"ParticipatedIn","from":"actor-022","to":"decision-003","data":{"id":"part-0048"}}
+{"edge":"ParticipatedIn","from":"actor-029","to":"decision-050","data":{"id":"part-0049"}}
+{"edge":"ParticipatedIn","from":"actor-012","to":"decision-036","data":{"id":"part-0050"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-041","data":{"id":"part-0051"}}
+{"edge":"ParticipatedIn","from":"actor-018","to":"decision-042","data":{"id":"part-0052"}}
+{"edge":"ParticipatedIn","from":"actor-012","to":"decision-025","data":{"id":"part-0053"}}
+{"edge":"ParticipatedIn","from":"actor-029","to":"decision-008","data":{"id":"part-0054"}}
+{"edge":"ParticipatedIn","from":"actor-027","to":"decision-004","data":{"id":"part-0055"}}
+{"edge":"ParticipatedIn","from":"actor-027","to":"decision-020","data":{"id":"part-0056"}}
+{"edge":"ParticipatedIn","from":"actor-029","to":"decision-042","data":{"id":"part-0057"}}
+{"edge":"ParticipatedIn","from":"actor-003","to":"decision-036","data":{"id":"part-0058"}}
+{"edge":"ParticipatedIn","from":"actor-004","to":"decision-014","data":{"id":"part-0059"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-030","data":{"id":"part-0060"}}
+{"edge":"ParticipatedIn","from":"actor-007","to":"decision-024","data":{"id":"part-0061"}}
+{"edge":"ParticipatedIn","from":"actor-010","to":"decision-022","data":{"id":"part-0062"}}
+{"edge":"ParticipatedIn","from":"actor-019","to":"decision-048","data":{"id":"part-0063"}}
+{"edge":"ParticipatedIn","from":"actor-029","to":"decision-056","data":{"id":"part-0064"}}
+{"edge":"ParticipatedIn","from":"actor-014","to":"decision-001","data":{"id":"part-0065"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-053","data":{"id":"part-0066"}}
+{"edge":"ParticipatedIn","from":"actor-001","to":"decision-008","data":{"id":"part-0067"}}
+{"edge":"ParticipatedIn","from":"actor-011","to":"decision-004","data":{"id":"part-0068"}}
+{"edge":"ParticipatedIn","from":"actor-025","to":"decision-033","data":{"id":"part-0069"}}
+{"edge":"ParticipatedIn","from":"actor-007","to":"decision-013","data":{"id":"part-0070"}}
+{"edge":"ParticipatedIn","from":"actor-026","to":"decision-054","data":{"id":"part-0071"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-011","data":{"id":"part-0072"}}
+{"edge":"ParticipatedIn","from":"actor-005","to":"decision-021","data":{"id":"part-0073"}}
+{"edge":"ParticipatedIn","from":"actor-030","to":"decision-026","data":{"id":"part-0074"}}
+{"edge":"ParticipatedIn","from":"actor-013","to":"decision-022","data":{"id":"part-0075"}}
+{"edge":"ParticipatedIn","from":"actor-016","to":"decision-002","data":{"id":"part-0076"}}
+{"edge":"ParticipatedIn","from":"actor-024","to":"decision-017","data":{"id":"part-0077"}}
+{"edge":"ParticipatedIn","from":"actor-014","to":"decision-032","data":{"id":"part-0078"}}
+{"edge":"ParticipatedIn","from":"actor-003","to":"decision-059","data":{"id":"part-0079"}}
+{"edge":"ParticipatedIn","from":"actor-005","to":"decision-008","data":{"id":"part-0080"}}
+{"edge":"ParticipatedIn","from":"actor-009","to":"decision-002","data":{"id":"part-0081"}}
+{"edge":"ParticipatedIn","from":"actor-027","to":"decision-012","data":{"id":"part-0082"}}
+{"edge":"ParticipatedIn","from":"actor-024","to":"decision-023","data":{"id":"part-0083"}}
+{"edge":"ParticipatedIn","from":"actor-007","to":"decision-039","data":{"id":"part-0084"}}
+{"edge":"ParticipatedIn","from":"actor-029","to":"decision-002","data":{"id":"part-0085"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-039","data":{"id":"part-0086"}}
+{"edge":"ParticipatedIn","from":"actor-009","to":"decision-032","data":{"id":"part-0087"}}
+{"edge":"ParticipatedIn","from":"actor-004","to":"decision-058","data":{"id":"part-0088"}}
+{"edge":"ParticipatedIn","from":"actor-010","to":"decision-033","data":{"id":"part-0089"}}
+{"edge":"ParticipatedIn","from":"actor-007","to":"decision-045","data":{"id":"part-0090"}}
+{"edge":"ParticipatedIn","from":"actor-030","to":"decision-043","data":{"id":"part-0091"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-028","data":{"id":"part-0092"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-001","data":{"id":"part-0093"}}
+{"edge":"ParticipatedIn","from":"actor-030","to":"decision-035","data":{"id":"part-0094"}}
+{"edge":"ParticipatedIn","from":"actor-018","to":"decision-013","data":{"id":"part-0095"}}
+{"edge":"ParticipatedIn","from":"actor-019","to":"decision-005","data":{"id":"part-0096"}}
+{"edge":"ParticipatedIn","from":"actor-017","to":"decision-035","data":{"id":"part-0097"}}
+{"edge":"ParticipatedIn","from":"actor-016","to":"decision-003","data":{"id":"part-0098"}}
+{"edge":"ParticipatedIn","from":"actor-022","to":"decision-025","data":{"id":"part-0099"}}
+{"edge":"ParticipatedIn","from":"actor-010","to":"decision-054","data":{"id":"part-0100"}}
+{"edge":"ParticipatedIn","from":"actor-023","to":"decision-047","data":{"id":"part-0101"}}
+{"edge":"ParticipatedIn","from":"actor-010","to":"decision-010","data":{"id":"part-0102"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-015","data":{"id":"part-0103"}}
+{"edge":"ParticipatedIn","from":"actor-018","to":"decision-040","data":{"id":"part-0104"}}
+{"edge":"ParticipatedIn","from":"actor-016","to":"decision-052","data":{"id":"part-0105"}}
+{"edge":"ParticipatedIn","from":"actor-019","to":"decision-055","data":{"id":"part-0106"}}
+{"edge":"ParticipatedIn","from":"actor-001","to":"decision-038","data":{"id":"part-0107"}}
+{"edge":"ParticipatedIn","from":"actor-016","to":"decision-007","data":{"id":"part-0108"}}
+{"edge":"ParticipatedIn","from":"actor-005","to":"decision-048","data":{"id":"part-0109"}}
+{"edge":"ParticipatedIn","from":"actor-019","to":"decision-039","data":{"id":"part-0110"}}
+{"edge":"ParticipatedIn","from":"actor-022","to":"decision-032","data":{"id":"part-0111"}}
+{"edge":"ParticipatedIn","from":"actor-005","to":"decision-005","data":{"id":"part-0112"}}
+{"edge":"ParticipatedIn","from":"actor-008","to":"decision-019","data":{"id":"part-0113"}}
+{"edge":"ParticipatedIn","from":"actor-013","to":"decision-038","data":{"id":"part-0114"}}
+{"edge":"ParticipatedIn","from":"actor-017","to":"decision-057","data":{"id":"part-0115"}}
+{"edge":"ParticipatedIn","from":"actor-018","to":"decision-050","data":{"id":"part-0116"}}
+{"edge":"ParticipatedIn","from":"actor-006","to":"decision-035","data":{"id":"part-0117"}}
+{"edge":"ParticipatedIn","from":"actor-020","to":"decision-035","data":{"id":"part-0118"}}
+{"edge":"ParticipatedIn","from":"actor-021","to":"decision-046","data":{"id":"part-0119"}}
+{"edge":"ParticipatedIn","from":"actor-021","to":"decision-046","data":{"id":"part-0120"}}
+{"edge":"Supports","from":"trace-021","to":"decision-043","data":{"id":"sup-0001","weight":null}}
+{"edge":"Supports","from":"trace-086","to":"decision-008","data":{"id":"sup-0002","weight":0.996}}
+{"edge":"Supports","from":"trace-019","to":"decision-002","data":{"id":"sup-0003","weight":0.62}}
+{"edge":"Supports","from":"trace-025","to":"decision-043","data":{"id":"sup-0004","weight":null}}
+{"edge":"Supports","from":"trace-082","to":"decision-027","data":{"id":"sup-0005","weight":0.803}}
+{"edge":"Supports","from":"trace-089","to":"decision-031","data":{"id":"sup-0006","weight":0.111}}
+{"edge":"Supports","from":"trace-088","to":"decision-046","data":{"id":"sup-0007","weight":0.307}}
+{"edge":"Supports","from":"trace-064","to":"decision-049","data":{"id":"sup-0008","weight":0.621}}
+{"edge":"Supports","from":"trace-040","to":"decision-043","data":{"id":"sup-0009","weight":null}}
+{"edge":"Supports","from":"trace-046","to":"decision-015","data":{"id":"sup-0010","weight":null}}
+{"edge":"Supports","from":"trace-024","to":"decision-002","data":{"id":"sup-0011","weight":0.584}}
+{"edge":"Supports","from":"trace-023","to":"decision-020","data":{"id":"sup-0012","weight":0.009}}
+{"edge":"Supports","from":"trace-002","to":"decision-017","data":{"id":"sup-0013","weight":0.701}}
+{"edge":"Supports","from":"trace-044","to":"decision-002","data":{"id":"sup-0014","weight":null}}
+{"edge":"Supports","from":"trace-016","to":"decision-045","data":{"id":"sup-0015","weight":0.382}}
+{"edge":"Supports","from":"trace-042","to":"decision-014","data":{"id":"sup-0016","weight":0.852}}
+{"edge":"Supports","from":"trace-049","to":"decision-014","data":{"id":"sup-0017","weight":0.57}}
+{"edge":"Supports","from":"trace-019","to":"decision-011","data":{"id":"sup-0018","weight":0.122}}
+{"edge":"Supports","from":"trace-089","to":"decision-002","data":{"id":"sup-0019","weight":0.69}}
+{"edge":"Supports","from":"trace-060","to":"decision-021","data":{"id":"sup-0020","weight":0.7}}
+{"edge":"Supports","from":"trace-071","to":"decision-011","data":{"id":"sup-0021","weight":0.595}}
+{"edge":"Supports","from":"trace-034","to":"decision-012","data":{"id":"sup-0022","weight":0.908}}
+{"edge":"Supports","from":"trace-055","to":"decision-059","data":{"id":"sup-0023","weight":0.845}}
+{"edge":"Supports","from":"trace-004","to":"decision-049","data":{"id":"sup-0024","weight":0.922}}
+{"edge":"Supports","from":"trace-081","to":"decision-022","data":{"id":"sup-0025","weight":0.563}}
+{"edge":"Supports","from":"trace-069","to":"decision-003","data":{"id":"sup-0026","weight":null}}
+{"edge":"Supports","from":"trace-089","to":"decision-028","data":{"id":"sup-0027","weight":0.008}}
+{"edge":"Supports","from":"trace-003","to":"decision-047","data":{"id":"sup-0028","weight":0.866}}
+{"edge":"Supports","from":"trace-035","to":"decision-007","data":{"id":"sup-0029","weight":0.238}}
+{"edge":"Supports","from":"trace-067","to":"decision-056","data":{"id":"sup-0030","weight":0.613}}
+{"edge":"Supports","from":"trace-053","to":"decision-051","data":{"id":"sup-0031","weight":0.339}}
+{"edge":"Supports","from":"trace-048","to":"decision-012","data":{"id":"sup-0032","weight":0.662}}
+{"edge":"Supports","from":"trace-038","to":"decision-029","data":{"id":"sup-0033","weight":0.94}}
+{"edge":"Supports","from":"trace-040","to":"decision-001","data":{"id":"sup-0034","weight":0.889}}
+{"edge":"Supports","from":"trace-056","to":"decision-013","data":{"id":"sup-0035","weight":0.09}}
+{"edge":"Supports","from":"trace-014","to":"decision-036","data":{"id":"sup-0036","weight":0.09}}
+{"edge":"Supports","from":"trace-030","to":"decision-020","data":{"id":"sup-0037","weight":0.903}}
+{"edge":"Supports","from":"trace-058","to":"decision-026","data":{"id":"sup-0038","weight":0.293}}
+{"edge":"Supports","from":"trace-022","to":"decision-006","data":{"id":"sup-0039","weight":0.524}}
+{"edge":"Supports","from":"trace-050","to":"decision-033","data":{"id":"sup-0040","weight":0.532}}
+{"edge":"Supports","from":"trace-044","to":"decision-010","data":{"id":"sup-0041","weight":0.797}}
+{"edge":"Supports","from":"trace-084","to":"decision-054","data":{"id":"sup-0042","weight":0.967}}
+{"edge":"Supports","from":"trace-005","to":"decision-033","data":{"id":"sup-0043","weight":0.424}}
+{"edge":"Supports","from":"trace-020","to":"decision-044","data":{"id":"sup-0044","weight":0.023}}
+{"edge":"Supports","from":"trace-027","to":"decision-001","data":{"id":"sup-0045","weight":0.775}}
+{"edge":"Supports","from":"trace-004","to":"decision-040","data":{"id":"sup-0046","weight":0.886}}
+{"edge":"Supports","from":"trace-080","to":"decision-056","data":{"id":"sup-0047","weight":0.186}}
+{"edge":"Supports","from":"trace-055","to":"decision-051","data":{"id":"sup-0048","weight":0.01}}
+{"edge":"Supports","from":"trace-022","to":"decision-015","data":{"id":"sup-0049","weight":0.54}}
+{"edge":"Supports","from":"trace-055","to":"decision-052","data":{"id":"sup-0050","weight":0.69}}
+{"edge":"Supports","from":"trace-011","to":"decision-059","data":{"id":"sup-0051","weight":0.486}}
+{"edge":"Supports","from":"trace-015","to":"decision-010","data":{"id":"sup-0052","weight":0.431}}
+{"edge":"Supports","from":"trace-051","to":"decision-022","data":{"id":"sup-0053","weight":0.002}}
+{"edge":"Supports","from":"trace-089","to":"decision-045","data":{"id":"sup-0054","weight":0.381}}
+{"edge":"Supports","from":"trace-013","to":"decision-011","data":{"id":"sup-0055","weight":0.413}}
+{"edge":"Supports","from":"trace-090","to":"decision-020","data":{"id":"sup-0056","weight":0.114}}
+{"edge":"Supports","from":"trace-019","to":"decision-020","data":{"id":"sup-0057","weight":0.995}}
+{"edge":"Supports","from":"trace-029","to":"decision-040","data":{"id":"sup-0058","weight":0.527}}
+{"edge":"Supports","from":"trace-054","to":"decision-017","data":{"id":"sup-0059","weight":0.396}}
+{"edge":"Supports","from":"trace-071","to":"decision-038","data":{"id":"sup-0060","weight":null}}
+{"edge":"Supports","from":"trace-017","to":"decision-023","data":{"id":"sup-0061","weight":null}}
+{"edge":"Supports","from":"trace-078","to":"decision-008","data":{"id":"sup-0062","weight":0.329}}
+{"edge":"Supports","from":"trace-080","to":"decision-032","data":{"id":"sup-0063","weight":0.756}}
+{"edge":"Supports","from":"trace-049","to":"decision-026","data":{"id":"sup-0064","weight":null}}
+{"edge":"Supports","from":"trace-014","to":"decision-053","data":{"id":"sup-0065","weight":0.583}}
+{"edge":"Supports","from":"trace-086","to":"decision-018","data":{"id":"sup-0066","weight":0.818}}
+{"edge":"Supports","from":"trace-072","to":"decision-052","data":{"id":"sup-0067","weight":0.2}}
+{"edge":"Supports","from":"trace-043","to":"decision-031","data":{"id":"sup-0068","weight":null}}
+{"edge":"Supports","from":"trace-070","to":"decision-007","data":{"id":"sup-0069","weight":0.136}}
+{"edge":"Supports","from":"trace-071","to":"decision-025","data":{"id":"sup-0070","weight":0.763}}
+{"edge":"Supports","from":"trace-066","to":"decision-024","data":{"id":"sup-0071","weight":0.769}}
+{"edge":"Supports","from":"trace-033","to":"decision-041","data":{"id":"sup-0072","weight":null}}
+{"edge":"Supports","from":"trace-088","to":"decision-032","data":{"id":"sup-0073","weight":0.386}}
+{"edge":"Supports","from":"trace-043","to":"decision-044","data":{"id":"sup-0074","weight":0.635}}
+{"edge":"Supports","from":"trace-089","to":"decision-017","data":{"id":"sup-0075","weight":0.301}}
+{"edge":"Supports","from":"trace-019","to":"decision-006","data":{"id":"sup-0076","weight":0.798}}
+{"edge":"Supports","from":"trace-009","to":"decision-039","data":{"id":"sup-0077","weight":0.578}}
+{"edge":"Supports","from":"trace-059","to":"decision-012","data":{"id":"sup-0078","weight":0.423}}
+{"edge":"Supports","from":"trace-057","to":"decision-052","data":{"id":"sup-0079","weight":0.54}}
+{"edge":"Supports","from":"trace-047","to":"decision-036","data":{"id":"sup-0080","weight":null}}
+{"edge":"Supports","from":"trace-072","to":"decision-001","data":{"id":"sup-0081","weight":0.677}}
+{"edge":"Supports","from":"trace-072","to":"decision-048","data":{"id":"sup-0082","weight":null}}
+{"edge":"Supports","from":"trace-027","to":"decision-028","data":{"id":"sup-0083","weight":0.902}}
+{"edge":"Supports","from":"trace-030","to":"decision-001","data":{"id":"sup-0084","weight":0.918}}
+{"edge":"Supports","from":"trace-056","to":"decision-023","data":{"id":"sup-0085","weight":0.827}}
+{"edge":"Supports","from":"trace-006","to":"decision-054","data":{"id":"sup-0086","weight":0.541}}
+{"edge":"Supports","from":"trace-056","to":"decision-007","data":{"id":"sup-0087","weight":null}}
+{"edge":"Supports","from":"trace-006","to":"decision-058","data":{"id":"sup-0088","weight":0.115}}
+{"edge":"Supports","from":"trace-067","to":"decision-057","data":{"id":"sup-0089","weight":0.194}}
+{"edge":"Supports","from":"trace-068","to":"decision-016","data":{"id":"sup-0090","weight":0.776}}
+{"edge":"Supports","from":"trace-037","to":"decision-060","data":{"id":"sup-0091","weight":0.066}}
+{"edge":"Supports","from":"trace-034","to":"decision-014","data":{"id":"sup-0092","weight":0.873}}
+{"edge":"Supports","from":"trace-016","to":"decision-008","data":{"id":"sup-0093","weight":0.347}}
+{"edge":"Supports","from":"trace-089","to":"decision-026","data":{"id":"sup-0094","weight":0.647}}
+{"edge":"Supports","from":"trace-028","to":"decision-053","data":{"id":"sup-0095","weight":0.106}}
+{"edge":"Supports","from":"trace-030","to":"decision-034","data":{"id":"sup-0096","weight":null}}
+{"edge":"Supports","from":"trace-037","to":"decision-015","data":{"id":"sup-0097","weight":0.735}}
+{"edge":"Supports","from":"trace-010","to":"decision-013","data":{"id":"sup-0098","weight":0.816}}
+{"edge":"Supports","from":"trace-086","to":"decision-003","data":{"id":"sup-0099","weight":0.197}}
+{"edge":"Supports","from":"trace-060","to":"decision-050","data":{"id":"sup-0100","weight":0.881}}
+{"edge":"Supports","from":"trace-013","to":"decision-027","data":{"id":"sup-0101","weight":0.228}}
+{"edge":"Supports","from":"trace-004","to":"decision-053","data":{"id":"sup-0102","weight":0.404}}
+{"edge":"Supports","from":"trace-045","to":"decision-040","data":{"id":"sup-0103","weight":0.741}}
+{"edge":"Supports","from":"trace-017","to":"decision-016","data":{"id":"sup-0104","weight":0.014}}
+{"edge":"Supports","from":"trace-001","to":"decision-024","data":{"id":"sup-0105","weight":null}}
+{"edge":"Supports","from":"trace-024","to":"decision-024","data":{"id":"sup-0106","weight":0.116}}
+{"edge":"Supports","from":"trace-012","to":"decision-025","data":{"id":"sup-0107","weight":null}}
+{"edge":"Supports","from":"trace-013","to":"decision-018","data":{"id":"sup-0108","weight":0.948}}
+{"edge":"Supports","from":"trace-027","to":"decision-043","data":{"id":"sup-0109","weight":null}}
+{"edge":"Supports","from":"trace-053","to":"decision-002","data":{"id":"sup-0110","weight":0.663}}
+{"edge":"Triggered","from":"signal-007","to":"decision-040","data":{"id":"trig-0001"}}
+{"edge":"Triggered","from":"signal-056","to":"decision-021","data":{"id":"trig-0002"}}
+{"edge":"Triggered","from":"signal-013","to":"decision-056","data":{"id":"trig-0003"}}
+{"edge":"Triggered","from":"signal-056","to":"decision-055","data":{"id":"trig-0004"}}
+{"edge":"Triggered","from":"signal-039","to":"decision-012","data":{"id":"trig-0005"}}
+{"edge":"Triggered","from":"signal-002","to":"decision-017","data":{"id":"trig-0006"}}
+{"edge":"Triggered","from":"signal-018","to":"decision-050","data":{"id":"trig-0007"}}
+{"edge":"Triggered","from":"signal-048","to":"decision-052","data":{"id":"trig-0008"}}
+{"edge":"Triggered","from":"signal-004","to":"decision-011","data":{"id":"trig-0009"}}
+{"edge":"Triggered","from":"signal-047","to":"decision-055","data":{"id":"trig-0010"}}
+{"edge":"Triggered","from":"signal-042","to":"decision-021","data":{"id":"trig-0011"}}
+{"edge":"Triggered","from":"signal-025","to":"decision-019","data":{"id":"trig-0012"}}
+{"edge":"Triggered","from":"signal-054","to":"decision-057","data":{"id":"trig-0013"}}
+{"edge":"Triggered","from":"signal-023","to":"decision-001","data":{"id":"trig-0014"}}
+{"edge":"Triggered","from":"signal-049","to":"decision-017","data":{"id":"trig-0015"}}
+{"edge":"Triggered","from":"signal-053","to":"decision-056","data":{"id":"trig-0016"}}
+{"edge":"Triggered","from":"signal-022","to":"decision-042","data":{"id":"trig-0017"}}
+{"edge":"Triggered","from":"signal-035","to":"decision-018","data":{"id":"trig-0018"}}
+{"edge":"Triggered","from":"signal-058","to":"decision-049","data":{"id":"trig-0019"}}
+{"edge":"Triggered","from":"signal-057","to":"decision-057","data":{"id":"trig-0020"}}
+{"edge":"Triggered","from":"signal-040","to":"decision-047","data":{"id":"trig-0021"}}
+{"edge":"Triggered","from":"signal-049","to":"decision-003","data":{"id":"trig-0022"}}
+{"edge":"Triggered","from":"signal-049","to":"decision-007","data":{"id":"trig-0023"}}
+{"edge":"Triggered","from":"signal-018","to":"decision-042","data":{"id":"trig-0024"}}
+{"edge":"Triggered","from":"signal-052","to":"decision-021","data":{"id":"trig-0025"}}
+{"edge":"Triggered","from":"signal-009","to":"decision-043","data":{"id":"trig-0026"}}
+{"edge":"Triggered","from":"signal-054","to":"decision-012","data":{"id":"trig-0027"}}
+{"edge":"Triggered","from":"signal-058","to":"decision-060","data":{"id":"trig-0028"}}
+{"edge":"Triggered","from":"signal-043","to":"decision-019","data":{"id":"trig-0029"}}
+{"edge":"Triggered","from":"signal-056","to":"decision-005","data":{"id":"trig-0030"}}
+{"edge":"Triggered","from":"signal-039","to":"decision-024","data":{"id":"trig-0031"}}
+{"edge":"Triggered","from":"signal-050","to":"decision-013","data":{"id":"trig-0032"}}
+{"edge":"Triggered","from":"signal-026","to":"decision-059","data":{"id":"trig-0033"}}
+{"edge":"Triggered","from":"signal-049","to":"decision-010","data":{"id":"trig-0034"}}
+{"edge":"Triggered","from":"signal-037","to":"decision-007","data":{"id":"trig-0035"}}
+{"edge":"Triggered","from":"signal-031","to":"decision-050","data":{"id":"trig-0036"}}
+{"edge":"Triggered","from":"signal-016","to":"decision-002","data":{"id":"trig-0037"}}
+{"edge":"Triggered","from":"signal-029","to":"decision-044","data":{"id":"trig-0038"}}
+{"edge":"Triggered","from":"signal-010","to":"decision-046","data":{"id":"trig-0039"}}
+{"edge":"Triggered","from":"signal-049","to":"decision-031","data":{"id":"trig-0040"}}
+{"edge":"Triggered","from":"signal-032","to":"decision-017","data":{"id":"trig-0041"}}
+{"edge":"Triggered","from":"signal-049","to":"decision-029","data":{"id":"trig-0042"}}
+{"edge":"Triggered","from":"signal-037","to":"decision-002","data":{"id":"trig-0043"}}
+{"edge":"Triggered","from":"signal-058","to":"decision-047","data":{"id":"trig-0044"}}
+{"edge":"Triggered","from":"signal-047","to":"decision-036","data":{"id":"trig-0045"}}
+{"edge":"Triggered","from":"signal-058","to":"decision-050","data":{"id":"trig-0046"}}
+{"edge":"Triggered","from":"signal-051","to":"decision-014","data":{"id":"trig-0047"}}
+{"edge":"Triggered","from":"signal-055","to":"decision-059","data":{"id":"trig-0048"}}
+{"edge":"Triggered","from":"signal-019","to":"decision-025","data":{"id":"trig-0049"}}
+{"edge":"Triggered","from":"signal-053","to":"decision-006","data":{"id":"trig-0050"}}
+{"edge":"Triggered","from":"signal-039","to":"decision-055","data":{"id":"trig-0051"}}
+{"edge":"Triggered","from":"signal-015","to":"decision-003","data":{"id":"trig-0052"}}
+{"edge":"Triggered","from":"signal-056","to":"decision-038","data":{"id":"trig-0053"}}
+{"edge":"Triggered","from":"signal-054","to":"decision-001","data":{"id":"trig-0054"}}
+{"edge":"Triggered","from":"signal-003","to":"decision-030","data":{"id":"trig-0055"}}
+{"edge":"Triggered","from":"signal-037","to":"decision-003","data":{"id":"trig-0056"}}
+{"edge":"Triggered","from":"signal-054","to":"decision-004","data":{"id":"trig-0057"}}
+{"edge":"Triggered","from":"signal-055","to":"decision-002","data":{"id":"trig-0058"}}
+{"edge":"Triggered","from":"signal-048","to":"decision-035","data":{"id":"trig-0059"}}
+{"edge":"Triggered","from":"signal-021","to":"decision-030","data":{"id":"trig-0060"}}
+{"edge":"Triggered","from":"signal-058","to":"decision-024","data":{"id":"trig-0061"}}
+{"edge":"Triggered","from":"signal-036","to":"decision-055","data":{"id":"trig-0062"}}
+{"edge":"Triggered","from":"signal-032","to":"decision-003","data":{"id":"trig-0063"}}
+{"edge":"Triggered","from":"signal-019","to":"decision-023","data":{"id":"trig-0064"}}
+{"edge":"Triggered","from":"signal-045","to":"decision-046","data":{"id":"trig-0065"}}
+{"edge":"Triggered","from":"signal-022","to":"decision-037","data":{"id":"trig-0066"}}
+{"edge":"Triggered","from":"signal-050","to":"decision-023","data":{"id":"trig-0067"}}
+{"edge":"Triggered","from":"signal-026","to":"decision-044","data":{"id":"trig-0068"}}
+{"edge":"Triggered","from":"signal-025","to":"decision-025","data":{"id":"trig-0069"}}
+{"edge":"Triggered","from":"signal-009","to":"decision-033","data":{"id":"trig-0070"}}
+{"edge":"Correlates","from":"signal-041","to":"signal-057","data":{"id":"corr-0001","confidence":0.79}}
+{"edge":"Correlates","from":"signal-021","to":"signal-052","data":{"id":"corr-0002","confidence":0.46}}
+{"edge":"Correlates","from":"signal-022","to":"signal-060","data":{"id":"corr-0003","confidence":0.03}}
+{"edge":"Correlates","from":"signal-027","to":"signal-033","data":{"id":"corr-0004","confidence":0.06}}
+{"edge":"Correlates","from":"signal-034","to":"signal-010","data":{"id":"corr-0005","confidence":0.85}}
+{"edge":"Correlates","from":"signal-028","to":"signal-007","data":{"id":"corr-0006","confidence":0.97}}
+{"edge":"Correlates","from":"signal-005","to":"signal-044","data":{"id":"corr-0007","confidence":0.35}}
+{"edge":"Correlates","from":"signal-033","to":"signal-014","data":{"id":"corr-0008","confidence":0.32}}
+{"edge":"Correlates","from":"signal-031","to":"signal-033","data":{"id":"corr-0009","confidence":0.27}}
+{"edge":"Correlates","from":"signal-004","to":"signal-001","data":{"id":"corr-0010","confidence":0.86}}
+{"edge":"Correlates","from":"signal-034","to":"signal-044","data":{"id":"corr-0011","confidence":0.09}}
+{"edge":"Correlates","from":"signal-013","to":"signal-012","data":{"id":"corr-0012","confidence":0.14}}
+{"edge":"Correlates","from":"signal-055","to":"signal-008","data":{"id":"corr-0013","confidence":0.77}}
+{"edge":"Correlates","from":"signal-034","to":"signal-035","data":{"id":"corr-0014","confidence":0.41}}
+{"edge":"Correlates","from":"signal-017","to":"signal-033","data":{"id":"corr-0015","confidence":0.6}}
+{"edge":"Correlates","from":"signal-049","to":"signal-055","data":{"id":"corr-0016","confidence":0}}
+{"edge":"Correlates","from":"signal-043","to":"signal-020","data":{"id":"corr-0017","confidence":0.65}}
+{"edge":"Correlates","from":"signal-039","to":"signal-055","data":{"id":"corr-0018","confidence":0.45}}
+{"edge":"Correlates","from":"signal-018","to":"signal-060","data":{"id":"corr-0019","confidence":0.69}}
+{"edge":"Correlates","from":"signal-005","to":"signal-004","data":{"id":"corr-0020","confidence":0.21}}
+{"edge":"Correlates","from":"signal-027","to":"signal-005","data":{"id":"corr-0021","confidence":0.32}}
+{"edge":"Correlates","from":"signal-036","to":"signal-004","data":{"id":"corr-0022","confidence":0.29}}
+{"edge":"Correlates","from":"signal-039","to":"signal-052","data":{"id":"corr-0023","confidence":0.65}}
+{"edge":"Correlates","from":"signal-001","to":"signal-007","data":{"id":"corr-0024","confidence":0.46}}
+{"edge":"Correlates","from":"signal-032","to":"signal-043","data":{"id":"corr-0025","confidence":1}}
+{"edge":"Correlates","from":"signal-046","to":"signal-029","data":{"id":"corr-0026","confidence":0.31}}
+{"edge":"Correlates","from":"signal-031","to":"signal-045","data":{"id":"corr-0027","confidence":0.48}}
+{"edge":"Correlates","from":"signal-010","to":"signal-044","data":{"id":"corr-0028","confidence":0.42}}
+{"edge":"Correlates","from":"signal-053","to":"signal-047","data":{"id":"corr-0029","confidence":0.84}}
+{"edge":"Correlates","from":"signal-030","to":"signal-035","data":{"id":"corr-0030","confidence":0.12}}
+{"edge":"Correlates","from":"signal-022","to":"signal-059","data":{"id":"corr-0031","confidence":0.09}}
+{"edge":"Correlates","from":"signal-005","to":"signal-006","data":{"id":"corr-0032","confidence":0.89}}
+{"edge":"Correlates","from":"signal-003","to":"signal-044","data":{"id":"corr-0033","confidence":0.11}}
+{"edge":"Correlates","from":"signal-017","to":"signal-026","data":{"id":"corr-0034","confidence":0.84}}
+{"edge":"Correlates","from":"signal-004","to":"signal-057","data":{"id":"corr-0035","confidence":0.83}}
+{"edge":"Correlates","from":"signal-002","to":"signal-007","data":{"id":"corr-0036","confidence":0.61}}
+{"edge":"Correlates","from":"signal-011","to":"signal-022","data":{"id":"corr-0037","confidence":0.05}}
+{"edge":"Correlates","from":"signal-057","to":"signal-053","data":{"id":"corr-0038","confidence":0.28}}
+{"edge":"Correlates","from":"signal-048","to":"signal-016","data":{"id":"corr-0039","confidence":0.71}}
+{"edge":"Correlates","from":"signal-056","to":"signal-060","data":{"id":"corr-0040","confidence":0.02}}
+{"edge":"Correlates","from":"signal-014","to":"signal-021","data":{"id":"corr-0041","confidence":0.97}}
+{"edge":"Correlates","from":"signal-034","to":"signal-037","data":{"id":"corr-0042","confidence":0.14}}
+{"edge":"Correlates","from":"signal-046","to":"signal-044","data":{"id":"corr-0043","confidence":0.04}}
+{"edge":"Correlates","from":"signal-031","to":"signal-020","data":{"id":"corr-0044","confidence":0.95}}
+{"edge":"Correlates","from":"signal-051","to":"signal-033","data":{"id":"corr-0045","confidence":0.07}}
+{"edge":"Correlates","from":"signal-032","to":"signal-036","data":{"id":"corr-0046","confidence":0.04}}
+{"edge":"Correlates","from":"signal-047","to":"signal-003","data":{"id":"corr-0047","confidence":0.15}}
+{"edge":"Correlates","from":"signal-052","to":"signal-049","data":{"id":"corr-0048","confidence":0.08}}
+{"edge":"Correlates","from":"signal-008","to":"signal-053","data":{"id":"corr-0049","confidence":0.15}}
+{"edge":"Correlates","from":"signal-044","to":"signal-055","data":{"id":"corr-0050","confidence":0.38}}

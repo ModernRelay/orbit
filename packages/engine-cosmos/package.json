@@ -1,0 +1,41 @@
+{
+  "name": "@modernrelay/orbit-engine-cosmos",
+  "version": "0.13.6",
+  "description": "cosmos.gl engine adapter for Orbit: GPU force layout, native picking, context-loss recovery.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ModernRelay/orbit.git",
+    "directory": "packages/engine-cosmos"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cosmos.gl/graph": "3.4.0",
+    "@modernrelay/orbit-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

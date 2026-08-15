@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run boundaries
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      # Deterministic performance checks run in CI through the pure evaluator
+      # suite. The GPU scenario runs manually on the reference M5 Pro
+      # via `node scripts/perf-lite.mjs --tier S|L --runs 3 --enforce`.
+      - run: pnpm run perf:gate
+      - run: pnpm run build
+      - run: pnpm run demo:build
+
+  e2e:
+    # BLOCKING GATE (restored v0.11.2 after being opt-in since v0.10). During
+    # that opt-in period, a speed-preset field changed and two e2e assertions
+    # stayed red for three releases. One assertion remains CI-skipped —
+    # the lasso polygon hit-test, which selects zero nodes under SwiftShader
+    # while passing on every real GPU; it still runs on every local pass.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter orbit-demo exec playwright install --with-deps chromium
+      - run: pnpm --filter orbit-demo e2e
+        env:
+          # Smaller streamed feed on CI: the runner renders through a software
+          # rasterizer (SwiftShader), and SIM-HOT rendering over the full
+          # 30K-row feed can starve input events — cosmos 3.4's on-demand
+          # rendering only helps idle gaps, not active streaming.
+          # Raising this back toward 30000 is a separate canary experiment.
+          STREAM_ROWS: '12000'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-playwright
+          path: |
+            apps/demo/playwright-report/
+            apps/demo/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run cosmos:pin-check
+      - run: pnpm run build
+      - run: pnpm run smoke
+      - run: pnpm run probe:node
+      - run: pnpm run svg:node-fixture
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-node-${{ matrix.node }}
+          path: |
+            .smoke/*.tgz
+            .smoke/report.json

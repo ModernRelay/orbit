@@ -1,0 +1,18 @@
+docs/internal/
+node_modules/
+dist/
+.DS_Store
+*.tsbuildinfo
+apps/demo/.vite/
+.smoke/
+apps/spike/results/records/
+apps/spike/test-results/
+apps/demo/test-results/
+apps/demo/playwright-report/
+packages/omnigraph/test/__generated__/
+
+# Local secrets — never committed (NPM_TOKEN lives here locally).
+.env
+
+# Local-only probe/perf evidence (never committed)
+.evidence/

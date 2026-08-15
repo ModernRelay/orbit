@@ -1,0 +1,115 @@
+{
+  "name": "@modernrelay/orbit-react",
+  "version": "0.13.6",
+  "description": "React binding for Orbit: <Graph> plus tree-shakeable components (toolbar, search, minimap, tooltip, inspector, table, navigator, and more).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ModernRelay/orbit.git",
+    "directory": "packages/react"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/Toolbar": "./src/components/Toolbar/index.tsx",
+    "./components/ContextMenu": "./src/components/ContextMenu/index.tsx",
+    "./components/SelectionActions": "./src/components/SelectionActions/index.tsx",
+    "./components/Navigator": "./src/components/Navigator/index.tsx",
+    "./components/Histogram": "./src/components/Histogram/index.tsx",
+    "./components/Timeline": "./src/components/Timeline/index.tsx",
+    "./components/Legend": "./src/components/Legend/index.tsx",
+    "./components/Search": "./src/components/Search/index.tsx",
+    "./components/Minimap": "./src/components/Minimap/index.tsx",
+    "./components/Tooltip": "./src/components/Tooltip/index.tsx",
+    "./components/Inspector": "./src/components/Inspector/index.tsx",
+    "./components/Table": "./src/components/Table/index.tsx",
+    "./components/SimControls": "./src/components/SimControls/index.tsx"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./components/Toolbar": {
+        "types": "./dist/components/Toolbar.d.ts",
+        "default": "./dist/components/Toolbar.js"
+      },
+      "./components/ContextMenu": {
+        "types": "./dist/components/ContextMenu.d.ts",
+        "default": "./dist/components/ContextMenu.js"
+      },
+      "./components/SelectionActions": {
+        "types": "./dist/components/SelectionActions.d.ts",
+        "default": "./dist/components/SelectionActions.js"
+      },
+      "./components/Navigator": {
+        "types": "./dist/components/Navigator.d.ts",
+        "default": "./dist/components/Navigator.js"
+      },
+      "./components/Histogram": {
+        "types": "./dist/components/Histogram.d.ts",
+        "default": "./dist/components/Histogram.js"
+      },
+      "./components/Timeline": {
+        "types": "./dist/components/Timeline.d.ts",
+        "default": "./dist/components/Timeline.js"
+      },
+      "./components/Legend": {
+        "types": "./dist/components/Legend.d.ts",
+        "default": "./dist/components/Legend.js"
+      },
+      "./components/Search": {
+        "types": "./dist/components/Search.d.ts",
+        "default": "./dist/components/Search.js"
+      },
+      "./components/Minimap": {
+        "types": "./dist/components/Minimap.d.ts",
+        "default": "./dist/components/Minimap.js"
+      },
+      "./components/Tooltip": {
+        "types": "./dist/components/Tooltip.d.ts",
+        "default": "./dist/components/Tooltip.js"
+      },
+      "./components/Inspector": {
+        "types": "./dist/components/Inspector.d.ts",
+        "default": "./dist/components/Inspector.js"
+      },
+      "./components/Table": {
+        "types": "./dist/components/Table.d.ts",
+        "default": "./dist/components/Table.js"
+      },
+      "./components/SimControls": {
+        "types": "./dist/components/SimControls.d.ts",
+        "default": "./dist/components/SimControls.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modernrelay/orbit-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "jsdom": "^26.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "@modernrelay/orbit-omnigraph",
+  "version": "0.13.6",
+  "description": "Omnigraph adapter for Orbit: og.export() loader with drift policies, .pg schema parser, and typed codegen.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ModernRelay/orbit.git",
+    "directory": "packages/omnigraph"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./server": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      }
+    }
+  },
+  "bin": {
+    "orbit-omnigraph-codegen": "./dist/codegen-cli.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modernrelay/omnigraph": "0.9.0",
+    "@modernrelay/orbit-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

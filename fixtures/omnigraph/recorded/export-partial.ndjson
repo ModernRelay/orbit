@@ -1,0 +1,110 @@
+{"edge":"Correlates","from":"signal-041","to":"signal-057","data":{"id":"corr-0001","confidence":0.79}}
+{"edge":"Correlates","from":"signal-021","to":"signal-052","data":{"id":"corr-0002","confidence":0.46}}
+{"edge":"Correlates","from":"signal-022","to":"signal-060","data":{"id":"corr-0003","confidence":0.03}}
+{"edge":"Correlates","from":"signal-027","to":"signal-033","data":{"id":"corr-0004","confidence":0.06}}
+{"edge":"Correlates","from":"signal-034","to":"signal-010","data":{"id":"corr-0005","confidence":0.85}}
+{"edge":"Correlates","from":"signal-028","to":"signal-007","data":{"id":"corr-0006","confidence":0.97}}
+{"edge":"Correlates","from":"signal-005","to":"signal-044","data":{"id":"corr-0007","confidence":0.35}}
+{"edge":"Correlates","from":"signal-033","to":"signal-014","data":{"id":"corr-0008","confidence":0.32}}
+{"edge":"Correlates","from":"signal-031","to":"signal-033","data":{"id":"corr-0009","confidence":0.27}}
+{"edge":"Correlates","from":"signal-004","to":"signal-001","data":{"id":"corr-0010","confidence":0.86}}
+{"edge":"Correlates","from":"signal-034","to":"signal-044","data":{"id":"corr-0011","confidence":0.09}}
+{"edge":"Correlates","from":"signal-013","to":"signal-012","data":{"id":"corr-0012","confidence":0.14}}
+{"edge":"Correlates","from":"signal-055","to":"signal-008","data":{"id":"corr-0013","confidence":0.77}}
+{"edge":"Correlates","from":"signal-034","to":"signal-035","data":{"id":"corr-0014","confidence":0.41}}
+{"edge":"Correlates","from":"signal-017","to":"signal-033","data":{"id":"corr-0015","confidence":0.6}}
+{"edge":"Correlates","from":"signal-049","to":"signal-055","data":{"id":"corr-0016","confidence":0.0}}
+{"edge":"Correlates","from":"signal-043","to":"signal-020","data":{"id":"corr-0017","confidence":0.65}}
+{"edge":"Correlates","from":"signal-039","to":"signal-055","data":{"id":"corr-0018","confidence":0.45}}
+{"edge":"Correlates","from":"signal-018","to":"signal-060","data":{"id":"corr-0019","confidence":0.69}}
+{"edge":"Correlates","from":"signal-005","to":"signal-004","data":{"id":"corr-0020","confidence":0.21}}
+{"edge":"Correlates","from":"signal-027","to":"signal-005","data":{"id":"corr-0021","confidence":0.32}}
+{"edge":"Correlates","from":"signal-036","to":"signal-004","data":{"id":"corr-0022","confidence":0.29}}
+{"edge":"Correlates","from":"signal-039","to":"signal-052","data":{"id":"corr-0023","confidence":0.65}}
+{"edge":"Correlates","from":"signal-001","to":"signal-007","data":{"id":"corr-0024","confidence":0.46}}
+{"edge":"Correlates","from":"signal-032","to":"signal-043","data":{"id":"corr-0025","confidence":1.0}}
+{"edge":"Correlates","from":"signal-046","to":"signal-029","data":{"id":"corr-0026","confidence":0.31}}
+{"edge":"Correlates","from":"signal-031","to":"signal-045","data":{"id":"corr-0027","confidence":0.48}}
+{"edge":"Correlates","from":"signal-010","to":"signal-044","data":{"id":"corr-0028","confidence":0.42}}
+{"edge":"Correlates","from":"signal-053","to":"signal-047","data":{"id":"corr-0029","confidence":0.84}}
+{"edge":"Correlates","from":"signal-030","to":"signal-035","data":{"id":"corr-0030","confidence":0.12}}
+{"edge":"Correlates","from":"signal-022","to":"signal-059","data":{"id":"corr-0031","confidence":0.09}}
+{"edge":"Correlates","from":"signal-005","to":"signal-006","data":{"id":"corr-0032","confidence":0.89}}
+{"edge":"Correlates","from":"signal-003","to":"signal-044","data":{"id":"corr-0033","confidence":0.11}}
+{"edge":"Correlates","from":"signal-017","to":"signal-026","data":{"id":"corr-0034","confidence":0.84}}
+{"edge":"Correlates","from":"signal-004","to":"signal-057","data":{"id":"corr-0035","confidence":0.83}}
+{"edge":"Correlates","from":"signal-002","to":"signal-007","data":{"id":"corr-0036","confidence":0.61}}
+{"edge":"Correlates","from":"signal-011","to":"signal-022","data":{"id":"corr-0037","confidence":0.05}}
+{"edge":"Correlates","from":"signal-057","to":"signal-053","data":{"id":"corr-0038","confidence":0.28}}
+{"edge":"Correlates","from":"signal-048","to":"signal-016","data":{"id":"corr-0039","confidence":0.71}}
+{"edge":"Correlates","from":"signal-056","to":"signal-060","data":{"id":"corr-0040","confidence":0.02}}
+{"edge":"Correlates","from":"signal-014","to":"signal-021","data":{"id":"corr-0041","confidence":0.97}}
+{"edge":"Correlates","from":"signal-034","to":"signal-037","data":{"id":"corr-0042","confidence":0.14}}
+{"edge":"Correlates","from":"signal-046","to":"signal-044","data":{"id":"corr-0043","confidence":0.04}}
+{"edge":"Correlates","from":"signal-031","to":"signal-020","data":{"id":"corr-0044","confidence":0.95}}
+{"edge":"Correlates","from":"signal-051","to":"signal-033","data":{"id":"corr-0045","confidence":0.07}}
+{"edge":"Correlates","from":"signal-032","to":"signal-036","data":{"id":"corr-0046","confidence":0.04}}
+{"edge":"Correlates","from":"signal-047","to":"signal-003","data":{"id":"corr-0047","confidence":0.15}}
+{"edge":"Correlates","from":"signal-052","to":"signal-049","data":{"id":"corr-0048","confidence":0.08}}
+{"edge":"Correlates","from":"signal-008","to":"signal-053","data":{"id":"corr-0049","confidence":0.15}}
+{"edge":"Correlates","from":"signal-044","to":"signal-055","data":{"id":"corr-0050","confidence":0.38}}
+{"type":"Signal","data":{"id":"signal-001","body":"Market movement around wire encodings.","category":"customer","observed_at":17326,"slug":"signal-001","source":null,"strength":0.0,"title":"Signal 1: search admission"}}
+{"type":"Signal","data":{"id":"signal-002","body":"Market movement around typed attrs.","category":"technology","observed_at":18775,"slug":"signal-002","source":null,"strength":1e-9,"title":"Signal 2: columnar snapshots"}}
+{"type":"Signal","data":{"id":"signal-003","body":"Market movement around category scales — 图例.","category":"regulatory","observed_at":20489,"slug":"signal-003","source":"https://example.test/signals/3","strength":0.479163,"title":"Signal 3: naïve dedupe"}}
+{"type":"Signal","data":{"id":"signal-004","body":"Market movement around category scales — 图例.","category":"technology","observed_at":17163,"slug":"signal-004","source":null,"strength":0.519988,"title":"Signal 4: naïve dedupe"}}
+{"type":"Signal","data":{"id":"signal-005","body":"Market movement around legend domains.","category":"regulatory","observed_at":17448,"slug":"signal-005","source":null,"strength":0.691345,"title":"Signal 5: branch quiescence"}}
+{"type":"Signal","data":{"id":"signal-006","body":"Market movement around graph overlays.","category":"market","observed_at":17584,"slug":"signal-006","source":"https://example.test/signals/6","strength":0.551137,"title":"Signal 6: Ω-bounds"}}
+{"type":"Signal","data":{"id":"signal-007","body":"Market movement around typed attrs.","category":"technology","observed_at":19105,"slug":"signal-007","source":"https://example.test/signals/7","strength":0.512544,"title":"Signal 7: category scales — 图例"}}
+{"type":"Signal","data":{"id":"signal-008","body":"Market movement around legend domains.","category":"market","observed_at":19528,"slug":"signal-008","source":"https://example.test/signals/8","strength":0.869861,"title":"Signal 8: legend domains"}}
+{"type":"Signal","data":{"id":"signal-009","body":null,"category":"competitor","observed_at":19628,"slug":"signal-009","source":"https://example.test/signals/9","strength":0.497684,"title":"Signal 9: revision stamps"}}
+{"type":"Signal","data":{"id":"signal-010","body":null,"category":"customer","observed_at":16700,"slug":"signal-010","source":"https://example.test/signals/10","strength":0.096162,"title":"Signal 10: revision stamps"}}
+{"type":"Signal","data":{"id":"signal-011","body":"Market movement around legend domains.","category":"regulatory","observed_at":19124,"slug":"signal-011","source":"https://example.test/signals/11","strength":0.472962,"title":"Signal 11: legend domains"}}
+{"type":"Signal","data":{"id":"signal-012","body":"Market movement around naïve dedupe.","category":"customer","observed_at":20550,"slug":"signal-012","source":null,"strength":0.506528,"title":"Signal 12: naïve dedupe"}}
+{"type":"Signal","data":{"id":"signal-013","body":"Market movement around revision stamps.","category":"customer","observed_at":17934,"slug":"signal-013","source":"https://example.test/signals/13","strength":0.422065,"title":"Signal 13: legend domains"}}
+{"type":"Signal","data":{"id":"signal-014","body":null,"category":"market","observed_at":20744,"slug":"signal-014","source":"https://example.test/signals/14","strength":0.398996,"title":"Signal 14: naïve dedupe"}}
+{"type":"Signal","data":{"id":"signal-015","body":"Market movement around export streaming.","category":"competitor","observed_at":20109,"slug":"signal-015","source":null,"strength":0.758282,"title":"Signal 15: ingestion backpressure"}}
+{"type":"Signal","data":{"id":"signal-016","body":"Market movement around branch quiescence.","category":"customer","observed_at":18603,"slug":"signal-016","source":null,"strength":0.472056,"title":"Signal 16: typed attrs"}}
+{"type":"Signal","data":{"id":"signal-017","body":null,"category":"customer","observed_at":20095,"slug":"signal-017","source":"https://example.test/signals/17","strength":0.083839,"title":"Signal 17: revision stamps"}}
+{"type":"Signal","data":{"id":"signal-018","body":null,"category":"technology","observed_at":16692,"slug":"signal-018","source":null,"strength":0.937273,"title":"Signal 18: columnar snapshots"}}
+{"type":"Signal","data":{"id":"signal-019","body":null,"category":"customer","observed_at":17706,"slug":"signal-019","source":null,"strength":0.469585,"title":"Signal 19: revision stamps"}}
+{"type":"Signal","data":{"id":"signal-020","body":"Market movement around columnar snapshots.","category":"technology","observed_at":19882,"slug":"signal-020","source":"https://example.test/signals/20","strength":0.753215,"title":"Signal 20: edge identity"}}
+{"type":"Signal","data":{"id":"signal-021","body":"Market movement around ingestion backpressure.","category":"competitor","observed_at":19880,"slug":"signal-021","source":"https://example.test/signals/21","strength":0.735278,"title":"Signal 21: Ω-bounds"}}
+{"type":"Signal","data":{"id":"signal-022","body":null,"category":"regulatory","observed_at":16606,"slug":"signal-022","source":"https://example.test/signals/22","strength":0.846439,"title":"Signal 22: revision stamps"}}
+{"type":"Signal","data":{"id":"signal-023","body":null,"category":"regulatory","observed_at":17162,"slug":"signal-023","source":"https://example.test/signals/23","strength":0.086616,"title":"Signal 23: export streaming"}}
+{"type":"Signal","data":{"id":"signal-024","body":null,"category":"market","observed_at":20137,"slug":"signal-024","source":"https://example.test/signals/24","strength":0.040446,"title":"Signal 24: columnar snapshots"}}
+{"type":"Signal","data":{"id":"signal-025","body":"Market movement around branch quiescence.","category":"market","observed_at":17806,"slug":"signal-025","source":"https://example.test/signals/25","strength":0.861196,"title":"Signal 25: ingestion backpressure"}}
+{"type":"Signal","data":{"id":"signal-026","body":"Market movement around naïve dedupe.","category":"competitor","observed_at":17121,"slug":"signal-026","source":null,"strength":0.280003,"title":"Signal 26: search admission"}}
+{"type":"Signal","data":{"id":"signal-027","body":"Market movement around schema drift.","category":"regulatory","observed_at":20356,"slug":"signal-027","source":"https://example.test/signals/27","strength":0.175595,"title":"Signal 27: naïve dedupe"}}
+{"type":"Signal","data":{"id":"signal-028","body":null,"category":"regulatory","observed_at":19960,"slug":"signal-028","source":"https://example.test/signals/28","strength":0.831339,"title":"Signal 28: category scales — 图例"}}
+{"type":"Signal","data":{"id":"signal-029","body":"Market movement around revision stamps.","category":"technology","observed_at":17199,"slug":"signal-029","source":"https://example.test/signals/29","strength":0.39148,"title":"Signal 29: export streaming"}}
+{"type":"Signal","data":{"id":"signal-030","body":null,"category":"customer","observed_at":18653,"slug":"signal-030","source":"https://example.test/signals/30","strength":0.17736,"title":"Signal 30: crème-fraîche caching"}}
+{"type":"Signal","data":{"id":"signal-031","body":"Market movement around columnar snapshots.","category":"regulatory","observed_at":19670,"slug":"signal-031","source":"https://example.test/signals/31","strength":0.302954,"title":"Signal 31: legend domains"}}
+{"type":"Signal","data":{"id":"signal-032","body":null,"category":"customer","observed_at":17213,"slug":"signal-032","source":"https://example.test/signals/32","strength":0.644454,"title":"Signal 32: edge identity"}}
+{"type":"Signal","data":{"id":"signal-033","body":"Market movement around category scales — 图例.","category":"customer","observed_at":19984,"slug":"signal-033","source":"https://example.test/signals/33","strength":0.386967,"title":"Signal 33: search admission"}}
+{"type":"Signal","data":{"id":"signal-034","body":null,"category":"market","observed_at":19737,"slug":"signal-034","source":"https://example.test/signals/34","strength":0.026825,"title":"Signal 34: typed attrs"}}
+{"type":"Signal","data":{"id":"signal-035","body":"Market movement around crème-fraîche caching.","category":"technology","observed_at":17329,"slug":"signal-035","source":"https://example.test/signals/35","strength":0.937112,"title":"Signal 35: ingestion backpressure"}}
+{"type":"Signal","data":{"id":"signal-036","body":"Market movement around graph overlays.","category":"market","observed_at":18547,"slug":"signal-036","source":null,"strength":0.369431,"title":"Signal 36: search admission"}}
+{"type":"Signal","data":{"id":"signal-037","body":"Market movement around typed attrs.","category":"technology","observed_at":16747,"slug":"signal-037","source":"https://example.test/signals/37","strength":0.883798,"title":"Signal 37: wire encodings"}}
+{"type":"Signal","data":{"id":"signal-038","body":"Market movement around naïve dedupe.","category":"market","observed_at":19835,"slug":"signal-038","source":null,"strength":0.241285,"title":"Signal 38: edge identity"}}
+{"type":"Signal","data":{"id":"signal-039","body":"Market movement around export streaming.","category":"customer","observed_at":18645,"slug":"signal-039","source":null,"strength":0.537504,"title":"Signal 39: crème-fraîche caching"}}
+{"type":"Signal","data":{"id":"signal-040","body":null,"category":"technology","observed_at":16933,"slug":"signal-040","source":null,"strength":0.944124,"title":"Signal 40: ingestion backpressure"}}
+{"type":"Signal","data":{"id":"signal-041","body":"Market movement around graph overlays.","category":"customer","observed_at":18969,"slug":"signal-041","source":"https://example.test/signals/41","strength":0.551587,"title":"Signal 41: search admission"}}
+{"type":"Signal","data":{"id":"signal-042","body":"Market movement around crème-fraîche caching.","category":"customer","observed_at":20632,"slug":"signal-042","source":null,"strength":0.799856,"title":"Signal 42: branch quiescence"}}
+{"type":"Signal","data":{"id":"signal-043","body":null,"category":"market","observed_at":17581,"slug":"signal-043","source":null,"strength":0.206987,"title":"Signal 43: columnar snapshots"}}
+{"type":"Signal","data":{"id":"signal-044","body":null,"category":"regulatory","observed_at":19101,"slug":"signal-044","source":"https://example.test/signals/44","strength":0.825437,"title":"Signal 44: crème-fraîche caching"}}
+{"type":"Signal","data":{"id":"signal-045","body":null,"category":"technology","observed_at":19652,"slug":"signal-045","source":null,"strength":0.597921,"title":"Signal 45: schema drift"}}
+{"type":"Signal","data":{"id":"signal-046","body":null,"category":"regulatory","observed_at":18480,"slug":"signal-046","source":"https://example.test/signals/46","strength":0.028038,"title":"Signal 46: crème-fraîche caching"}}
+{"type":"Signal","data":{"id":"signal-047","body":null,"category":"technology","observed_at":17049,"slug":"signal-047","source":"https://example.test/signals/47","strength":0.107928,"title":"Signal 47: typed attrs"}}
+{"type":"Signal","data":{"id":"signal-048","body":"Market movement around schema drift.","category":"regulatory","observed_at":18454,"slug":"signal-048","source":"https://example.test/signals/48","strength":0.291874,"title":"Signal 48: ingestion backpressure"}}
+{"type":"Signal","data":{"id":"signal-049","body":"Market movement around columnar snapshots.","category":"regulatory","observed_at":18910,"slug":"signal-049","source":null,"strength":0.467257,"title":"Signal 49: revision stamps"}}
+{"type":"Signal","data":{"id":"signal-050","body":"Market movement around edge identity.","category":"customer","observed_at":19920,"slug":"signal-050","source":"https://example.test/signals/50","strength":0.385888,"title":"Signal 50: ingestion backpressure"}}
+{"type":"Signal","data":{"id":"signal-051","body":"Market movement around typed attrs.","category":"regulatory","observed_at":17923,"slug":"signal-051","source":"https://example.test/signals/51","strength":0.43061,"title":"Signal 51: revision stamps"}}
+{"type":"Signal","data":{"id":"signal-052","body":null,"category":"regulatory","observed_at":19894,"slug":"signal-052","source":"https://example.test/signals/52","strength":0.712629,"title":"Signal 52: Ω-bounds"}}
+{"type":"Signal","data":{"id":"signal-053","body":null,"category":"market","observed_at":19070,"slug":"signal-053","source":null,"strength":0.037462,"title":"Signal 53: legend domains"}}
+{"type":"Signal","data":{"id":"signal-054","body":null,"category":"competitor","observed_at":16653,"slug":"signal-054","source":"https://example.test/signals/54","strength":0.558492,"title":"Signal 54: export streaming"}}
+{"type":"Signal","data":{"id":"signal-055","body":"Market movement around category scales — 图例.","category":"competitor","observed_at":17933,"slug":"signal-055","source":"https://example.test/signals/55","strength":0.837372,"title":"Signal 55: legend domains"}}
+{"type":"Signal","data":{"id":"signal-056","body":"Market movement around schema drift.","category":"regulatory","observed_at":17807,"slug":"signal-056","source":null,"strength":0.308975,"title":"Signal 56: naïve dedupe"}}
+{"type":"Signal","data":{"id":"signal-057","body":null,"category":"competitor","observed_at":16474,"slug":"signal-057","source":"https://example.test/signals/57","strength":0.195232,"title":"Signal 57: edge identity"}}
+{"type":"Signal","data":{"id":"signal-058","body":null,"category":"competitor","observed_at":20011,"slug":"signal-058","source":"https://example.test/signals/58","strength":0.106871,"title":"Signal 58: graph overlays"}}
+{"type":"Signal","data":{"id":"signal-059","body":null,"category":"regulatory","observed_at":16597,"slug":"signal-059","source":"https://example.test/signals/59","strength":0.008096,"title":"Signal 59: columnar snapshots"}}
+{"type":"Signal","data":{"id":"signal-060","body":"Market movement around crème-fraîche caching.","category":"technology","observed_at":18486,"slug":"signal-060","source":null,"strength":0.117169,"title":"Signal 60: crème-fraîche caching"}}

@@ -1,0 +1,36 @@
+{
+  "name": "orbit-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "eslint .",
+    "boundaries": "node scripts/check-boundaries.mjs",
+    "anchors": "node scripts/check-internal-anchors.mjs",
+    "cosmos:pin-check": "node scripts/check-cosmos-pin.mjs",
+    "smoke": "node scripts/pack-smoke.mjs",
+    "probe": "PROBE_HEADFUL=1 pnpm --filter orbit-spike exec playwright test",
+    "probe:node": "node scripts/probe-node.mjs",
+    "perf:gate": "node --test scripts/perf-gate.test.mjs",
+    "check": "pnpm run boundaries && pnpm run anchors && pnpm run cosmos:pin-check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run perf:gate",
+    "demo:dev": "pnpm --filter orbit-demo dev",
+    "demo:build": "pnpm --filter orbit-demo build",
+    "version": "changeset version && pnpm install --lockfile-only",
+    "release": "pnpm run build && pnpm run smoke && changeset publish",
+    "svg:node-fixture": "node scripts/svg-node-fixture.mjs"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^2.31.1",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.7.0",
+    "publint": "^0.3.21",
+    "tsup": "^8.5.1",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^3.0.0"
+  },
+  "packageManager": "pnpm@10.33.3"
+}
