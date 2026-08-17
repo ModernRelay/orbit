@@ -196,8 +196,13 @@ interface AttemptRetry {
 export function createOmnigraphSource(options: OmnigraphSourceOptions): OmnigraphSource {
   const graphId = options.graphId;
   const branch = options.branch ?? 'main';
-  const batchSize = Math.max(1, Math.floor(options.batchSize ?? DEFAULT_BATCH_SIZE));
-  const maxPendingBytes = options.maxPendingBytes ?? DEFAULT_MAX_PENDING_BYTES;
+  const batchSize =
+    options.batchSize === undefined ? DEFAULT_BATCH_SIZE : options.batchSize;
+  if (!Number.isSafeInteger(batchSize) || batchSize <= 0) {
+    throw new TypeError('createOmnigraphSource: batchSize must be a positive safe integer');
+  }
+  const maxPendingBytes =
+    options.maxPendingBytes === undefined ? DEFAULT_MAX_PENDING_BYTES : options.maxPendingBytes;
   if (!Number.isSafeInteger(maxPendingBytes) || maxPendingBytes <= 0) {
     throw new TypeError(
       'createOmnigraphSource: maxPendingBytes must be a positive safe integer',

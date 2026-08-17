@@ -829,45 +829,61 @@ export class CosmosEngine implements GraphEngine {
    * later explicit directive (including `false`) replaces it.
    */
   private queueCommit(update: EngineCommit): void {
+    // EngineCommit's caller-owned array views expire when commit() returns.
+    // A pre-mount/lost-context commit outlives that boundary, so snapshot the
+    // complete payload before either retaining it directly or folding it into
+    // an earlier pending commit. ImageBitmap handles are intentionally kept by
+    // reference; only their caller-owned container objects are copied.
+    const ownedUpdate = cloneCommitForQueue(update);
     const previous = this.pendingCommit;
     if (previous === null) {
-      this.pendingCommit = update;
+      this.pendingCommit = ownedUpdate;
       return;
     }
 
-    const merged: EngineCommit = { revision: update.revision };
+    const merged: EngineCommit = { revision: ownedUpdate.revision };
 
-    const structure = update.structure ?? previous.structure;
+    const structure = ownedUpdate.structure ?? previous.structure;
     if (structure !== undefined) merged.structure = structure;
 
-    if (previous.buffers !== undefined || update.buffers !== undefined) {
-      merged.buffers = { ...previous.buffers, ...update.buffers };
+    if (previous.buffers !== undefined || ownedUpdate.buffers !== undefined) {
+      merged.buffers = { ...previous.buffers, ...ownedUpdate.buffers };
     }
 
-    if (previous.config !== undefined || update.config !== undefined) {
-      const config = { ...previous.config, ...update.config };
+    if (
+      previous.bufferPatches !== undefined ||
+      ownedUpdate.bufferPatches !== undefined
+    ) {
+      merged.bufferPatches = {
+        ...previous.bufferPatches,
+        ...ownedUpdate.bufferPatches,
+      };
+    }
+
+    if (previous.config !== undefined || ownedUpdate.config !== undefined) {
+      const config = { ...previous.config, ...ownedUpdate.config };
       if (
         previous.config?.simulation !== undefined ||
-        update.config?.simulation !== undefined
+        ownedUpdate.config?.simulation !== undefined
       ) {
         config.simulation = {
           ...previous.config?.simulation,
-          ...update.config?.simulation,
+          ...ownedUpdate.config?.simulation,
         };
       }
       merged.config = config;
     }
 
-    if (previous.resources !== undefined || update.resources !== undefined) {
-      merged.resources = mergeResources(previous.resources, update.resources);
+    if (previous.resources !== undefined || ownedUpdate.resources !== undefined) {
+      merged.resources = mergeResources(previous.resources, ownedUpdate.resources);
     }
 
     // Contract: `restart: false` and an ABSENT restart are
     // equivalent no-ops ("false/absent = keep state") — so neither cancels a
     // pending queued restart directive; only a new {alpha} replaces it.
     const restart =
-      update.restart !== undefined && update.restart !== false
-        ? update.restart
+      ownedUpdate.restart !== undefined && ownedUpdate.restart !== false
+        ? ownedUpdate.restart
         : previous.restart;
     if (restart !== undefined) merged.restart = restart;
 
@@ -1374,6 +1390,118 @@ export class CosmosEngine implements GraphEngine {
     }
     return out;
   }
+}
+
+/**
+ * Takes ownership of every mutable container in a commit that may be retained
+ * past `commit()`'s synchronous lifetime. Typed arrays are copied by value;
+ * nested records/lists are copied so callers cannot replace an owned array or
+ * atlas operation after enqueue. ImageBitmap itself is an opaque resource
+ * handle and deliberately remains shared.
+ */
+function cloneCommitForQueue(update: EngineCommit): EngineCommit {
+  const owned: EngineCommit = { revision: update.revision };
+
+  if (update.structure !== undefined) {
+    owned.structure = {
+      pointCount: update.structure.pointCount,
+      positions: update.structure.positions.slice(),
+      links: update.structure.links.slice(),
+    };
+  }
+
+  if (update.buffers !== undefined) {
+    const buffers: NonNullable<EngineCommit['buffers']> = {};
+    if (update.buffers.pointColor !== undefined) {
+      buffers.pointColor = update.buffers.pointColor.slice();
+    }
+    if (update.buffers.pointSize !== undefined) {
+      buffers.pointSize = update.buffers.pointSize.slice();
+    }
+    if (update.buffers.linkColor !== undefined) {
+      buffers.linkColor = update.buffers.linkColor.slice();
+    }
+    if (update.buffers.linkWidth !== undefined) {
+      buffers.linkWidth = update.buffers.linkWidth.slice();
+    }
+    owned.buffers = buffers;
+  }
+
+  if (update.bufferPatches !== undefined) {
+    const patches: NonNullable<EngineCommit['bufferPatches']> = {};
+    if (update.bufferPatches.pointColor !== undefined) {
+      patches.pointColor = update.bufferPatches.pointColor.map(({ start, data }) => ({
+        start,
+        data: data.slice(),
+      }));
+    }
+    if (update.bufferPatches.pointSize !== undefined) {
+      patches.pointSize = update.bufferPatches.pointSize.map(({ start, data }) => ({
+        start,
+        data: data.slice(),
+      }));
+    }
+    if (update.bufferPatches.linkColor !== undefined) {
+      patches.linkColor = update.bufferPatches.linkColor.map(({ start, data }) => ({
+        start,
+        data: data.slice(),
+      }));
+    }
+    if (update.bufferPatches.linkWidth !== undefined) {
+      patches.linkWidth = update.bufferPatches.linkWidth.map(({ start, data }) => ({
+        start,
+        data: data.slice(),
+      }));
+    }
+    owned.bufferPatches = patches;
+  }
+
+  if (update.config !== undefined) {
+    const config: NonNullable<EngineCommit['config']> = { ...update.config };
+    if (update.config.simulation !== undefined) {
+      config.simulation = { ...update.config.simulation };
+    }
+    if (update.config.cluster !== undefined) {
+      config.cluster =
+        update.config.cluster === null
+          ? null
+          : {
+              ...update.config.cluster,
+              pointClusters: update.config.cluster.pointClusters.slice(),
+              ...(update.config.cluster.centers === undefined
+                ? {}
+                : { centers: update.config.cluster.centers.slice() }),
+            };
+    }
+    owned.config = config;
+  }
+
+  if (update.resources !== undefined) {
+    const resources: EngineResources = {};
+    if (update.resources.imageAtlas !== undefined) {
+      const imageAtlas: NonNullable<EngineResources['imageAtlas']> = {};
+      if (update.resources.imageAtlas.upserts !== undefined) {
+        imageAtlas.upserts = update.resources.imageAtlas.upserts.map(({ slot, bitmap }) => ({
+          slot,
+          bitmap,
+        }));
+      }
+      if (update.resources.imageAtlas.removeSlots !== undefined) {
+        imageAtlas.removeSlots = Array.from(update.resources.imageAtlas.removeSlots);
+      }
+      resources.imageAtlas = imageAtlas;
+    }
+    if (update.resources.pointImageIndex !== undefined) {
+      resources.pointImageIndex = update.resources.pointImageIndex.slice();
+    }
+    owned.resources = resources;
+  }
+
+  if (update.restart !== undefined) {
+    owned.restart = update.restart === false ? false : { alpha: update.restart.alpha };
+  }
+
+  return owned;
 }
 
 /**

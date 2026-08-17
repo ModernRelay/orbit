@@ -3953,7 +3953,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
             simRestarted = true;
           }
         }
-        eng.commit(commit);
+        commitToEngine(eng, commit);
         revisions.appliedRender = eng.appliedRevision();
         const facade = session !== null ? session.edgePicking : null;
         if (facade !== null) {
@@ -9874,47 +9874,48 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   }
 
   /** styling capture: Scales that are data by construction. */
-  function serializableScaleOf(
+  function serializableScaleOf<T extends string | number>(
     channel: 'nodeColor' | 'nodeSize',
-    value: unknown,
-  ): SerializableScale | undefined {
+    value: Accessor<GraphNode<N>, T> | Scale<T, N> | undefined,
+  ): SerializableScale<T> | undefined {
     if (value === undefined) return undefined;
     if (typeof value === 'function') {
       warnViewStateDrop(channel, 'accessor functions do not serialize');
       return undefined;
     }
     if (!isScaleValue(value)) return undefined; // constants are app defaults, not captured
-    if (value.kind === 'sequential') {
+    const scale = value as Scale<T, N>;
+    if (scale.kind === 'sequential') {
       return {
         kind: 'sequential',
-        metric: value.metric,
-        range: value.range as readonly string[] | readonly number[],
+        metric: scale.metric,
+        range: scale.range,
         // The numeric-array domain form is data; a DomainPolicy is app
         // behavior config and stays with the app.
-        ...(Array.isArray(value.domain) ? { domain: value.domain as readonly number[] } : {}),
-      };
+        ...(Array.isArray(scale.domain)
+          ? { domain: scale.domain as readonly [number, number] }
+          : {}),
+      } as SerializableScale<T>;
     }
-    if (value.kind === 'diverging') {
+    if (scale.kind === 'diverging') {
       return {
         kind: 'diverging',
-        metric: value.metric,
-        range: value.range as readonly string[] | readonly number[],
-        mid: value.mid,
-      };
+        metric: scale.metric,
+        range: scale.range,
+        mid: scale.mid,
+      } as SerializableScale<T>;
     }
     // categorical: only the field-descriptor `by` form is data.
-    if (typeof value.by !== 'string') {
+    if (typeof scale.by !== 'string') {
       warnViewStateDrop(channel, "a function-`by` categorical scale does not serialize");
       return undefined;
     }
     return {
       kind: 'categorical',
-      by: value.by,
-      ...(value.palette !== undefined
-        ? { palette: value.palette as readonly string[] | readonly number[] }
-        : {}),
-      ...(value.domain !== undefined ? { domain: value.domain } : {}),
-    };
+      by: scale.by,
+      ...(scale.palette !== undefined ? { palette: scale.palette } : {}),
+      ...(scale.domain !== undefined ? { domain: scale.domain } : {}),
+    } as SerializableScale<T>;
   }
 
   /** Named-theme capture: only 'light'/'dark' serialize (custom GraphTheme
@@ -10336,7 +10337,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
                   ...prevState.revisions,
                   render: prevState.revisions.render + 1,
                 };
-                eng.commit({
+                commitToEngine(eng, {
                   revision: nextRevisions.render,
                   structure: {
                     pointCount: scene.count,
@@ -10344,6 +10345,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
                     links: scene.links,
                   },
                 });
+                nextRevisions.appliedRender = eng.appliedRevision();
                 eng.pause();
                 const patch: Partial<GraphStoreState> = { revisions: nextRevisions };
                 if (prevState.simulationRunning) patch.simulationRunning = false;

@@ -10,13 +10,22 @@
  * the SAME set → imperative `style.transform` writes through refs keyed by
  * id. No React re-render per tick (M0: the label lane is pure CPU O(k)).
  *
- * The layer is pointer-inert; label divs opt back in and drive the
- * click-selection path through the same public mutators (replace on plain
- * click and toggle on meta/shift).
+ * The layer is pointer-inert; built-in label divs opt back in as focusable
+ * buttons and drive the same public selection mutators by click or Enter/Space
+ * (replace normally, toggle with meta/shift). Custom renderers own their
+ * content's focus semantics, avoiding a button-role wrapper around a native
+ * interactive control. Node labels expose their context action through
+ * right-click plus ContextMenu/Shift+F10.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactElement, ReactNode } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactElement,
+  ReactNode,
+} from 'react';
 import type { GraphNode, LabelPlacement, NodeId } from '@modernrelay/orbit-core';
 import { useAmbientGraphInstance } from './GraphProvider';
 import { overlaySurface, overlayLayerStyle } from './components/shared';
@@ -71,6 +80,7 @@ export function LabelLayer(props: LabelLayerProps): ReactElement {
   /** Freshest known screen position per candidate — written by BOTH channels
    * so a candidate re-render never snaps back to a stale x/y. */
   const positionsRef = useRef(new Map<string, readonly [number, number]>());
+  const layerRef = useRef<HTMLDivElement | null>(null);
 
   // Candidate SET changes: throttled re-rank → React re-render of the content.
   useEffect(() => {
@@ -109,14 +119,18 @@ export function LabelLayer(props: LabelLayerProps): ReactElement {
 
   // Click-selection semantics through the public mutators:
   // plain click replaces the node selection; meta/shift click toggles the id.
-  const onLabelClick = (id: NodeId, e: ReactMouseEvent<HTMLDivElement>): void => {
-    e.stopPropagation();
-    if (e.metaKey || e.shiftKey) {
+  const selectLabel = (id: NodeId, additive: boolean): void => {
+    if (additive) {
       const cur = instance.store.getState().selection.nodeIds;
       instance.setSelection(cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
       return;
     }
     instance.setSelection([id]);
+  };
+
+  const onLabelClick = (id: NodeId, e: ReactMouseEvent<HTMLDivElement>): void => {
+    e.stopPropagation();
+    selectLabel(id, e.metaKey || e.shiftKey);
   };
 
   // a cluster label resolves to its MEMBER node ids through the
@@ -126,13 +140,50 @@ export function LabelLayer(props: LabelLayerProps): ReactElement {
     instance.selectCluster(key, { additive: e.metaKey || e.shiftKey });
   };
 
+  const onLabelKeyDown = (
+    p: LabelPlacement,
+    e: ReactKeyboardEvent<HTMLDivElement>,
+  ): void => {
+    // Native button activation does not exist for a div with role="button",
+    // and keyboard-triggered `contextmenu` coordinates vary by browser. Give
+    // node labels (including native controls supplied by a custom renderer)
+    // an explicit ContextMenu / Shift+F10 path, anchored at the label's center
+    // in the same container-relative coordinate system as a pointer-triggered
+    // menu.
+    if (
+      p.kind !== 'cluster' &&
+      (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      const layerRect = layerRef.current?.getBoundingClientRect();
+      if (layerRect === undefined) return;
+      const labelRect = e.currentTarget.getBoundingClientRect();
+      instance.requestNodeContextMenu(p.id, [
+        labelRect.left + labelRect.width / 2 - layerRect.left,
+        labelRect.top + labelRect.height / 2 - layerRect.top,
+      ]);
+      return;
+    }
+    // An escape-hatch renderer may supply its own focusable control. Its
+    // Enter keydown can synthesize a click that already bubbles through the
+    // label's click path, so handling the bubbled keydown here as well would
+    // activate the label twice.
+    if (e.target !== e.currentTarget) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const additive = e.metaKey || e.shiftKey;
+    if (p.kind === 'cluster') instance.selectCluster(p.id, { additive });
+    else selectLabel(p.id, additive);
+  };
+
   // Right-click routes into the SAME typed 'contextMenu' channel the canvas
   // gesture feeds. Label divs are pointerEvents:'auto' (click-to-focus), so
   // without this the gesture dies here and the browser's native menu opens
   // on exactly the nodes prominent enough to carry labels. Coordinates are
   // container-relative CSS px (the layer fills the container), matching the
   // payload contract the canvas path uses.
-  const layerRef = useRef<HTMLDivElement | null>(null);
   const onLabelContextMenu = (id: NodeId, e: ReactMouseEvent<HTMLDivElement>): void => {
     e.preventDefault();
     e.stopPropagation();
@@ -154,17 +205,29 @@ export function LabelLayer(props: LabelLayerProps): ReactElement {
           ? [props.labelClassName, props.clusterLabelClassName].filter(Boolean).join(' ') ||
             undefined
           : props.labelClassName;
+        const hasCustomRenderer = isCluster
+          ? props.renderClusterLabel !== undefined
+          : props.renderNodeLabel !== undefined;
         return (
           <div
             key={key}
             {...(isCluster ? { 'data-orbit-cluster-label': p.id } : { 'data-orbit-label': p.id })}
             className={className}
+            {...(!hasCustomRenderer
+              ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  'aria-label': p.text,
+                  ...(!isCluster ? { 'aria-haspopup': 'menu' as const } : {}),
+                }
+              : {})}
             style={{ ...LABEL_BASE_STYLE, transform: transformOf(x, y) }}
             ref={(el) => {
               if (el === null) elementsRef.current.delete(key);
               else elementsRef.current.set(key, el);
             }}
             onClick={(e) => (isCluster ? onClusterLabelClick(p.id, e) : onLabelClick(p.id, e))}
+            onKeyDown={(e) => onLabelKeyDown(p, e)}
             // Cluster labels keep the browser menu for now: their click
             // already selects members, and no cluster menu target exists.
             onContextMenu={isCluster ? undefined : (e) => onLabelContextMenu(p.id, e)}

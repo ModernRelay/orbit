@@ -77,24 +77,36 @@ export async function prepareGraphData<
   const lanes = { csv: false, rows: false };
   const edgeTable = await resolveTabular(input.edges, options, edgeIdentity, 'edge', lanes);
   let nodeTable: RowTable | null = null;
-  if (!deriveNodes) {
-    if (!('nodes' in input) || input.nodes === undefined) {
-      throw new TypeError(
-        'prepareGraphData: input must supply nodes, set deriveNodes: true, or use a document',
-      );
+  try {
+    if (!deriveNodes) {
+      if (!('nodes' in input) || input.nodes === undefined) {
+        throw new TypeError(
+          'prepareGraphData: input must supply nodes, set deriveNodes: true, or use a document',
+        );
+      }
+      const nodeIdentity = new Set(mapping.nodes === undefined ? [] : [mapping.nodes.id]);
+      nodeTable = await resolveTabular(input.nodes, options, nodeIdentity, 'node', lanes);
     }
-    const nodeIdentity = new Set(mapping.nodes === undefined ? [] : [mapping.nodes.id]);
-    nodeTable = await resolveTabular(input.nodes, options, nodeIdentity, 'node', lanes);
-  }
 
-  const resolvedFormat = format ?? (lanes.csv ? 'csv' : 'rows');
-  return (await buildPrepared({
-    nodeTable,
-    edgeTable,
-    mapping,
-    format: resolvedFormat,
-    options,
-  })) as PreparedGraph<N, E>;
+    const resolvedFormat = format ?? (lanes.csv ? 'csv' : 'rows');
+    return (await buildPrepared({
+      nodeTable,
+      edgeTable,
+      mapping,
+      format: resolvedFormat,
+      options,
+    })) as PreparedGraph<N, E>;
+  } catch (cause) {
+    // The edge lane is opened first. If node-lane resolution fails before
+    // buildPrepared takes ownership, release every already-peeked iterator.
+    // Cleanup is best-effort on this failure path: run every close, but keep
+    // the resolution error as the rejection callers receive.
+    await Promise.allSettled([
+      Promise.resolve().then(() => edgeTable.close?.()),
+      Promise.resolve().then(() => nodeTable?.close?.()),
+    ]);
+    throw cause;
+  }
 }
 
 async function resolveTabular(

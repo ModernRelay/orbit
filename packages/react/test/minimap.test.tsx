@@ -199,10 +199,17 @@ describe('<GraphMinimap> viewport rectangle lane', () => {
 /** jsdom has no PointerEvent: dispatch MouseEvents with pointer TYPES (the
  * same native event names React's onPointer* handlers listen for), which
  * carry real clientX/clientY. */
-function firePointer(el: Element, type: string, x: number, y: number): void {
+function firePointer(el: Element, type: string, x: number, y: number, pointerId = 1): void {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: x,
+    clientY: y,
+  });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
   fireEvent(
     el,
-    new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+    event,
   );
 }
 
@@ -237,5 +244,36 @@ describe('<GraphMinimap> click/drag pan', () => {
     firePointer(canvas, 'pointerup', 15, 15);
     firePointer(canvas, 'pointermove', 20, 20);
     expect(setViewportSpy).toHaveBeenCalledTimes(3); // no pan after release
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])(
+    '%s terminates the owning drag',
+    async (terminalEvent) => {
+      const { instance, canvas } = await setup(40);
+      const setViewportSpy = vi.spyOn(instance, 'setViewport');
+
+      firePointer(canvas, 'pointerdown', 10, 10, 7);
+      firePointer(canvas, terminalEvent, 10, 10, 7);
+      firePointer(canvas, 'pointermove', 20, 20, 7);
+
+      expect(setViewportSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('only the pointer that started a drag may move or terminate it', async () => {
+    const { instance, canvas } = await setup(40);
+    const setViewportSpy = vi.spyOn(instance, 'setViewport');
+
+    firePointer(canvas, 'pointerdown', 10, 10, 7);
+    firePointer(canvas, 'pointermove', 20, 20, 8); // unrelated move
+    firePointer(canvas, 'pointerup', 20, 20, 8); // unrelated release
+    firePointer(canvas, 'pointerdown', 20, 20, 8); // cannot steal ownership
+    expect(setViewportSpy).toHaveBeenCalledTimes(1);
+
+    firePointer(canvas, 'pointermove', 14, 14, 7);
+    expect(setViewportSpy).toHaveBeenCalledTimes(2);
+    firePointer(canvas, 'pointerup', 14, 14, 7);
+    firePointer(canvas, 'pointermove', 18, 18, 7);
+    expect(setViewportSpy).toHaveBeenCalledTimes(2);
   });
 });

@@ -11,9 +11,11 @@
  * STRING, which survives.
  * - duplicate edge ids drop, first wins ('duplicate-edge-id', warning).
  * - self-loops are RETAINED with 'self-loop-retained' (info).
- * - invalid-node / invalid-edge / dangling-edge cannot occur here: ids come
- * from a structurally validated dictionary column and endpoints are
- * in-bounds indices by prior validation (validateColumnarStructure).
+ * - invalid-node / invalid-edge rows with NUL-reserved ids drop here;
+ * dangling edges can then arise when an endpoint names a dropped invalid
+ * node. Other structural corruption cannot occur because ids come from a
+ * structurally validated dictionary column and endpoints are in-bounds
+ * indices by prior validation (validateColumnarStructure).
  *
  * Duplicates hide in TWO encodings: two rows sharing a code, and two
  * DISTINCT dictionary entries holding equal strings. Both are handled by
@@ -95,6 +97,7 @@ export function acceptColumnar(
   const edgeRows = snapshot.edges.length;
 
   const duplicateNode: Tally = { count: 0, samples: [] };
+  const invalidEdge: Tally = { count: 0, samples: [] };
   const duplicateEdge: Tally = { count: 0, samples: [] };
   const selfLoop: Tally = { count: 0, samples: [] };
   const invalidNode: Tally = { count: 0, samples: [] };
@@ -137,18 +140,21 @@ export function acceptColumnar(
 
   // --- Edges: first occurrence per canonical edge id wins; self-loops kept. -
   const edgeCanonical = canonicalizeDictionary(edgeIds.dictionary);
+  const nulEdgeDict = new Uint8Array(edgeIds.dictionary.length);
+  for (let d = 0; d < edgeIds.dictionary.length; d++) {
+    if (edgeIds.dictionary[d]!.includes('\u0000')) nulEdgeDict[d] = 1;
+  }
   const keepEdges = new Uint8Array(edgeRows);
   const seenEdgeByCanonical = new Uint8Array(edgeIds.dictionary.length);
   const { source, target } = snapshot.edges;
   const linksOut = new Uint32Array(edgeRows * 2); // trimmed after the scan
   let acceptedEdgeCount = 0;
   for (let e = 0; e < edgeRows; e++) {
-    const canonical = edgeCanonical[edgeIds.codes[e]!]!;
-    if (seenEdgeByCanonical[canonical] !== 0) {
-      record(duplicateEdge, edgeIds.dictionary[edgeIds.codes[e]!]!);
+    if (nulEdgeDict[edgeIds.codes[e]!] !== 0) {
+      record(invalidEdge, `[${e}]`);
       continue;
     }
-    seenEdgeByCanonical[canonical] = 1;
+    const canonical = edgeCanonical[edgeIds.codes[e]!]!;
     const s = nodeAcceptedIndex[source[e]!]!;
     const t = nodeAcceptedIndex[target[e]!]!;
     if (s === -1 || t === -1) {
@@ -160,6 +166,16 @@ export function acceptColumnar(
       );
       continue;
     }
+    // Object-lane order is endpoint admission BEFORE final-id dedupe: a
+    // dangling record never occupies its edge id, so a later endpoint-valid
+    // record with the same id remains eligible. NUL-invalid node rows make
+    // that distinction observable in the otherwise structurally sound
+    // columnar lane.
+    if (seenEdgeByCanonical[canonical] !== 0) {
+      record(duplicateEdge, edgeIds.dictionary[edgeIds.codes[e]!]!);
+      continue;
+    }
+    seenEdgeByCanonical[canonical] = 1;
     if (s === t) {
       // Same ACCEPTED node = same id string (the object lane compares
       // source/target strings) — retained, reported.
@@ -187,6 +203,13 @@ export function acceptColumnar(
     'warning',
     duplicateNode,
     `${duplicateNode.count} duplicate node id(s) dropped (first occurrence wins)`,
+  );
+  pushDiagnostic(
+    diagnostics,
+    'invalid-edge',
+    'error',
+    invalidEdge,
+    `${invalidEdge.count} edge row(s) dropped: missing or non-string source/target, or NUL-containing explicit id`,
   );
   pushDiagnostic(
     diagnostics,

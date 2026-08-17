@@ -192,12 +192,15 @@ export function GraphTooltip(props: GraphTooltipProps): ReactElement {
     [],
   );
 
-  // Delay lane: arm on hover, cancel/hide immediately on unhover.
+  // Delay lane: arm on hover, cancel/hide immediately on unhover OR target
+  // replacement. Keeping the previous card mounted while a new target's
+  // timer runs presents stale content for an item that is no longer hovered.
   useEffect(() => {
     if (hoverKey === null) {
       setVisibleKey(null);
       return undefined;
     }
+    setVisibleKey((current) => (current === hoverKey ? current : null));
     const timer = setTimeout(() => {
       setVisibleKey(hoverKey);
     }, delayMs);
@@ -251,7 +254,10 @@ export function GraphTooltip(props: GraphTooltipProps): ReactElement {
     if (visibleKey !== null) position(decodeHover(visibleKey).id);
   }, [visibleKey, position]);
 
-  const target = visibleKey === null ? null : decodeHover(visibleKey);
+  // Render-gate synchronously as well as clearing state in the effect: on the
+  // first commit for a replacement hover, effects have not run yet and
+  // `visibleKey` still names the previous target.
+  const target = visibleKey === null || visibleKey !== hoverKey ? null : decodeHover(visibleKey);
   const node =
     target?.kind === 'node'
       ? (instance.getNode(target.id) as GraphNode<any> | undefined)

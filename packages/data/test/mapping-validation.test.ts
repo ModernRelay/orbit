@@ -84,6 +84,17 @@ describe('mapping validation', () => {
     ).rejects.toThrow();
   });
 
+  it('rejects non-finite numeric source revisions before creating a lossy artifact', async () => {
+    for (const sourceRevision of [NaN, Infinity, -Infinity]) {
+      await expect(
+        prepareGraphData({ nodes: [], edges: [] }, PARITY_MAPPING, {
+          ...PARITY_OPTIONS,
+          sourceRevision,
+        }),
+      ).rejects.toThrow(/sourceRevision must be a string or finite number/);
+    }
+  });
+
   it('throws with the row ordinal when an identity value is unusable', async () => {
     await expect(
       prepareGraphData(
@@ -92,5 +103,50 @@ describe('mapping validation', () => {
         PARITY_OPTIONS,
       ),
     ).rejects.toThrow(/node id in column "id" is missing or unusable at row 1/);
+  });
+
+  it('rejects NUL-containing node ids, edge ids, and endpoints reserved by orbit-core', async () => {
+    await expect(
+      prepareGraphData(
+        { nodes: [{ id: 'safe' }, { id: '\0["group","g"]' }], edges: [] },
+        PARITY_MAPPING,
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/node id in column "id" contains reserved NUL at row 1/);
+
+    await expect(
+      prepareGraphData(
+        {
+          nodes: [{ id: 'safe' }],
+          edges: [{ id: 'e', source: 'safe', target: 'bad\0endpoint' }],
+        },
+        PARITY_MAPPING,
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/edge target in column "target" contains reserved NUL at row 0/);
+
+    await expect(
+      prepareGraphData(
+        {
+          nodes: [{ id: 'safe' }],
+          edges: [{ id: '\0["meta-edge","safe","safe"]', source: 'safe', target: 'safe' }],
+        },
+        PARITY_MAPPING,
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/edge id in column "id" contains reserved NUL at row 0/);
+  });
+
+  it('rejects a NUL endpoint before deriveNodes can synthesize a reserved node id', async () => {
+    await expect(
+      prepareGraphData(
+        {
+          edges: [{ source: '\0["group","g"]', target: 'safe' }],
+          deriveNodes: true,
+        },
+        { edges: { source: 'source', target: 'target' } },
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/edge source in column "source" contains reserved NUL at row 0/);
   });
 });

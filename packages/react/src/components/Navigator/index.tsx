@@ -76,6 +76,7 @@ import type {
   SearchResult,
   SelectionState,
 } from '@modernrelay/orbit-core';
+import { getSearchResultUnavailableCallback } from '../../hooks';
 import { useResolvedInstance } from '../shared';
 import type { AnyGraphInstance } from '../../GraphProvider';
 
@@ -476,7 +477,12 @@ export function GraphNavigator(props: GraphNavigatorProps): ReactElement {
   const activate = (row: NavRow): void => {
     if (row.listKey === 'search') {
       const result = searchResults.find((r) => r.id === row.nodeId);
-      if (result !== undefined) instance.activateSearchResult(result);
+      if (result !== undefined) {
+        const activation = instance.activateSearchResult(result);
+        if (activation.status === 'unavailable') {
+          getSearchResultUnavailableCallback(instance)?.(result, activation.reason);
+        }
+      }
       return;
     }
     const neighbors = instance.focusNode(row.nodeId);

@@ -21,7 +21,7 @@ export default defineConfig([
   // `../chunk-*.js` import breaks for consumers relying on the inline
   // default. pack-smoke gates the no-imports shape.
   {
-    entry: { 'worker/entry': 'src/worker/entry.ts' },
+    entry: { 'worker/entry': 'src/worker/entry.js' },
     format: ['esm'],
     dts: false,
     sourcemap: true,

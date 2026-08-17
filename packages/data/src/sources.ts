@@ -30,6 +30,56 @@ export function isAsyncIterable(value: unknown): value is AsyncIterable<unknown>
   );
 }
 
+/**
+ * Iterator teardown is caller-owned protocol, not necessarily an idempotent
+ * async-generator method. Memoize the first close so nested replay/adapter
+ * wrappers can all settle without invoking an arbitrary `return()` twice.
+ */
+function iteratorCloseOnce<T>(iterator: AsyncIterator<T>): () => Promise<void> {
+  let closePromise: Promise<void> | undefined;
+  return () => {
+    closePromise ??= (async () => {
+      await iterator.return?.();
+    })();
+    return closePromise;
+  };
+}
+
+/**
+ * Drive an arbitrary async iterator behind an async-generator boundary that
+ * guarantees `return()` on early exit *and* when `next()` rejects. Native
+ * `for await` does not close an iterator whose own `next()` rejects.
+ */
+async function* closingIterable<T>(source: AsyncIterable<T>): AsyncGenerator<T> {
+  const iterator = source[Symbol.asyncIterator]();
+  const close = iteratorCloseOnce(iterator);
+  let exhausted = false;
+  let failed = false;
+  try {
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) {
+        exhausted = true;
+        return;
+      }
+      yield next.value;
+    }
+  } catch (cause) {
+    failed = true;
+    throw cause;
+  } finally {
+    if (!exhausted) {
+      try {
+        await close();
+      } catch (closeCause) {
+        // A failed read/consumer operation is the useful outcome. Teardown
+        // failure is surfaced only when there is no earlier failure to mask.
+        if (!failed) throw closeCause;
+      }
+    }
+  }
+}
+
 /** An async iterable with its first element already consumed and re-yielded.
  * `done` distinguishes a completed source from one whose first yield was
  * `undefined`; conflating them silently discarded the whole source instead
@@ -46,31 +96,54 @@ export async function peekAsyncIterable(
   close: () => Promise<void>;
 }> {
   const iterator = source[Symbol.asyncIterator]();
-  const head = await iterator.next();
+  const close = iteratorCloseOnce(iterator);
+  let head: IteratorResult<unknown>;
+  try {
+    head = await iterator.next();
+  } catch (cause) {
+    try {
+      await close();
+    } catch {
+      // Preserve the iterator's read failure; teardown is best-effort here.
+    }
+    throw cause;
+  }
   const first = head.done ? undefined : head.value;
   async function* replay(): AsyncGenerator<unknown> {
+    let exhausted = head.done === true;
+    let failed = false;
     try {
       if (!head.done) yield head.value;
       // Delegate to the original iterator (not the iterable) so nothing is lost.
       while (true) {
         const next = await iterator.next();
-        if (next.done) return;
+        if (next.done) {
+          exhausted = true;
+          return;
+        }
         yield next.value;
       }
+    } catch (cause) {
+      failed = true;
+      throw cause;
     } finally {
       // Early exit or a downstream throw must close the source;
       // file handles, network bodies, and generator finally-blocks hang off
-      // return. Forwarded unconditionally; a completed iterator no-ops.
-      await iterator.return?.();
+      // return. A rejected next() also needs explicit teardown.
+      if (!exhausted) {
+        try {
+          await close();
+        } catch (closeCause) {
+          if (!failed) throw closeCause;
+        }
+      }
     }
   }
   return {
     first,
     done: head.done === true,
     rest: replay(),
-    close: async () => {
-      await iterator.return?.();
-    },
+    close,
   };
 }
 
@@ -90,14 +163,14 @@ export function byteChunks(
     return (async function* () {
       // Blob.stream is a web ReadableStream; async-iterable in Node ≥18.
       const stream = source.stream() as unknown as AsyncIterable<Uint8Array>;
-      for await (const chunk of stream) {
+      for await (const chunk of closingIterable(stream)) {
         throwIfAborted(signal);
         yield chunk;
       }
     })();
   }
   return (async function* () {
-    for await (const chunk of source) {
+    for await (const chunk of closingIterable(source)) {
       throwIfAborted(signal);
       if (!(chunk instanceof Uint8Array)) {
         throw new TypeError(
@@ -145,7 +218,7 @@ export function rowStream(
   }
   if (isAsyncIterable(source)) {
     return (async function* () {
-      for await (const row of source) {
+      for await (const row of closingIterable(source)) {
         throwIfAborted(signal);
         yield row;
       }

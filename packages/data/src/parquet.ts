@@ -110,7 +110,13 @@ async function parquetRowTable(
         for (const key of Object.keys(raw)) {
           const value = raw[key];
           if (value === null || value === undefined) continue; // parquet null → absent
-          row[key] = normalizeParquetValue(value);
+          // Preserve a literal `__proto__` schema column as own data.
+          Object.defineProperty(row, key, {
+            value: normalizeParquetValue(value),
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
         }
         yield row;
       }

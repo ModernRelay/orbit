@@ -77,6 +77,16 @@ function checkStringColumn(
     out.push({ where, problem: 'not-a-string-column', detail: 'expected {kind:"string", dictionary, codes}' });
     return;
   }
+  for (let d = 0; d < col.dictionary.length; d++) {
+    if (typeof col.dictionary[d] !== 'string') {
+      out.push({
+        where,
+        problem: 'not-a-string-column',
+        detail: `dictionary entry ${d} is not a string`,
+      });
+      return;
+    }
+  }
   if (col.codes.length !== rows) {
     const detached = col.codes.length === 0 && col.codes.buffer.byteLength === 0;
     out.push({

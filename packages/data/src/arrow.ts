@@ -122,7 +122,14 @@ async function arrowRowTable(
         for (let j = 0; j < columns.length; j++) {
           const value = vectors[j]?.get(i);
           if (value === null || value === undefined) continue; // arrow null → absent
-          row[columns[j]!] = normalizeArrowValue(value);
+          // Arrow schemas may legally contain a `__proto__` column. Plain
+          // assignment would invoke the legacy prototype setter and lose it.
+          Object.defineProperty(row, columns[j]!, {
+            value: normalizeArrowValue(value),
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
         }
         yield row;
       }

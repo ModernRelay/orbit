@@ -276,6 +276,23 @@ node Odd {
     expect(out).toContain("| ({ 'orbit:type': 'Odd' } & OddProps);");
   });
 
+  it('types every physical id as a required string regardless of its schema wire type', () => {
+    const out = generateTypesFromPgSource(`
+node NumericId {
+    id: I64 @key
+}
+edge OptionalNumericId: NumericId -> NumericId {
+    id: U64?
+}
+`);
+    const node = interfaceBody(out, 'NumericIdProps');
+    const edge = interfaceBody(out, 'OptionalNumericIdEdgeProps');
+    expect(node.match(/^ {2}id: string;$/gm)).toHaveLength(1);
+    expect(edge.match(/^ {2}id: string;$/gm)).toHaveLength(1);
+    expect(node).not.toContain('id: number');
+    expect(edge).not.toContain('id: number | null');
+  });
+
   it('collapses to never-unions and an empty TypeMap for an empty schema', () => {
     const out = generateTypes({ interfaces: [], nodes: [], edges: [] });
     expect(out).toContain('export type NodeAttrs = never;');

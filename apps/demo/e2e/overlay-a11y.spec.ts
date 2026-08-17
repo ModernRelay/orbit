@@ -132,9 +132,19 @@ test('navigator: Tab to toggle, open, arrow through items, Enter focuses a node'
 }) => {
   await gotoReady(page);
 
-  // The collapsible navigator toggle is the page's first tabbable element.
-  await page.keyboard.press('Tab');
   const toggle = page.locator(NAV_TOGGLE);
+  // Labels are legitimate keyboard controls and precede the overlay children
+  // in Graph's DOM. Prove the toggle is reachable by sequential keyboard
+  // navigation without coupling this test to the current number of labels.
+  let reachedToggle = false;
+  for (let tabs = 0; tabs < 64; tabs++) {
+    await page.keyboard.press('Tab');
+    if (await toggle.evaluate((element) => element === document.activeElement)) {
+      reachedToggle = true;
+      break;
+    }
+  }
+  expect(reachedToggle, 'Tab should reach the navigator toggle').toBe(true);
   await expect(toggle).toBeFocused();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 

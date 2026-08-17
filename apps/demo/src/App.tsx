@@ -614,6 +614,10 @@ export function App() {
   /** Last unavailable activation ("<label>: <reason>") — sticky. */
   const [searchNote, setSearchNote] = useState<string | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
+  /** Invalidates an in-flight CSV preparation when a newer data-mode action
+   * wins. Preparation intentionally runs before the graph mode changes. */
+  const csvLoadEpochRef = useRef(0);
+  const csvBusyRef = useRef(false);
 
   // --- M5 semantic-exploration state (see semantic.tsx) ---
   const [m5Grouping, setM5Grouping] = useState<M5Grouping>('none');
@@ -830,6 +834,7 @@ export function App() {
 
   // --- declarative data updates ---
   const regenerate = useCallback(() => {
+    csvLoadEpochRef.current += 1;
     setGen((g) => {
       const seed = nextSeed(g.seed);
       // New datasetKey → full reset (positions, per-dataset state).
@@ -847,6 +852,7 @@ export function App() {
   }, [resetOmnigraphState]);
 
   const addNodes = useCallback(() => {
+    csvLoadEpochRef.current += 1;
     // Same datasetKey, bumped sourceRevision, strict superset snapshot →
     // exercises the incremental diff + position preservation.
     setMode(DECLARATIVE);
@@ -860,6 +866,7 @@ export function App() {
   // purpose:'replace' is rejected while a declarative source drives, so
   // the session begins against a fresh, never-declarative instance.
   const streamFeed = useCallback(() => {
+    csvLoadEpochRef.current += 1;
     setSelection([]);
     setPendingIsolate(false);
     setDragNote(null);
@@ -881,7 +888,11 @@ export function App() {
       nodeShare: readStreamNodeShare(),
       family: readStreamFamily(),
       shouldCancel: () => cancelled,
-      onProgress: setMeter, // driver-throttled — receipts arrive far faster
+      // The driver emits a terminal aborted receipt during cleanup. Never let
+      // that old run repopulate a meter cleared by a mode/run switch.
+      onProgress: (progress) => {
+        if (!cancelled) setMeter(progress);
+      },
     }).catch((err: unknown) => {
       if (!cancelled) setError(err instanceof Error ? err.message : String(err));
     });
@@ -895,6 +906,7 @@ export function App() {
   // `purpose:'replace'` session, which may not race a declarative source,
   // so each load targets a fresh instance (`key` change).
   const loadOmnigraph = useCallback(() => {
+    csvLoadEpochRef.current += 1;
     setSelection([]);
     setPendingIsolate(false);
     setDragNote(null);
@@ -953,14 +965,15 @@ export function App() {
   // mode change remounts <Graph> (`key`) — the previous mode may have been a
   // replace-session stream, and a fresh instance takes the declarative
   // prepared snapshot without racing it.
-  const csvBusyRef = useRef(false);
   const onCsvFile = useCallback(
     (file: File) => {
       if (csvBusyRef.current) return; // one prepare at a time
       csvBusyRef.current = true;
+      const requestEpoch = ++csvLoadEpochRef.current;
       setCsvError(null);
       loadCsvEdgesFile(file)
         .then((result) => {
+          if (csvLoadEpochRef.current !== requestEpoch) return;
           setSelection([]);
           setPendingIsolate(false);
           setDragNote(null);
@@ -972,6 +985,7 @@ export function App() {
           setMode((m) => ({ kind: 'csv', runId: m.kind === 'csv' ? m.runId + 1 : 1, result }));
         })
         .catch((err: unknown) => {
+          if (csvLoadEpochRef.current !== requestEpoch) return;
           setCsvError(err instanceof Error ? err.message : String(err));
         })
         .finally(() => {
@@ -987,6 +1001,7 @@ export function App() {
   // this mode run a FIXED layout while the others stay on force.
   const enterSemantic = useCallback(
     (layout: M5Layout) => {
+      csvLoadEpochRef.current += 1;
       setSelection([]);
       setPendingIsolate(false);
       setDragNote(null);
@@ -1060,6 +1075,7 @@ export function App() {
 
   const m5OnLayoutChange = useCallback(
     (layout: M5Layout) => {
+      csvLoadEpochRef.current += 1;
       setMode((m) =>
         m.kind === 'semantic' && m.layout !== layout
           ? { kind: 'semantic', runId: m.runId + 1, layout }

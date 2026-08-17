@@ -218,6 +218,27 @@ describe('<LabelLayer>', () => {
     expect(mock.setSelection).toHaveBeenLastCalledWith(['a']);
   });
 
+  it('node labels are named keyboard buttons with click-equivalent activation', () => {
+    const mock = createLabelsMock([placement('a', 'Alpha'), placement('b', 'Beta')]);
+    const { container } = render(
+      <GraphProvider instance={mock.instance}>
+        <LabelLayer />
+      </GraphProvider>,
+    );
+    const a = container.querySelector('[data-orbit-label="a"]')!;
+    const b = container.querySelector('[data-orbit-label="b"]')!;
+
+    expect(a.getAttribute('role')).toBe('button');
+    expect(a.getAttribute('tabindex')).toBe('0');
+    expect(a.getAttribute('aria-label')).toBe('Alpha');
+    expect(a.getAttribute('aria-haspopup')).toBe('menu');
+
+    fireEvent.keyDown(a, { key: 'Enter' });
+    expect(mock.setSelection).toHaveBeenLastCalledWith(['a']);
+    fireEvent.keyDown(b, { key: ' ', shiftKey: true });
+    expect(mock.setSelection).toHaveBeenLastCalledWith(['a', 'b']);
+  });
+
   it('label right-click routes into the typed context-menu channel, not the browser menu', () => {
     const mock = createLabelsMock([placement('a', 'Alpha')]);
     const { container } = render(
@@ -238,6 +259,125 @@ describe('<LabelLayer>', () => {
     // Container-relative CSS px (jsdom rects sit at 0,0 so client == local).
     expect(screen).toEqual([40, 25]);
   });
+
+  it.each([
+    ['ContextMenu', false],
+    ['F10', true],
+  ])(
+    '%s opens the node context action from the keyboard at the label center',
+    (key, shiftKey) => {
+      const mock = createLabelsMock([placement('a', 'Alpha')]);
+      const { container } = render(
+        <GraphProvider instance={mock.instance}>
+          <LabelLayer />
+        </GraphProvider>,
+      );
+      const layer = container.querySelector('[data-orbit-label-layer]') as HTMLDivElement;
+      const a = container.querySelector('[data-orbit-label="a"]') as HTMLDivElement;
+      vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
+        x: 10,
+        y: 20,
+        left: 10,
+        top: 20,
+        right: 210,
+        bottom: 120,
+        width: 200,
+        height: 100,
+        toJSON: () => ({}),
+      });
+      vi.spyOn(a, 'getBoundingClientRect').mockReturnValue({
+        x: 30,
+        y: 50,
+        left: 30,
+        top: 50,
+        right: 70,
+        bottom: 70,
+        width: 40,
+        height: 20,
+        toJSON: () => ({}),
+      });
+
+      const allowed = fireEvent.keyDown(a, { key, shiftKey });
+
+      expect(allowed, 'the browser context-menu default must be suppressed').toBe(false);
+      expect(mock.requestNodeContextMenu).toHaveBeenCalledTimes(1);
+      expect(mock.requestNodeContextMenu).toHaveBeenCalledWith('a', [40, 40]);
+      expect(mock.setSelection).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not double-activate when a custom focusable child synthesizes a click', () => {
+    const mock = createLabelsMock([placement('a', 'Alpha')]);
+    const { container, getByRole, getAllByRole } = render(
+      <GraphProvider instance={mock.instance}>
+        <LabelLayer renderNodeLabel={() => <button type="button">custom action</button>} />
+      </GraphProvider>,
+    );
+    const wrapper = container.querySelector('[data-orbit-label="a"]')!;
+    const child = getByRole('button', { name: 'custom action' });
+
+    // The escape hatch owns its semantics: there must not be a second,
+    // button-role focus stop wrapped around the native button.
+    expect(wrapper.getAttribute('role')).toBeNull();
+    expect(wrapper.getAttribute('tabindex')).toBeNull();
+    expect(wrapper.getAttribute('aria-label')).toBeNull();
+    expect(wrapper.getAttribute('aria-haspopup')).toBeNull();
+    expect(getAllByRole('button')).toEqual([child]);
+
+    // Browser sequence for Enter on a native child button: keydown followed
+    // by its synthesized click. Only the click may reach label activation.
+    fireEvent.keyDown(child, { key: 'Enter' });
+    fireEvent.click(child);
+
+    expect(mock.setSelection).toHaveBeenCalledTimes(1);
+    expect(mock.setSelection).toHaveBeenCalledWith(['a']);
+  });
+
+  it.each([
+    ['ContextMenu', false],
+    ['F10', true],
+  ])(
+    'custom node control keeps the explicit %s context-menu keyboard path',
+    (key, shiftKey) => {
+      const mock = createLabelsMock([placement('a', 'Alpha')]);
+      const { container, getByRole } = render(
+        <GraphProvider instance={mock.instance}>
+          <LabelLayer renderNodeLabel={() => <button type="button">custom action</button>} />
+        </GraphProvider>,
+      );
+      const layer = container.querySelector('[data-orbit-label-layer]') as HTMLDivElement;
+      const wrapper = container.querySelector('[data-orbit-label="a"]') as HTMLDivElement;
+      const child = getByRole('button', { name: 'custom action' });
+      vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
+        x: 10,
+        y: 20,
+        left: 10,
+        top: 20,
+        right: 210,
+        bottom: 120,
+        width: 200,
+        height: 100,
+        toJSON: () => ({}),
+      });
+      vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({
+        x: 30,
+        y: 50,
+        left: 30,
+        top: 50,
+        right: 70,
+        bottom: 70,
+        width: 40,
+        height: 20,
+        toJSON: () => ({}),
+      });
+
+      const allowed = fireEvent.keyDown(child, { key, shiftKey });
+
+      expect(allowed, 'the browser context-menu default must be suppressed').toBe(false);
+      expect(mock.requestNodeContextMenu).toHaveBeenCalledWith('a', [40, 40]);
+      expect(mock.setSelection).not.toHaveBeenCalled();
+    },
+  );
 
   it('cluster-label right-click stays native: no context-menu call, no preventDefault', () => {
     const mock = createLabelsMock([]);
@@ -387,6 +527,25 @@ describe('<LabelLayer> cluster placements', () => {
     expect(mock.selectCluster).toHaveBeenLastCalledWith('red', { additive: true });
   });
 
+  it('cluster labels expose the same named keyboard-button contract', () => {
+    const mock = createLabelsMock([clusterPlacement('red', 'Red cluster')]);
+    const { container } = render(
+      <GraphProvider instance={mock.instance}>
+        <LabelLayer />
+      </GraphProvider>,
+    );
+    const el = container.querySelector('[data-orbit-cluster-label="red"]')!;
+
+    expect(el.getAttribute('role')).toBe('button');
+    expect(el.getAttribute('tabindex')).toBe('0');
+    expect(el.getAttribute('aria-label')).toBe('Red cluster');
+    expect(el.hasAttribute('aria-haspopup')).toBe(false);
+    fireEvent.keyDown(el, { key: 'Enter' });
+    expect(mock.selectCluster).toHaveBeenLastCalledWith('red', { additive: false });
+    fireEvent.keyDown(el, { key: ' ', metaKey: true });
+    expect(mock.selectCluster).toHaveBeenLastCalledWith('red', { additive: true });
+  });
+
   it('clusterLabelClassName and renderClusterLabel apply only to cluster labels', () => {
     const mock = createLabelsMock([
       clusterPlacement('red', 'red'),
@@ -410,6 +569,13 @@ describe('<LabelLayer> cluster placements', () => {
     expect(cluster.classList.contains('lbl')).toBe(true);
     expect(cluster.classList.contains('cluster-lbl')).toBe(true);
     expect(node.classList.contains('cluster-lbl')).toBe(false);
+    expect(cluster.getAttribute('role')).toBeNull();
+    expect(cluster.getAttribute('tabindex')).toBeNull();
+    expect(cluster.getAttribute('aria-label')).toBeNull();
+    // The node has no custom renderer and retains the built-in keyboard
+    // button contract.
+    expect(node.getAttribute('role')).toBe('button');
+    expect(node.getAttribute('tabindex')).toBe('0');
     expect(cluster.querySelector('[data-testid="cluster-custom"]')!.textContent).toBe('red:a+b');
     expect(node.textContent).toBe('Alpha');
   });

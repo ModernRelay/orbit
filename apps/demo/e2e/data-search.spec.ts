@@ -230,3 +230,57 @@ test('csv drop: a 50-row edges fixture derives nodes and swaps the dataset', asy
   await expect(page.locator(SEARCH_OPTION).first()).toBeVisible({ timeout: 10_000 });
   await expect(page.locator(SEARCH_LABEL).first()).toHaveText(/^c17/);
 });
+
+test('a newer data-mode choice supersedes an in-flight CSV preparation', async ({
+  page,
+}, testInfo) => {
+  // Make the otherwise-small fixture deterministically asynchronous. Orbit's
+  // CSV lane consumes File.stream(), so delaying its first chunk leaves time
+  // for the user to choose another mode before preparation resolves.
+  await page.addInitScript(() => {
+    const state = window as typeof window & { __orbitCsvStreamFinished?: boolean };
+    state.__orbitCsvStreamFinished = false;
+    const originalStream = Blob.prototype.stream;
+    Blob.prototype.stream = function (this: Blob): ReadableStream<Uint8Array> {
+      const original = originalStream.call(this);
+      // Do not delay unrelated Blob consumers used while the app boots.
+      if (!(this instanceof File) || this.name !== 'superseded.csv') return original;
+      const reader = original.getReader();
+      return new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 500);
+          });
+          const next = await reader.read();
+          if (next.done) {
+            state.__orbitCsvStreamFinished = true;
+            controller.close();
+          } else controller.enqueue(next.value);
+        },
+        cancel(reason) {
+          return reader.cancel(reason);
+        },
+      });
+    };
+  });
+
+  const fixture = testInfo.outputPath('superseded.csv');
+  writeFileSync(fixture, 'source,target,weight\na,b,1\nb,c,2\n', 'utf8');
+  await gotoReady(page);
+
+  await page.setInputFiles('[data-testid="csv-file-input"]', fixture);
+  await page.getByTestId('semantic-mode').click();
+  await expect(page.getByTestId('m5-panel')).toBeVisible({ timeout: 15_000 });
+
+  // Wait for EOF rather than a wall-clock approximation, then give the
+  // preparation promise and React commit a chance to drain. Its completion
+  // must not replace the newer semantic mode or publish a CSV summary.
+  await page.waitForFunction(
+    () =>
+      (window as typeof window & { __orbitCsvStreamFinished?: boolean })
+        .__orbitCsvStreamFinished === true,
+  );
+  await page.waitForTimeout(250);
+  await expect(page.getByTestId('m5-panel')).toBeVisible();
+  await expect(page.getByTestId('csv-summary')).toHaveCount(0);
+});

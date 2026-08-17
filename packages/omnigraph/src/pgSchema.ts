@@ -174,51 +174,26 @@ function findBlockEnd(src: string, openIdx: number): number {
   return n;
 }
 
-/** Split a block body into statements at newlines that sit outside parens/brackets/strings. */
-function splitStatements(body: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let current = '';
-  let i = 0;
-  const n = body.length;
-  while (i < n) {
-    const ch = body.charAt(i);
-    if (ch === '"') {
-      current += ch;
-      i++;
-      while (i < n) {
-        const c = body.charAt(i);
-        current += c;
-        i++;
-        if (c === '\\' && i < n) {
-          current += body.charAt(i);
-          i++;
-        } else if (c === '"') break;
-      }
-      continue;
-    }
-    if (ch === '(' || ch === '[') depth++;
-    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
-    if (ch === '\n' && depth === 0) {
-      out.push(current);
-      current = '';
-    } else {
-      current += ch;
-    }
-    i++;
-  }
-  out.push(current);
-  return out.map((s) => s.trim()).filter((s) => s.length > 0);
-}
-
 interface RawAnnotation {
   name: string;
   args?: string;
   raw: string;
 }
 
+const BODY_CONSTRAINT_NAMES: ReadonlySet<string> = new Set([
+  'key',
+  'unique',
+  'index',
+  'range',
+  'check',
+]);
+
 /** Scan a run of `@ident` / `@ident(...)` annotations starting at `start`. */
-function scanAnnotations(src: string, start: number): { anns: RawAnnotation[]; end: number } {
+function scanAnnotations(
+  src: string,
+  start: number,
+  stopBeforeBodyConstraint = false,
+): { anns: RawAnnotation[]; end: number } {
   const anns: RawAnnotation[] = [];
   let i = start;
   const n = src.length;
@@ -226,14 +201,23 @@ function scanAnnotations(src: string, start: number): { anns: RawAnnotation[]; e
     let j = i;
     while (j < n && /\s/.test(src.charAt(j))) j++;
     if (src.charAt(j) !== '@') break;
-    const m = /^@([A-Za-z_]\w*)/.exec(src.slice(j));
+    // `annotation` and `body_constraint` spell the sigil and name as
+    // separate Pest sequence terms (`"@" ~ ident`), so implicit whitespace
+    // is legal here too (`@ key`, `@ rename_from (...)`).
+    const m = /^@\s*([A-Za-z_]\w*)/.exec(src.slice(j));
     if (!m || m[1] === undefined) break;
     const name = m[1];
     let end = j + m[0].length;
     let args: string | undefined;
-    if (src.charAt(end) === '(') {
+    // Pest inserts the silent WHITESPACE rule around `~`, so all schema
+    // annotations permit whitespace between their name and argument list
+    // (`@card (1..1)`, `@embed ("body")`, ...). Keep that whitespace in the
+    // preserved raw spelling while using the actual `(` as the parse cursor.
+    let open = end;
+    while (open < n && /\s/.test(src.charAt(open))) open++;
+    if (src.charAt(open) === '(') {
       let depth = 0;
-      let k = end;
+      let k = open;
       while (k < n) {
         const ch = src.charAt(k);
         if (ch === '"') {
@@ -256,8 +240,14 @@ function scanAnnotations(src: string, start: number): { anns: RawAnnotation[]; e
         }
         k++;
       }
-      args = src.slice(end + 1, k - 1);
+      args = src.slice(open + 1, k - 1);
       end = k;
+    }
+    // In a property declaration these call-shaped keywords begin the next
+    // `body_constraint`; the Pest annotation rule explicitly excludes them.
+    // Bare `@key`/`@unique`/`@index` remain valid property annotations.
+    if (stopBeforeBodyConstraint && args !== undefined && BODY_CONSTRAINT_NAMES.has(name)) {
+      break;
     }
     const entry: RawAnnotation = { name, raw: src.slice(j, end) };
     if (args !== undefined) entry.args = args;
@@ -322,20 +312,32 @@ function parseTypeRef(text: string): { type: PgType; optional: boolean; end: num
       i += m[0].length;
     } else {
       const close = text.indexOf(']', i);
-      const end = close === -1 ? n : close + 1;
+      const nextLine = text.indexOf('\n', i);
+      let end = close === -1 ? n : close + 1;
+      if (nextLine !== -1 && nextLine < end) end = nextLine;
       type = { kind: 'unknown', raw: text.slice(i, end).trim() };
       i = end;
     }
   } else {
     const m = /^([A-Za-z_]\w*)/.exec(text.slice(i));
     if (!m || m[1] === undefined) {
-      return { type: { kind: 'unknown', raw: text.trim() }, optional: false, end: n };
+      const nextLine = text.indexOf('\n', i);
+      const end = nextLine === -1 ? n : nextLine;
+      return {
+        type: { kind: 'unknown', raw: text.slice(i, end).trim() },
+        optional: false,
+        end,
+      };
     }
     const ident = m[1];
     i += m[0].length;
-    if ((ident === 'enum' || ident === 'Vector') && text.charAt(i) === '(') {
+    // As with annotations, the server grammar's silent WHITESPACE rule makes
+    // `Vector (3)` and `enum (a, b)` equivalent to their compact spellings.
+    let open = i;
+    while (open < n && /\s/.test(text.charAt(open))) open++;
+    if ((ident === 'enum' || ident === 'Vector') && text.charAt(open) === '(') {
       let depth = 0;
-      let k = i;
+      let k = open;
       while (k < n) {
         const ch = text.charAt(k);
         if (ch === '(') depth++;
@@ -348,7 +350,7 @@ function parseTypeRef(text: string): { type: PgType; optional: boolean; end: num
         }
         k++;
       }
-      const inner = text.slice(i + 1, k - 1);
+      const inner = text.slice(open + 1, k - 1);
       i = k;
       if (ident === 'enum') {
         const values = splitArgs(inner).map((v) => v.replace(/^"(.*)"$/s, '$1'));
@@ -366,6 +368,9 @@ function parseTypeRef(text: string): { type: PgType; optional: boolean; end: num
     }
   }
   let optional = false;
+  // `type_ref = { core_type ~ "?"? }`: implicit whitespace also applies
+  // before the optional marker (`String ?`, `[String] ?`, `Vector (3) ?`).
+  while (i < n && /\s/.test(text.charAt(i))) i++;
   if (text.charAt(i) === '?') {
     optional = true;
     i++;
@@ -376,41 +381,47 @@ function parseTypeRef(text: string): { type: PgType; optional: boolean; end: num
 function parseBody(body: string): MutableTypeBody {
   const properties: PgProperty[] = [];
   const constraints: string[] = [];
-  for (const stmt of splitStatements(body)) {
-    if (stmt.startsWith('@')) {
-      const { anns } = scanAnnotations(stmt, 0);
+  // Pest's implicit WHITESPACE includes newlines, so a newline is not a
+  // statement delimiter: `String\n?`, `Vector\n(3)`, and same-line adjacent
+  // declarations are all legal. Consume the body as one token stream.
+  let cursor = body.trimStart();
+  while (cursor !== '') {
+    if (cursor.startsWith('@')) {
+      const { anns, end } = scanAnnotations(cursor, 0);
+      if (anns.length === 0 || end === 0) break;
       for (const a of anns) constraints.push(a.raw);
+      cursor = cursor.slice(end).trimStart();
       continue;
     }
-    // A statement may carry SEVERAL whitespace-separated properties
-    // (`id: String when: DateTime`); a single parse would keep only the first
-    // and silently drop the rest. Loop until the trailer
-    // stops looking like another property head; junk trailers stay
-    // tolerant-skipped as before.
-    let cursor = stmt;
-    for (;;) {
-      const head = /^([A-Za-z_]\w*)\s*:\s*/.exec(cursor);
-      if (!head || head[1] === undefined) break; // tolerant: skip unrecognized statements
-      const name = head[1];
-      const rest = cursor.slice(head[0].length);
-      const { type, optional, end } = parseTypeRef(rest);
-      const { anns, end: annsEnd } = scanAnnotations(rest, end);
-      properties.push({
-        name,
-        type,
-        optional,
-        key: anns.some((a) => a.name === 'key'),
-        unique: anns.some((a) => a.name === 'unique'),
-        index: anns.some((a) => a.name === 'index'),
-        annotations: anns.map((a) => a.raw),
-      });
-      cursor = rest.slice(annsEnd).trimStart();
-      if (cursor === '') break;
+
+    const head = /^([A-Za-z_]\w*)\s*:\s*/.exec(cursor);
+    if (!head || head[1] === undefined) {
+      // Tolerant recovery: discard only the malformed physical line, then
+      // resume. Valid declarations do not need newlines, but this preserves
+      // the historical ability to salvage later lines after unknown syntax.
+      const nextLine = cursor.indexOf('\n');
+      if (nextLine === -1) break;
+      cursor = cursor.slice(nextLine + 1).trimStart();
+      continue;
     }
+    const name = head[1];
+    const rest = cursor.slice(head[0].length);
+    const { type, optional, end } = parseTypeRef(rest);
+    const { anns, end: annsEnd } = scanAnnotations(rest, end, true);
+    properties.push({
+      name,
+      type,
+      optional,
+      key: anns.some((a) => a.name === 'key'),
+      unique: anns.some((a) => a.name === 'unique'),
+      index: anns.some((a) => a.name === 'index'),
+      annotations: anns.map((a) => a.raw),
+    });
+    cursor = rest.slice(annsEnd).trimStart();
   }
   // Body-level @key(a, b) / @unique(a) / @index(a) constraints flag the named properties.
   for (const raw of constraints) {
-    const m = /^@(key|unique|index)\((.*)\)$/s.exec(raw);
+    const m = /^@\s*(key|unique|index)\s*\((.*)\)$/s.exec(raw);
     if (!m || m[1] === undefined || m[2] === undefined) continue;
     const flag = m[1] as 'key' | 'unique' | 'index';
     for (const propName of splitArgs(m[2])) {

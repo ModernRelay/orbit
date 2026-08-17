@@ -119,6 +119,38 @@ describe('prepareArrowGraphData', () => {
     expect(prepared.summaries.nodes['views']).toMatchObject({ min: 10, max: 20 });
   });
 
+  it('preserves an Arrow schema column literally named __proto__ as own data', async () => {
+    const table = (
+      columns: ReadonlyArray<readonly [string, unknown]>,
+    ): ArrowTableLike => ({
+      numRows: 1,
+      schema: { fields: columns.map(([name]) => ({ name })) },
+      getChild: (name) => {
+        const entry = columns.find(([column]) => column === name);
+        return entry === undefined ? null : { get: () => entry[1] };
+      },
+    });
+    const nodes = table([
+      ['id', 'a'],
+      ['__proto__', { evil: true }],
+    ]);
+    const edges = table([
+      ['source', 'a'],
+      ['target', 'a'],
+    ]);
+
+    const prepared = await prepareArrowGraphData(
+      { nodes, edges },
+      { nodes: { id: 'id' }, edges: { source: 'source', target: 'target' } },
+      PARITY_OPTIONS,
+    );
+    const attrs = prepared.snapshot.nodes[0]!.attrs as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(attrs, '__proto__')).toBe(true);
+    expect(attrs['__proto__']).toEqual({ evil: true });
+    expect((attrs as { evil?: unknown }).evil).toBeUndefined();
+    expect(Object.getPrototypeOf(attrs)).toBe(Object.prototype);
+  });
+
   it('reports a clear install hint when apache-arrow is absent', async () => {
     _internals.importArrow = () =>
       Promise.reject(

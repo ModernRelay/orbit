@@ -125,6 +125,51 @@ describe('columnar-native acceptance vs the object-lane oracle', () => {
     ]);
   });
 
+  it('NUL-reserved explicit edge ids drop identically in native and object lanes', () => {
+    const snapshot = col();
+    (snapshot.edges.ids as { dictionary: readonly string[] }).dictionary = [
+      '\u0000["meta-edge","a","b"]',
+      'safe',
+    ];
+
+    expectOracleAgreement(snapshot);
+    const native = acceptColumnar(snapshot);
+    expect(native.acceptedEdgeCount).toBe(1);
+    expect(native.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'invalid-edge', count: 1, sampleIds: ['[0]'] }),
+    );
+  });
+
+  it('a dangling edge does not reserve its id ahead of a later valid edge', () => {
+    const snapshot = col({
+      nodes: {
+        ids: {
+          kind: 'string',
+          dictionary: ['bad\u0000node', 'b', 'c'],
+          codes: Uint32Array.of(0, 1, 2),
+        },
+        columns: {},
+        length: 3,
+      },
+      edges: {
+        ids: { kind: 'string', dictionary: ['same'], codes: Uint32Array.of(0, 0) },
+        source: Uint32Array.of(0, 1),
+        target: Uint32Array.of(1, 2),
+        columns: {},
+        length: 2,
+      },
+    });
+
+    expectOracleAgreement(snapshot);
+    const native = acceptColumnar(snapshot);
+    expect(native.acceptedEdgeCount).toBe(1);
+    expect([...native.keepEdges]).toEqual([0, 1]);
+    expect(native.diagnostics.map((diag) => diag.code)).toEqual([
+      'invalid-node',
+      'dangling-edge-endpoint',
+    ]);
+  });
+
   it('a duplicate-row COLLAPSE creating a self-loop matches the object lane', () => {
     // Edge (row0 → row2) where row 2 duplicates row 0's id: both lanes see
     // source string == target string → retained self-loop.

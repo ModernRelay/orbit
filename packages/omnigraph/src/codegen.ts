@@ -159,6 +159,16 @@ function emitPropsInterface(
     lines.push('  id: string;');
   }
   for (const prop of properties) {
+    if (prop.name === 'id') {
+      // Export normalization requires `data.id` to be a string regardless of
+      // a schema declaration. Emitting the declared wire scalar here (for
+      // example I64 -> number) would make generated attrs unsound.
+      lines.push(
+        `  /** Physical Omnigraph id — normalized as a required string regardless of its schema wire type. */`,
+      );
+      lines.push('  id: string;');
+      continue;
+    }
     // Every schema property emits normally — including one named `type`: the
     // adapter's discriminator lives at the namespaced ORBIT_TYPE_KEY, so
     // there is nothing to shadow.

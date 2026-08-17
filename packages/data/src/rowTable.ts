@@ -19,6 +19,12 @@ export interface RowTable {
   /** Discovered columns, or null when the source has no rows at all. */
   readonly columns: readonly string[] | null;
   readonly rows: AsyncIterable<Readonly<Record<string, unknown>>>;
+  /**
+   * Release a source whose column-discovery peek opened an iterator before
+   * materialization began. Implementations must be safe to close after
+   * normal exhaustion and more than once.
+   */
+  readonly close?: () => Promise<void>;
 }
 
 export const EMPTY_ROW_TABLE: RowTable = {

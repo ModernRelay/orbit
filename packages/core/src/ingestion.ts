@@ -222,7 +222,11 @@ export function stageBatch<N, E>(
   for (let i = 0; i < rawNodes.length; i++) {
     const row = rawNodes[i];
     const id = typeof row === 'object' && row !== null ? (row as { id?: unknown }).id : undefined;
-    if (typeof id !== 'string') {
+    if (typeof id !== 'string' || id.includes('\u0000')) {
+      // U+0000 is reserved by the scene-key codec for collapsed-group
+      // super-nodes. Streaming ingestion must enforce the same namespace
+      // boundary as declarative snapshot validation; otherwise an overlay
+      // row can collide with a synthetic scene row during group rewrite.
       recordRow(tallies.invalidNodes, `[${batch.sequence}:${i}]`);
       continue;
     }
@@ -246,6 +250,12 @@ export function stageBatch<N, E>(
     const edge = row as { id?: unknown; source?: unknown; target?: unknown };
     if (typeof edge.source !== 'string' || typeof edge.target !== 'string') {
       recordRow(tallies.invalidEdges, typeof edge.id === 'string' ? edge.id : `[${batch.sequence}:${i}]`);
+      continue;
+    }
+    if (typeof edge.id === 'string' && edge.id.includes('\u0000')) {
+      // Explicit edge ids occupy the same rendered id lane as internal
+      // meta-edge scene keys, whose reserved namespace begins with U+0000.
+      recordRow(tallies.invalidEdges, `[${batch.sequence}:${i}]`);
       continue;
     }
     const hasExplicitId = typeof edge.id === 'string';
@@ -511,7 +521,7 @@ export function sessionCommitDiagnostics(
     'invalid-node',
     'error',
     tallies.invalidNodes,
-    `${tallies.invalidNodes.count} ingested node row(s) dropped: missing or non-string id`,
+    `${tallies.invalidNodes.count} ingested node row(s) dropped: missing, non-string, or NUL-containing id`,
   );
   push(
     'duplicate-node-id',
@@ -523,7 +533,7 @@ export function sessionCommitDiagnostics(
     'invalid-edge',
     'error',
     tallies.invalidEdges,
-    `${tallies.invalidEdges.count} ingested edge row(s) dropped: missing or non-string source/target`,
+    `${tallies.invalidEdges.count} ingested edge row(s) dropped: missing or non-string source/target, or NUL-containing explicit id`,
   );
   push(
     'duplicate-edge-id',

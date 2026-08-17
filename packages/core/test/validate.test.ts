@@ -86,6 +86,23 @@ describe('validateSnapshot — edges', () => {
     expect(d).toMatchObject({ severity: 'error', count: 5 });
   });
 
+  it('drops explicit edge ids in the reserved NUL meta-edge namespace', () => {
+    const reserved = '\u0000["meta-edge","a","b"]';
+    const result = validateSnapshot(
+      snap(ab, [
+        { id: reserved, source: 'a', target: 'b' },
+        { id: 'safe', source: 'a', target: 'b' },
+      ]),
+    );
+
+    expect(result.edges.map((edge) => edge.id)).toEqual(['safe']);
+    expect(diag(result.diagnostics, 'invalid-edge')).toMatchObject({
+      severity: 'error',
+      count: 1,
+      sampleIds: ['[0]'],
+    });
+  });
+
   it('drops edges whose endpoint is not in the accepted node set', () => {
     const result = validateSnapshot(
       snap(ab, [
