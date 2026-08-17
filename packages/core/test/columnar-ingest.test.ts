@@ -109,6 +109,30 @@ describe('structural validation (reject WHOLE, O(cols+rows))', () => {
       'bad-column-kind',
     );
   });
+
+  it('rejects non-string dictionary entries before main or worker admission', () => {
+    for (const mutate of [
+      (snapshot: Fixture) => {
+        (snapshot.nodes.ids.dictionary as unknown[])[1] = 42;
+      },
+      (snapshot: Fixture) => {
+        (snapshot.edges.ids.dictionary as unknown[])[0] = { id: 'e1' };
+      },
+      (snapshot: Fixture) => {
+        const cluster = snapshot.nodes.columns!.cluster!;
+        if (cluster.kind === 'string') (cluster.dictionary as unknown[])[0] = null;
+      },
+    ]) {
+      const snapshot = fixture();
+      mutate(snapshot);
+      expect(validateColumnarStructure(snapshot)).toContainEqual(
+        expect.objectContaining({
+          problem: 'not-a-string-column',
+          detail: expect.stringContaining('dictionary entry'),
+        }),
+      );
+    }
+  });
 });
 
 describe('ingestion through the instance (the shared pipeline)', () => {
@@ -160,6 +184,22 @@ describe('ingestion through the instance (the shared pipeline)', () => {
       instance.store.getState().diagnostics.some((d) => d.code === 'invalid-columnar-snapshot'),
     ).toBe(false);
     expect(instance.getSceneNodeIds()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('rejects a non-string id dictionary WHOLE instead of materializing non-string ids', async () => {
+    const { instance } = await rig();
+    instance.applyHostUpdate({ data: snap(1, ['keep'], []) });
+    const bad = fixture();
+    (bad.nodes.ids.dictionary as unknown[])[0] = 7;
+
+    instance.applyHostUpdate({ data: bad });
+
+    expect(instance.getSceneNodeIds()).toEqual(['keep']);
+    expect(
+      instance.store
+        .getState()
+        .diagnostics.find((diag) => diag.code === 'invalid-columnar-snapshot')?.message,
+    ).toContain('dictionary entry 0 is not a string');
   });
 
   it('duplicate ids and self-loops flow through the OBJECT-lane rules (one place)', async () => {

@@ -117,7 +117,9 @@ export function GraphMinimap(props: GraphMinimapProps): ReactElement {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rectRef = useRef<HTMLDivElement | null>(null);
-  const draggingRef = useRef(false);
+  /** Pointer that owns the current pan gesture. Other simultaneous pointers
+   * cannot move or terminate it. */
+  const draggingPointerRef = useRef<number | null>(null);
   const declaredSceneRef = useRef<DeclaredSceneCache>({ ids: [], scene: null });
   /** mask lane for `getVisible`, recomputed once per refresh tick. */
   const visibleRef = useRef<{ ids: readonly NodeId[]; set: ReadonlySet<NodeId> | null }>({
@@ -272,8 +274,10 @@ export function GraphMinimap(props: GraphMinimapProps): ReactElement {
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    const owner = draggingPointerRef.current;
+    if (owner !== null && owner !== e.pointerId) return;
     e.preventDefault();
-    draggingRef.current = true;
+    draggingPointerRef.current = e.pointerId;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -283,12 +287,13 @@ export function GraphMinimap(props: GraphMinimapProps): ReactElement {
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
-    if (!draggingRef.current) return;
+    if (draggingPointerRef.current !== e.pointerId) return;
     panTo(e);
   };
 
-  const endDrag = (): void => {
-    draggingRef.current = false;
+  const endDrag = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (draggingPointerRef.current !== e.pointerId) return;
+    draggingPointerRef.current = null;
   };
 
   return (
@@ -323,6 +328,8 @@ export function GraphMinimap(props: GraphMinimapProps): ReactElement {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
         onPointerLeave={endDrag}
       />
       <div ref={rectRef} data-orbit-minimap-viewport="" style={RECT_STYLE} />

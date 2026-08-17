@@ -90,6 +90,51 @@ describe('estimateBatchBytes', () => {
 });
 
 describe('stageBatch synthesized edge identities', () => {
+  it('rejects NUL-containing node ids reserved for synthetic group scene keys', () => {
+    const contribution = newContribution<NAttrs, EAttrs>('overlay');
+    const tallies = newStagingTallies();
+    let order = 0;
+
+    const result = stageBatch(
+      contribution,
+      batch(0, 'b0', {
+        nodes: [
+          { id: '\0["group","g"]', attrs: { label: 'collision' } },
+          { id: 'safe', attrs: { label: 'safe' } },
+        ],
+      }),
+      tallies,
+      () => order++,
+    );
+
+    expect(result).toEqual({ admittedNodes: 1, admittedEdges: 0 });
+    expect(contribution.nodes.map(({ node }) => node.id)).toEqual(['safe']);
+    expect(contribution.nodeIds).toEqual(new Set(['safe']));
+    expect(tallies.invalidNodes).toEqual({ count: 1, samples: ['[0:0]'] });
+  });
+
+  it('rejects explicit edge ids reserved for synthetic meta-edge scene keys', () => {
+    const contribution = newContribution<NAttrs, EAttrs>('overlay');
+    const tallies = newStagingTallies();
+    let order = 0;
+
+    const result = stageBatch(
+      contribution,
+      batch(0, 'b0', {
+        edges: [
+          { id: '\u0000["meta-edge","a","b"]', source: 'a', target: 'b' },
+          { id: 'safe', source: 'a', target: 'b' },
+        ],
+      }),
+      tallies,
+      () => order++,
+    );
+
+    expect(result).toEqual({ admittedNodes: 0, admittedEdges: 1 });
+    expect(contribution.edges.map(({ edge }) => edge.id)).toEqual(['safe']);
+    expect(tallies.invalidEdges).toEqual({ count: 1, samples: ['[0:0]'] });
+  });
+
   it('keeps delimiter- and NUL-bearing endpoint tuples distinct', () => {
     const contribution = newContribution<NAttrs, EAttrs>('overlay');
     const tallies = newStagingTallies();

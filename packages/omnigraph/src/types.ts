@@ -58,7 +58,7 @@ export interface OmnigraphSourceOptions {
    * field (wire form `type_names`). Omit to export every table.
    */
   typeNames?: readonly string[];
-  /** Export lines per `IngestBatch` append. Default 2000. */
+  /** Export lines per `IngestBatch` append. Must be a positive safe integer. Default 2000. */
   batchSize?: number;
   /**
    * Whole-load byte budget for the atomic replace. Because atomic staging

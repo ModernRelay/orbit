@@ -60,26 +60,37 @@ export interface ViewLayoutSpec {
   kind: 'force' | 'fixed';
 }
 
-/** Scale subset that is data by construction (no functions). */
-export type SerializableScale =
+type SerializableScaleFor<T extends string | number> =
   | {
-      kind: 'sequential' | 'diverging';
+      kind: 'sequential';
       metric: string;
-      range: readonly string[] | readonly number[];
-      domain?: readonly number[];
-      mid?: number;
+      range: readonly [T, T];
+      domain?: readonly [number, number];
+    }
+  | {
+      kind: 'diverging';
+      metric: string;
+      range: readonly [T, T, T];
+      mid: number;
     }
   | {
       kind: 'categorical';
       /** Field-descriptor form only — a function `by` is omitted upstream. */
       by: string;
-      palette?: readonly string[] | readonly number[];
+      palette?: readonly T[];
       domain?: readonly string[];
     };
 
+/** Scale subset that is data by construction (no functions). `T` is bound
+ * by the styling channel: CSS strings for nodeColor, finite numbers for
+ * nodeSize. Tuple arity mirrors the runtime Scale<T> contract exactly. The
+ * conditional preserves homogeneous value collections when `T` is a union. */
+export type SerializableScale<T extends string | number = string | number> =
+  T extends unknown ? SerializableScaleFor<T> : never;
+
 export interface ViewStyling {
-  nodeColor?: SerializableScale;
-  nodeSize?: SerializableScale;
+  nodeColor?: SerializableScale<string>;
+  nodeSize?: SerializableScale<number>;
   showLinks?: boolean;
   edgeArrows?: boolean;
   /** Named themes only; a custom GraphTheme object is omitted upstream. */
@@ -195,6 +206,7 @@ const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 const isStrArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr);
+const isNumArray = (v: unknown): v is number[] => Array.isArray(v) && v.every(isNum);
 
 function validateBrush(v: unknown, at: string, problems: string[]): void {
   if (!isObj(v)) {
@@ -215,18 +227,51 @@ function validateBrush(v: unknown, at: string, problems: string[]): void {
   problems.push(`${at}: unknown brush kind`);
 }
 
-function validateScale(v: unknown, at: string, problems: string[]): void {
+function validateScale(
+  v: unknown,
+  at: string,
+  valueKind: 'string' | 'number',
+  problems: string[],
+): void {
   if (!isObj(v)) {
     problems.push(`${at}: not an object`);
     return;
   }
-  if (v['kind'] === 'sequential' || v['kind'] === 'diverging') {
+  const isValueArray = valueKind === 'string' ? isStrArray : isNumArray;
+  const valueLabel = valueKind === 'string' ? 'string' : 'finite number';
+  if (v['kind'] === 'sequential') {
     if (!isStr(v['metric'])) problems.push(`${at}: metric must be a string`);
-    if (!Array.isArray(v['range'])) problems.push(`${at}: range must be an array`);
+    if (!isValueArray(v['range']) || v['range'].length !== 2) {
+      problems.push(`${at}: sequential range must be a [${valueLabel}, ${valueLabel}] tuple`);
+    }
+    if (
+      v['domain'] !== undefined &&
+      (!isNumArray(v['domain']) || v['domain'].length !== 2)
+    ) {
+      problems.push(`${at}: sequential domain must be a [min, max] finite-number tuple`);
+    }
+    return;
+  }
+  if (v['kind'] === 'diverging') {
+    if (!isStr(v['metric'])) problems.push(`${at}: metric must be a string`);
+    if (!isValueArray(v['range']) || v['range'].length !== 3) {
+      problems.push(
+        `${at}: diverging range must be a [${valueLabel}, ${valueLabel}, ${valueLabel}] tuple`,
+      );
+    }
+    if (!isNum(v['mid'])) {
+      problems.push(`${at}: diverging mid must be a finite number`);
+    }
     return;
   }
   if (v['kind'] === 'categorical') {
     if (!isStr(v['by'])) problems.push(`${at}: categorical 'by' must be a field string`);
+    if (v['domain'] !== undefined && !isStrArray(v['domain'])) {
+      problems.push(`${at}: categorical domain must be a string[]`);
+    }
+    if (v['palette'] !== undefined && !isValueArray(v['palette'])) {
+      problems.push(`${at}: categorical palette must be a ${valueLabel}[]`);
+    }
     return;
   }
   problems.push(`${at}: unknown scale kind`);
@@ -378,10 +423,10 @@ export function validateViewState(raw: unknown): ViewStateVerdict {
       problems.push('styling: must be an object');
     } else {
       if (styling['nodeColor'] !== undefined) {
-        validateScale(styling['nodeColor'], 'styling.nodeColor', problems);
+        validateScale(styling['nodeColor'], 'styling.nodeColor', 'string', problems);
       }
       if (styling['nodeSize'] !== undefined) {
-        validateScale(styling['nodeSize'], 'styling.nodeSize', problems);
+        validateScale(styling['nodeSize'], 'styling.nodeSize', 'number', problems);
       }
       for (const flag of ['showLinks', 'edgeArrows'] as const) {
         if (styling[flag] !== undefined && !isBool(styling[flag])) {

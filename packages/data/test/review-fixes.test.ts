@@ -89,6 +89,275 @@ describe("'__proto__' keys land as own properties", () => {
     expect((attrs as { evil?: unknown }).evil).toBeUndefined(); // prototype NOT swapped
     expect(Object.getPrototypeOf(attrs)).toBe(Object.prototype);
   });
+
+  it('preserves a CSV header literally named __proto__', async () => {
+    const enc = new TextEncoder();
+    const prepared = await prepareGraphData(
+      {
+        nodes: enc.encode('id,__proto__\na,safe\n').buffer as ArrayBuffer,
+        edges: enc.encode('source,target\na,a\n').buffer as ArrayBuffer,
+      },
+      NODE_MAPPING,
+      { ...PARITY_OPTIONS, format: 'csv' },
+    );
+    const attrs = prepared.snapshot.nodes[0]!.attrs as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(attrs, '__proto__')).toBe(true);
+    expect(attrs['__proto__']).toBe('safe');
+    expect(Object.getPrototypeOf(attrs)).toBe(Object.prototype);
+  });
+});
+
+describe('async source cleanup across preparation failures', () => {
+  function hostileIterator<T>(
+    values: readonly T[],
+    state: { returns: number },
+    options: {
+      rejectAfterValues?: boolean;
+      rejectReturn?: boolean;
+      rejectSecondReturn?: boolean;
+    } = {},
+  ): AsyncIterable<T> {
+    let index = 0;
+    const iterator: AsyncIterableIterator<T> = {
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+      async next() {
+        if (index < values.length) return { done: false as const, value: values[index++]! };
+        if (options.rejectAfterValues) throw new Error('source next failed');
+        return { done: true as const, value: undefined };
+      },
+      async return() {
+        state.returns++;
+        if (options.rejectReturn || (options.rejectSecondReturn && state.returns > 1)) {
+          throw new Error('source return failed');
+        }
+        return { done: true as const, value: undefined };
+      },
+    };
+    return iterator;
+  }
+
+  function tracked<T>(values: readonly T[], state: { closed: boolean }): AsyncIterable<T> {
+    return (async function* () {
+      try {
+        for (const value of values) yield value;
+      } finally {
+        state.closed = true;
+      }
+    })();
+  }
+
+  it('closes both row sources when mapping validation fails after column peeks', async () => {
+    const nodes = { closed: false };
+    const edges = { closed: false };
+    await expect(
+      prepareGraphData(
+        {
+          nodes: tracked([{ wrong: 'a' }, { wrong: 'b' }], nodes),
+          edges: tracked(
+            [
+              { source: 'a', target: 'b' },
+              { source: 'b', target: 'a' },
+            ],
+            edges,
+          ),
+        },
+        NODE_MAPPING,
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/node id column "id" not found/);
+    expect(nodes.closed).toBe(true);
+    expect(edges.closed).toBe(true);
+  });
+
+  it('closes the failing edge row source and the unopened node materialization', async () => {
+    const nodes = { closed: false };
+    const edges = { closed: false };
+    await expect(
+      prepareGraphData(
+        {
+          nodes: tracked([{ id: 'a' }, { id: 'b' }], nodes),
+          edges: tracked(
+            [
+              { source: null, target: 'a' },
+              { source: 'a', target: 'b' },
+            ],
+            edges,
+          ),
+        },
+        NODE_MAPPING,
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/edge source.*row 0/);
+    expect(nodes.closed).toBe(true);
+    expect(edges.closed).toBe(true);
+  });
+
+  function trackedCsv(text: string, state: { closed: boolean }): AsyncIterable<Uint8Array> {
+    return (async function* () {
+      try {
+        yield new TextEncoder().encode(text);
+        yield new Uint8Array(); // keep the source suspended until its consumer advances
+      } finally {
+        state.closed = true;
+      }
+    })();
+  }
+
+  it('closes both CSV byte sources when header-based mapping validation fails', async () => {
+    const nodes = { closed: false };
+    const edges = { closed: false };
+    await expect(
+      prepareGraphData(
+        {
+          nodes: trackedCsv('wrong\na\n', nodes),
+          edges: trackedCsv('source,target\na,a\n', edges),
+        },
+        NODE_MAPPING,
+        { ...PARITY_OPTIONS, format: 'csv' },
+      ),
+    ).rejects.toThrow(/node id column "id" not found/);
+    expect(nodes.closed).toBe(true);
+    expect(edges.closed).toBe(true);
+  });
+
+  it('closes sampled CSV sources when the first materialized identity is invalid', async () => {
+    const nodes = { closed: false };
+    const edges = { closed: false };
+    // Keep csvTable in its 1,000-row sample replay when the builder rejects
+    // row zero; the private csvRecords iterator must still receive return().
+    const invalidEdges = `source,target\n${',a\n'.repeat(1000)}`;
+    await expect(
+      prepareGraphData(
+        {
+          nodes: trackedCsv('id\na\n', nodes),
+          edges: trackedCsv(invalidEdges, edges),
+        },
+        NODE_MAPPING,
+        { ...PARITY_OPTIONS, format: 'csv' },
+      ),
+    ).rejects.toThrow(/edge source.*row 0/);
+    expect(nodes.closed).toBe(true);
+    expect(edges.closed).toBe(true);
+  });
+
+  it('closes a row iterator when next() rejects during materialization', async () => {
+    const state = { returns: 0 };
+    await expect(
+      prepareGraphData(
+        {
+          nodes: [{ id: 'a' }],
+          edges: hostileIterator([{ source: 'a', target: 'a' }], state, {
+            rejectAfterValues: true,
+            rejectReturn: true,
+          }),
+        },
+        NODE_MAPPING,
+        { ...PARITY_OPTIONS, format: 'rows' },
+      ),
+    ).rejects.toThrow(/source next failed/); // builder cleanup must not replace the read failure
+    expect(state.returns).toBe(1);
+  });
+
+  it('keeps a node-resolution failure when closing the already-open edge lane also rejects', async () => {
+    const nodes = { returns: 0 };
+    const edges = { returns: 0 };
+    await expect(
+      prepareGraphData(
+        {
+          nodes: hostileIterator([], nodes, {
+            rejectAfterValues: true,
+            rejectReturn: true,
+          }),
+          edges: hostileIterator([{ source: 'a', target: 'a' }], edges, {
+            rejectReturn: true,
+          }),
+        },
+        NODE_MAPPING,
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/source next failed/);
+    expect(nodes.returns).toBe(1);
+    expect(edges.returns).toBe(1);
+  });
+
+  it('closes the original iterator when inference fails on its first next()', async () => {
+    const state = { returns: 0 };
+    await expect(
+      prepareGraphData(
+        {
+          nodes: [{ id: 'a' }],
+          edges: hostileIterator([], state, {
+            rejectAfterValues: true,
+            rejectReturn: true,
+          }),
+        },
+        NODE_MAPPING,
+        PARITY_OPTIONS,
+      ),
+    ).rejects.toThrow(/source next failed/); // teardown failure must not mask the read failure
+    expect(state.returns).toBe(1);
+  });
+
+  it('keeps invalid-first-row diagnostics when explicit and inferred source teardown rejects', async () => {
+    for (const format of ['rows', undefined] as const) {
+      const state = { returns: 0 };
+      await expect(
+        prepareGraphData(
+          {
+            nodes: hostileIterator([42], state, { rejectReturn: true }),
+            edges: [],
+          },
+          NODE_MAPPING,
+          { ...PARITY_OPTIONS, ...(format === undefined ? {} : { format }) },
+        ),
+      ).rejects.toThrow(/plain row objects.*got number/s);
+      expect(state.returns).toBe(1);
+    }
+  });
+
+  it('closes a CSV byte iterator when its first next() rejects', async () => {
+    const state = { returns: 0 };
+    const nodes = new TextEncoder().encode('id\na\n').buffer as ArrayBuffer;
+    await expect(
+      prepareGraphData(
+        {
+          nodes,
+          edges: hostileIterator<Uint8Array>([], state, { rejectAfterValues: true }),
+        },
+        NODE_MAPPING,
+        { ...PARITY_OPTIONS, format: 'csv' },
+      ),
+    ).rejects.toThrow(/source next failed/);
+    expect(state.returns).toBe(1);
+  });
+
+  it('never calls an arbitrary return() twice across builder and caller cleanup', async () => {
+    const nodes = { returns: 0 };
+    const edges = { returns: 0 };
+    await expect(
+      prepareGraphData(
+        {
+          nodes: hostileIterator([{ wrong: 'a' }, { wrong: 'b' }], nodes, {
+            rejectSecondReturn: true,
+          }),
+          edges: hostileIterator(
+            [
+              { source: 'a', target: 'b' },
+              { source: 'b', target: 'a' },
+            ],
+            edges,
+            { rejectSecondReturn: true },
+          ),
+        },
+        NODE_MAPPING,
+        { ...PARITY_OPTIONS, format: 'rows' },
+      ),
+    ).rejects.toThrow(/node id column "id" not found/);
+    expect(nodes.returns).toBe(1);
+    expect(edges.returns).toBe(1);
+  });
 });
 
 describe('deep BigInt normalization in the Arrow/Parquet shared utility', () => {
@@ -116,5 +385,43 @@ describe('serializePrepared stays JSON-safe with prepared attrs', () => {
       PARITY_OPTIONS,
     );
     expect(() => serializePrepared(prepared)).not.toThrow();
+  });
+
+  it('rejects lossy values instead of silently replacing or omitting them', async () => {
+    const make = () =>
+      prepareGraphData(
+        { nodes: [{ id: 'a', nested: { value: 1 } }], edges: [] },
+        NODE_MAPPING,
+        PARITY_OPTIONS,
+      );
+
+    for (const value of [NaN, Infinity, -Infinity]) {
+      const prepared = await make();
+      (prepared.snapshot.nodes[0]!.attrs as { nested: { value: unknown } }).nested.value = value;
+      expect(() => serializePrepared(prepared)).toThrow(/not JSON-safe \(non-finite number\)/);
+    }
+
+    const withNonFiniteRevision = await make();
+    withNonFiniteRevision.snapshot.sourceRevision = Infinity;
+    expect(() => serializePrepared(withNonFiniteRevision)).toThrow(
+      /sourceRevision.*not JSON-safe \(non-finite number\)/,
+    );
+
+    for (const sourceRevision of [null, true, {}, []]) {
+      const prepared = await make();
+      Object.assign(prepared.snapshot, { sourceRevision });
+      expect(() => serializePrepared(prepared)).toThrow(
+        /sourceRevision must be a string or finite number/,
+      );
+    }
+
+    const withUndefined = await make();
+    (withUndefined.snapshot.nodes[0]!.attrs as { nested: { value: unknown } }).nested.value =
+      undefined;
+    expect(() => serializePrepared(withUndefined)).toThrow(/not JSON-safe \(undefined value\)/);
+
+    const withDate = await make();
+    (withDate.snapshot.nodes[0]!.attrs as { nested: { value: unknown } }).nested.value = new Date();
+    expect(() => serializePrepared(withDate)).toThrow(/not JSON-safe \(non-plain object\)/);
   });
 });

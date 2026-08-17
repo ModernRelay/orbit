@@ -134,3 +134,23 @@ test('stream feed → live meter → commit → isolate via context menu → res
   await expect(page.locator(SCOPE_STATUS)).toHaveText('full', { timeout: 10_000 });
   await expect(page.locator(NODE_COUNT)).toHaveText(fmt(STREAM_NODES));
 });
+
+test('leaving an active stream run cannot resurrect its cleared progress meter', async ({ page }) => {
+  // Enough batches to guarantee a paint/yield between the first progress
+  // receipt and completion; the test cancels immediately after that paint.
+  await page.goto('/?rows=200000');
+  await page.waitForSelector(READY_DOT, { timeout: 60_000 });
+  await page.getByTestId('stream-feed').click();
+  await expect(page.locator(METER)).toHaveAttribute('data-phase', 'streaming', {
+    timeout: 15_000,
+  });
+
+  await page.getByTestId('semantic-mode').click();
+  await expect(page.getByTestId('m5-panel')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(METER)).toHaveCount(0);
+
+  // The abandoned driver emits its terminal `aborted` receipt at the next
+  // batch boundary. It must remain private to that obsolete run.
+  await page.waitForTimeout(500);
+  await expect(page.locator(METER)).toHaveCount(0);
+});

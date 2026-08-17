@@ -4,7 +4,11 @@
  * config and method calls in order so batching/ordering can be asserted.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EngineDiagnostic, EngineHostEvents } from '@modernrelay/orbit-core/engine';
+import type {
+  EngineCommit,
+  EngineDiagnostic,
+  EngineHostEvents,
+} from '@modernrelay/orbit-core/engine';
 import { CosmosEngine } from '../src/CosmosEngine';
 import type { CosmosEngineOptions } from '../src/CosmosEngine';
 
@@ -937,6 +941,125 @@ describe('CosmosEngine', () => {
     expect(withoutRestart.appliedRevision()).toBe(4);
   });
 
+  it('owns every array in an initial queued commit before commit() returns', async () => {
+    const positions = new Float32Array([10, 20, 30, 40]);
+    const links = new Uint32Array([0, 1]);
+    const pointColor = new Float32Array([1, 0, 0, 1, 0, 1, 0, 1]);
+    const pointSize = new Float32Array([3, 4]);
+    const linkColor = new Float32Array([0, 0, 1, 1]);
+    const patchData = new Float32Array([7]);
+    const pointClusters = new Float32Array([0, 1]);
+    const centers = new Float32Array([5, 6, 7, 8]);
+    const pointImageIndex = new Float32Array([0, 1]);
+    const engine = new CosmosEngine();
+
+    engine.commit({
+      revision: 1,
+      structure: { pointCount: 2, positions, links },
+      buffers: { pointColor, pointSize, linkColor },
+      bufferPatches: { linkWidth: [{ start: 0, data: patchData }] },
+      config: { cluster: { pointClusters, centers, strength: 0.5 } },
+      resources: { pointImageIndex },
+    });
+
+    // The patch channel is unsupported by cosmos and therefore is not
+    // applied, but it still crosses the same queued ownership boundary.
+    const pending = (
+      engine as unknown as { pendingCommit: EngineCommit | null }
+    ).pendingCommit!;
+    expect(pending.bufferPatches!.linkWidth![0]!.data).not.toBe(patchData);
+
+    positions.fill(99);
+    links.set([1, 0]);
+    pointColor.fill(0.25);
+    pointSize.fill(99);
+    linkColor.fill(0.25);
+    patchData.fill(99);
+    pointClusters.fill(9);
+    centers.fill(99);
+    pointImageIndex.fill(-1);
+
+    const container = document.createElement('div');
+    await engine.mount(container, makeEvents());
+    const graph = h.constructed[h.constructed.length - 1]!;
+
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointPositions')!.args[0] as Float32Array))
+      .toEqual([10, 20, 30, 40]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setLinks')!.args[0] as Float32Array))
+      .toEqual([0, 1]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointColors')!.args[0] as Float32Array))
+      .toEqual([1, 0, 0, 1, 0, 1, 0, 1]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointSizes')!.args[0] as Float32Array))
+      .toEqual([3, 4]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setLinkColors')!.args[0] as Float32Array))
+      .toEqual([0, 0, 1, 1]);
+    expect(graph.calls.find((c) => c.method === 'setPointClusters')!.args[0])
+      .toEqual([0, 1]);
+    expect(graph.calls.find((c) => c.method === 'setClusterPositions')!.args[0])
+      .toEqual([5, 6, 7, 8]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointImageIndices')!.args[0] as Float32Array))
+      .toEqual([0, 1]);
+  });
+
+  it('merges only owned array snapshots across queued commits', async () => {
+    const positions = new Float32Array([1, 2, 3, 4]);
+    const links = new Uint32Array([0, 1]);
+    const pointColor = new Float32Array([1, 0, 0, 1, 0, 1, 0, 1]);
+    const pointColorPatch = new Float32Array([0.5]);
+    const engine = new CosmosEngine();
+
+    engine.commit({
+      revision: 1,
+      structure: { pointCount: 2, positions, links },
+      buffers: { pointColor },
+      bufferPatches: { pointSize: [{ start: 0, data: pointColorPatch }] },
+    });
+    positions.fill(90);
+    links.fill(1);
+    pointColor.fill(0.25);
+    pointColorPatch.fill(90);
+
+    const pointSize = new Float32Array([8, 9]);
+    const linkWidthPatch = new Float32Array([2]);
+    const pointClusters = new Float32Array([1, 0]);
+    const pointImageIndex = new Float32Array([1, 0]);
+    engine.commit({
+      revision: 2,
+      buffers: { pointSize },
+      bufferPatches: { linkWidth: [{ start: 0, data: linkWidthPatch }] },
+      config: { cluster: { pointClusters } },
+      resources: { pointImageIndex },
+    });
+    pointSize.fill(90);
+    linkWidthPatch.fill(90);
+    pointClusters.fill(9);
+    pointImageIndex.fill(-1);
+
+    const pending = (
+      engine as unknown as { pendingCommit: EngineCommit | null }
+    ).pendingCommit!;
+    expect(Array.from(pending.bufferPatches!.pointSize![0]!.data)).toEqual([0.5]);
+    expect(Array.from(pending.bufferPatches!.linkWidth![0]!.data)).toEqual([2]);
+
+    const container = document.createElement('div');
+    await engine.mount(container, makeEvents());
+    const graph = h.constructed[h.constructed.length - 1]!;
+
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointPositions')!.args[0] as Float32Array))
+      .toEqual([1, 2, 3, 4]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setLinks')!.args[0] as Float32Array))
+      .toEqual([0, 1]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointColors')!.args[0] as Float32Array))
+      .toEqual([1, 0, 0, 1, 0, 1, 0, 1]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointSizes')!.args[0] as Float32Array))
+      .toEqual([8, 9]);
+    expect(graph.calls.find((c) => c.method === 'setPointClusters')!.args[0])
+      .toEqual([1, 0]);
+    expect(Array.from(graph.calls.find((c) => c.method === 'setPointImageIndices')!.args[0] as Float32Array))
+      .toEqual([1, 0]);
+    expect(engine.appliedRevision()).toBe(2);
+  });
+
   it('appliedRevision tracks the last rendered commit', async () => {
     const { engine, graph } = await mounted();
     expect(engine.appliedRevision()).toBeNull();
@@ -1547,7 +1670,8 @@ describe('CosmosEngine styling channels', () => {
 
     const indexCalls = recreated.calls.filter((c) => c.method === 'setPointImageIndices');
     expect(indexCalls).toHaveLength(1);
-    expect(indexCalls[0]!.args[0]).toBe(idxB); // latest pointImageIndex
+    expect(indexCalls[0]!.args[0]).not.toBe(idxB); // queued resources are owned snapshots
+    expect(Array.from(indexCalls[0]!.args[0] as Float32Array)).toEqual([0, -1]);
 
     expect(recreated.calls.filter((c) => c.method === 'render')).toHaveLength(1);
     expect(engine.appliedRevision()).toBe(6);

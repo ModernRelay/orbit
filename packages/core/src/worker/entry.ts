@@ -8,13 +8,17 @@
 import { EnvelopeSequencer } from '../workerProtocol';
 import { handleWorkerRequest } from './runtime';
 
-const sequencer = new EnvelopeSequencer();
-const scope = self as unknown as {
+export interface WorkerEntryScope {
   onmessage: ((ev: MessageEvent) => void) | null;
   postMessage: (message: unknown, transfer: Transferable[]) => void;
-};
+}
 
-scope.onmessage = (ev: MessageEvent) => {
-  const { reply, transfers } = handleWorkerRequest(ev.data, sequencer);
-  scope.postMessage(reply, [...transfers]);
-};
+/** Install the thread glue. The .js bootstrap calls this in both workspace
+ * Vite builds and the self-contained published worker bundle. */
+export function installWorkerEntry(scope: WorkerEntryScope): void {
+  const sequencer = new EnvelopeSequencer();
+  scope.onmessage = (ev: MessageEvent) => {
+    const { reply, transfers } = handleWorkerRequest(ev.data, sequencer);
+    scope.postMessage(reply, [...transfers]);
+  };
+}

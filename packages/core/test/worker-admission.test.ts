@@ -79,6 +79,47 @@ async function rig(over: Partial<CreateGraphInstanceOptions<NAttrs, EAttrs>> = {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('async admission (execution: auto + a live lane)', () => {
+  it('rejects non-string entries in every dictionary before worker encoding', async () => {
+    const create = vi.fn(workerFromDouble);
+    const { instance } = await rig({ execution: 'worker', workerFactory: { create } });
+    instance.applyHostUpdate({ data: snap(1, ['keep'], []) });
+
+    const mutations: Array<(snapshot: ColumnarGraphSnapshot<NAttrs, EAttrs>) => void> = [
+      (snapshot) => {
+        (snapshot.nodes.ids.dictionary as unknown[])[0] = 123;
+      },
+      (snapshot) => {
+        (snapshot.edges.ids.dictionary as unknown[])[0] = { id: 'e1' };
+      },
+      (snapshot) => {
+        snapshot.nodes.columns = {
+          ...snapshot.nodes.columns,
+          label: {
+            kind: 'string',
+            dictionary: ['ok', null] as unknown as string[],
+            codes: Uint32Array.of(0, 1, 0, 1),
+          },
+        };
+      },
+    ];
+
+    for (const mutate of mutations) {
+      const bad = columnarFixture();
+      mutate(bad);
+      instance.applyHostUpdate({ data: bad });
+      expect(instance.getSceneNodeIds()).toEqual(['keep']);
+      expect(
+        instance.store
+          .getState()
+          .diagnostics.find((diag) => diag.code === 'invalid-columnar-snapshot')?.message,
+      ).toContain('dictionary entry');
+    }
+
+    await flush();
+    expect(instance.getSceneNodeIds()).toEqual(['keep']);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('lands IDENTICAL to the sync twin — after the flush, not before', async () => {
     const sync = await rig(); // execution 'main' default
     sync.instance.applyHostUpdate({ data: columnarFixture() });

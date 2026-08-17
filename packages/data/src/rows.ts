@@ -19,8 +19,13 @@ export async function rowsTable(
   if (!isPlainRowObject(first)) {
     // Close the underlying source before reporting: the replay
     // generator was never started, so ITS return would skip the finally
-    // close reaches the source iterator directly.
-    await close();
+    // close reaches the source iterator directly. A hostile teardown must
+    // not replace the more useful row-shape validation failure below.
+    try {
+      await close();
+    } catch {
+      // best-effort cleanup on an already-failed admission path
+    }
     throw new TypeError(
       `prepareGraphData: ${role} row sources must yield plain row objects ` +
         `(got ${first === null ? 'null' : typeof first})`,
@@ -29,6 +34,7 @@ export async function rowsTable(
   const columns = Object.keys(first);
   return {
     columns,
+    close,
     rows: (async function* () {
       let index = 0;
       for await (const row of rest) {

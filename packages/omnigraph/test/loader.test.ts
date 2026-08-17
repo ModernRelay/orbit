@@ -220,6 +220,32 @@ const exportCalls = (calls: RecordedRequest[]): RecordedRequest[] =>
 // Tests
 // ---------------------------------------------------------------------------
 
+describe('source option validation', () => {
+  it('rejects batchSize values that cannot define a finite batch boundary', () => {
+    for (const batchSize of [
+      NaN,
+      Infinity,
+      -Infinity,
+      0,
+      -1,
+      1.5,
+      Number.MAX_VALUE,
+      null as unknown as number,
+    ]) {
+      expect(() => harness(recordedRoutes(), { batchSize })).toThrow(
+        /batchSize must be a positive safe integer/,
+      );
+    }
+    expect(() => harness(recordedRoutes(), { batchSize: 1 })).not.toThrow();
+  });
+
+  it('rejects non-numeric maxPendingBytes instead of treating null as the default', () => {
+    expect(() =>
+      harness(recordedRoutes(), { maxPendingBytes: null as unknown as number }),
+    ).toThrow(/maxPendingBytes must be a positive safe integer/);
+  });
+});
+
 describe('partial-export identity includes typeNames', () => {
   it('same head, different typeNames → DIFFERENT datasetKey and sourceRevision; order canonicalizes', async () => {
     const runLoad = async (typeNames?: readonly string[]) => {

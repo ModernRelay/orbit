@@ -15,8 +15,31 @@ import {
   validateViewState,
   VIEW_STATE_VERSION,
 } from '../src/viewState';
-import type { GraphViewState } from '../src/viewState';
+import type { GraphViewState, SerializableScale, ViewStyling } from '../src/viewState';
 import { container, makeInstance, snap } from './helpers';
+
+// Compile-time witnesses for the public default generic. Its value union must
+// distribute over whole scales, rather than permit mixed value collections.
+const _defaultStringScale: SerializableScale = {
+  kind: 'sequential',
+  metric: 'degree',
+  range: ['#000', '#fff'],
+};
+const _defaultNumberScale: SerializableScale = {
+  kind: 'categorical',
+  by: 'type',
+  palette: [2, 4],
+};
+// @ts-expect-error a serializable scale cannot mix string and number tuple values
+const _mixedDefaultTuple: SerializableScale = { kind: 'sequential', metric: 'degree', range: ['#000', 4] };
+// @ts-expect-error a serializable scale cannot mix string and number palette values
+const _mixedDefaultPalette: SerializableScale = { kind: 'categorical', by: 'type', palette: ['#000', 4] };
+const _channelScales: ViewStyling = {
+  nodeColor: _defaultStringScale,
+  nodeSize: _defaultNumberScale,
+};
+// @ts-expect-error nodeColor remains a string-valued styling channel
+const _wrongColorChannel: ViewStyling = { nodeColor: _defaultNumberScale };
 
 // ---------------------------------------------------------------------------
 // Canonical JSON
@@ -111,6 +134,98 @@ describe('validateViewState', () => {
     const bad = { ...MINIMAL, crossfilter: [{ key: 'score', state: { kind: 'numeric' } }] };
     expect(validateViewState(good).ok).toBe(true);
     expect(validateViewState(bad).ok).toBe(false);
+  });
+
+  it('rejects malformed categorical scale domains and palettes', () => {
+    const verdicts = [
+      validateViewState({
+        ...MINIMAL,
+        styling: { nodeColor: { kind: 'categorical', by: 'type', domain: 'type' } },
+      }),
+      validateViewState({
+        ...MINIMAL,
+        styling: { nodeColor: { kind: 'categorical', by: 'type', domain: ['ok', 1] } },
+      }),
+      validateViewState({
+        ...MINIMAL,
+        styling: { nodeColor: { kind: 'categorical', by: 'type', palette: '#f00' } },
+      }),
+      validateViewState({
+        ...MINIMAL,
+        styling: { nodeSize: { kind: 'categorical', by: 'type', palette: [1, '2'] } },
+      }),
+      validateViewState({
+        ...MINIMAL,
+        styling: { nodeSize: { kind: 'categorical', by: 'type', palette: [1, Infinity] } },
+      }),
+    ];
+    for (const verdict of verdicts) {
+      expect(verdict.ok).toBe(false);
+      if (!verdict.ok) expect(verdict.code).toBe('invalid-view-state');
+    }
+
+    expect(
+      validateViewState({
+        ...MINIMAL,
+        styling: {
+          nodeColor: {
+            kind: 'categorical',
+            by: 'type',
+            domain: ['a', 'b'],
+            palette: ['#f00', '#0f0'],
+          },
+          nodeSize: { kind: 'categorical', by: 'type', palette: [2, 4] },
+        },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('rejects malformed or channel-incompatible numeric scale tuples', () => {
+    const sizeScales = [
+      { kind: 'sequential', metric: 'degree', range: ['#000', 7] },
+      { kind: 'sequential', metric: 'degree', range: [1, Number.NaN] },
+      { kind: 'sequential', metric: 'degree', range: [1] },
+      { kind: 'sequential', metric: 'degree', range: [1, 2, 3] },
+      { kind: 'sequential', metric: 'degree', range: [1, 2], domain: [0] },
+      { kind: 'sequential', metric: 'degree', range: [1, 2], domain: [0, 'high'] },
+      { kind: 'diverging', metric: 'risk', range: [1, 2, 3] },
+      { kind: 'diverging', metric: 'risk', range: [1, 2], mid: 0 },
+      { kind: 'diverging', metric: 'risk', range: [1, 2, 3, 4], mid: 0 },
+      { kind: 'diverging', metric: 'risk', range: [1, 2, 3], mid: Infinity },
+    ];
+    for (const nodeSize of sizeScales) {
+      const verdict = validateViewState({ ...MINIMAL, styling: { nodeSize } });
+      expect(verdict.ok).toBe(false);
+      if (!verdict.ok) {
+        expect(verdict.code).toBe('invalid-view-state');
+        expect(verdict.problems.join('; ')).toContain('styling.nodeSize');
+      }
+    }
+
+    for (const nodeColor of [
+      { kind: 'sequential', metric: 'degree', range: [1, 2] },
+      { kind: 'diverging', metric: 'risk', range: ['#00f', '#fff', {}], mid: 0 },
+      { kind: 'categorical', by: 'type', palette: [1, 2] },
+    ]) {
+      const verdict = validateViewState({ ...MINIMAL, styling: { nodeColor } });
+      expect(verdict.ok).toBe(false);
+      if (!verdict.ok) expect(verdict.problems.join('; ')).toContain('styling.nodeColor');
+    }
+
+    expect(
+      validateViewState({
+        ...MINIMAL,
+        styling: {
+          nodeColor: {
+            kind: 'diverging',
+            metric: 'risk',
+            range: ['#00f', '#fff', '#f00'],
+            domain: [-1, 1],
+            mid: 0,
+          },
+        },
+      }).ok,
+    ).toBe(true);
   });
 
   it('folds validate as [anchor, memberIds] tuples', () => {
@@ -380,7 +495,36 @@ describe('setViewState', () => {
     const idxA = 0; // 'a' is slot 0 in this fixture
     expect(commit.structure!.positions[2 * idxA]).toBeCloseTo(posA[0], 5);
     // …and the sim is paused (fixed-equivalent freeze).
-    expect(b.instance.store.getState().simulationRunning).toBe(false);
+    const store = b.instance.store.getState();
+    expect(store.simulationRunning).toBe(false);
+    expect(store.revisions.appliedRender).toBe(store.revisions.render);
+    expect(store.revisions.appliedRender).toBe(commit.revision);
+  });
+
+  it('rejects malformed scale shapes through setViewState without applying any lane', async () => {
+    const h = await ready();
+    const before = h.instance.getRevisions();
+    const beforeView = h.instance.getViewState();
+    const beforeCommits = h.engine.commits.length;
+    const malformed = [
+      { nodeColor: { kind: 'categorical', by: 'type', domain: [1] } },
+      { nodeColor: { kind: 'sequential', metric: 'degree', range: [1, 2] } },
+      { nodeSize: { kind: 'sequential', metric: 'degree', range: [2] } },
+      { nodeSize: { kind: 'sequential', metric: 'degree', range: [2, 8], domain: {} } },
+      { nodeSize: { kind: 'diverging', metric: 'degree', range: [2, 4, 8] } },
+    ];
+
+    for (const styling of malformed) {
+      const result = await h.instance.setViewState({ ...beforeView, styling });
+      expect(result.status).toBe('rejected');
+      if (result.status === 'rejected') {
+        expect(result.code).toBe('invalid-view-state');
+        expect(result.problems.join('; ')).toContain('styling.node');
+      }
+      expect(h.instance.getRevisions()).toEqual(before);
+      expect(h.instance.getViewState()).toEqual(beforeView);
+      expect(h.engine.commits).toHaveLength(beforeCommits);
+    }
   });
 });
 

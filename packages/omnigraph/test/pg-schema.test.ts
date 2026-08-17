@@ -245,6 +245,21 @@ describe('parsePgSchema grammar coverage beyond the fixture', () => {
     });
   });
 
+  it('recovers after a malformed type without swallowing later physical lines', () => {
+    const schema = parsePgSchema(`
+      node Recover {
+        broken: ???
+        broken_list: [???
+        good: String
+      }
+    `);
+    expect(node(schema, 'Recover').properties.map((p) => p.name)).toEqual([
+      'broken',
+      'broken_list',
+      'good',
+    ]);
+  });
+
   it('applies body-level @key(...) constraints to the named properties', () => {
     const schema = parsePgSchema(`
       node Composite {
@@ -257,6 +272,53 @@ describe('parsePgSchema grammar coverage beyond the fixture', () => {
     expect(composite?.properties.find((p) => p.name === 'region')?.key).toBe(true);
     expect(composite?.properties.find((p) => p.name === 'num')?.key).toBe(true);
     expect(composite?.constraints).toEqual(['@key(region, num)']);
+  });
+
+  it('matches the server grammar when whitespace separates delimiters', () => {
+    const schema = parsePgSchema(`
+      node Spaced @ rename_from ("Legacy") {
+        id: String
+          ? @ key
+        embedding: Vector
+          ( 3 ) ? @embed
+          ("id")
+        status: enum (active, archived)
+        tags: [String] ?
+        shard: I64
+        @ key
+          (shard)
+      }
+      edge Related: Spaced -> Spaced @card ( 1..1 ) @ custom ("kept")
+    `);
+
+    const spaced = node(schema, 'Spaced');
+    expect(spaced.properties.find((p) => p.name === 'id')).toMatchObject({
+      type: 'String',
+      optional: true,
+      key: true,
+    });
+    const embedding = spaced.properties.find((p) => p.name === 'embedding');
+    expect(embedding).toMatchObject({
+      type: { kind: 'vector', dim: 3 },
+      optional: true,
+    });
+    expect(embedding?.annotations).toHaveLength(1);
+    expect(embedding?.annotations[0]).toMatch(/^@embed\s+\("id"\)$/);
+    expect(spaced.properties.find((p) => p.name === 'status')?.type).toEqual({
+      kind: 'enum',
+      values: ['active', 'archived'],
+    });
+    expect(spaced.properties.find((p) => p.name === 'tags')).toMatchObject({
+      type: { kind: 'list', element: 'String' },
+      optional: true,
+    });
+    expect(spaced.properties.find((p) => p.name === 'shard')?.key).toBe(true);
+    expect(spaced.constraints).toHaveLength(1);
+    expect(spaced.constraints[0]).toMatch(/^@ key\s+\(shard\)$/);
+
+    const related = edge(schema, 'Related');
+    expect(related.card).toBe('1..1');
+    expect(related.annotations).toEqual(['@card ( 1..1 )', '@ custom ("kept")']);
   });
 });
 
@@ -352,5 +414,32 @@ describe('head annotations and same-line properties', () => {
     expect(props.map((p) => p.name)).toEqual(['id', 'when', 'score']);
     expect(props[0]!.key).toBe(true);
     expect(props[2]!.optional).toBe(true);
+  });
+
+  it('spaced annotation sigils do not strand later same-line properties', () => {
+    const schema = parsePgSchema(
+      'node N @ rename_from ("OldN") {\n' +
+        '  id: String @ key when: DateTime @ index score: F64 ?\n' +
+        '}\n',
+    );
+    const props = schema.nodes[0]!.properties;
+    expect(props.map((p) => p.name)).toEqual(['id', 'when', 'score']);
+    expect(props[0]!.key).toBe(true);
+    expect(props[1]!.index).toBe(true);
+    expect(props[2]!.optional).toBe(true);
+  });
+
+  it('separates interleaved body constraints from same-line property annotations', () => {
+    const schema = parsePgSchema(
+      'node N {\n' +
+        '  @ index (a) a: String b: String @ key (a, b) c: I32 @ unique (c) d: Bool\n' +
+        '}\n',
+    );
+    const n = schema.nodes[0]!;
+    expect(n.properties.map((p) => p.name)).toEqual(['a', 'b', 'c', 'd']);
+    expect(n.properties.find((p) => p.name === 'a')).toMatchObject({ key: true, index: true });
+    expect(n.properties.find((p) => p.name === 'b')?.key).toBe(true);
+    expect(n.properties.find((p) => p.name === 'c')?.unique).toBe(true);
+    expect(n.constraints).toEqual(['@ index (a)', '@ key (a, b)', '@ unique (c)']);
   });
 });

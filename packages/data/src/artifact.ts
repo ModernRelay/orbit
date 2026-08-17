@@ -15,10 +15,10 @@
  * - no expected fingerprint → full structural revalidation via
  * `validatePreparedEnvelope`.
  *
- * JSON transport caveat (documented): snapshot attrs must be JSON-safe
- * `bigint` throws (native JSON.stringify behavior) and `Date` flattens to an
- * ISO string. Prepared lanes that normalize values (arrow.ts/parquet.ts)
- * already produce JSON-safe attrs.
+ * Serialization accepts only lossless JSON data. Unsupported values (for
+ * example non-finite numbers, bigint, undefined, Date/class instances,
+ * sparse arrays, accessors, and cycles) throw with their artifact path rather
+ * than being silently replaced, omitted, or flattened by JSON.stringify.
  */
 
 import type { GraphSnapshot } from '@modernrelay/orbit-core';
@@ -45,6 +45,16 @@ export function serializePrepared(prepared: PreparedGraph<unknown, unknown>): Ui
     snapshot,
     summaries: prepared.summaries,
   };
+  assertJsonSafe(envelope, 'artifact');
+  if (
+    (typeof snapshot.sourceRevision !== 'string' &&
+      typeof snapshot.sourceRevision !== 'number') ||
+    (typeof snapshot.sourceRevision === 'number' && !Number.isFinite(snapshot.sourceRevision))
+  ) {
+    throw new TypeError(
+      'serializePrepared: snapshot.sourceRevision must be a string or finite number',
+    );
+  }
   return new TextEncoder().encode(JSON.stringify(envelope));
 }
 
@@ -109,8 +119,14 @@ export function validatePreparedEnvelope(envelope: Partial<PreparedArtifactEnvel
   if (typeof snapshot.datasetKey !== 'string' || snapshot.datasetKey === '') {
     throw new TypeError('loadPrepared: snapshot.datasetKey must be a non-empty string');
   }
-  if (typeof snapshot.sourceRevision !== 'string' && typeof snapshot.sourceRevision !== 'number') {
-    throw new TypeError('loadPrepared: snapshot.sourceRevision must be a string or number');
+  if (
+    (typeof snapshot.sourceRevision !== 'string' &&
+      typeof snapshot.sourceRevision !== 'number') ||
+    (typeof snapshot.sourceRevision === 'number' && !Number.isFinite(snapshot.sourceRevision))
+  ) {
+    throw new TypeError(
+      'loadPrepared: snapshot.sourceRevision must be a string or finite number',
+    );
   }
   if (envelope.datasetKey !== snapshot.datasetKey) {
     throw new TypeError('loadPrepared: envelope datasetKey disagrees with its snapshot');
@@ -181,3 +197,69 @@ export function validatePreparedEnvelope(envelope: Partial<PreparedArtifactEnvel
  * 'validate')). Not part of the public index.
  */
 export const _internals = { validate: validatePreparedEnvelope };
+
+function jsonSafetyError(path: string, reason: string): never {
+  throw new TypeError(`serializePrepared: ${path} is not JSON-safe (${reason})`);
+}
+
+/**
+ * JSON.stringify is intentionally lossy for several JavaScript values. Walk
+ * data first so an artifact either round-trips its data shape or does not get
+ * emitted. The active-object set detects cycles while still allowing the same
+ * acyclic object to be referenced from more than one place.
+ */
+function assertJsonSafe(value: unknown, path: string, active = new Set<object>()): void {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) jsonSafetyError(path, 'non-finite number');
+    return;
+  }
+  if (typeof value !== 'object') {
+    jsonSafetyError(path, `${typeof value} value`);
+  }
+
+  if (active.has(value)) jsonSafetyError(path, 'cyclic reference');
+  active.add(value);
+  try {
+    if (Array.isArray(value)) {
+      const expectedKeys = new Set<string>();
+      for (let i = 0; i < value.length; i++) {
+        const key = String(i);
+        expectedKeys.add(key);
+        if (!Object.prototype.hasOwnProperty.call(value, key)) {
+          jsonSafetyError(`${path}[${i}]`, 'sparse array hole');
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (descriptor === undefined || !('value' in descriptor)) {
+          jsonSafetyError(`${path}[${i}]`, 'accessor property');
+        }
+        assertJsonSafe(descriptor.value, `${path}[${i}]`, active);
+      }
+      for (const key of Reflect.ownKeys(value)) {
+        if (key === 'length' || (typeof key === 'string' && expectedKeys.has(key))) continue;
+        jsonSafetyError(path, `array property ${String(key)} would be omitted`);
+      }
+      return;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      jsonSafetyError(path, 'non-plain object');
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key === 'symbol') {
+        jsonSafetyError(path, `symbol-keyed property ${String(key)} would be omitted`);
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable) {
+        jsonSafetyError(`${path}[${JSON.stringify(key)}]`, 'non-enumerable property');
+      }
+      if (!('value' in descriptor)) {
+        jsonSafetyError(`${path}[${JSON.stringify(key)}]`, 'accessor property');
+      }
+      assertJsonSafe(descriptor.value, `${path}[${JSON.stringify(key)}]`, active);
+    }
+  } finally {
+    active.delete(value);
+  }
+}

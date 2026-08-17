@@ -64,6 +64,26 @@ describe('prepareParquetGraphData', () => {
     expect(prepared.snapshot.edges).toEqual(PARITY_EXPECTED_SNAPSHOT.edges);
   });
 
+  it('preserves a Parquet schema column literally named __proto__ as own data', async () => {
+    const raw = JSON.parse(
+      '{"source":"a","target":"b","__proto__":{"evil":true}}',
+    ) as Record<string, unknown>;
+    _internals.importHyparquet = async () => ({
+      parquetReadObjects: async () => [raw],
+    });
+
+    const prepared = await prepareParquetGraphData(
+      { edges: new ArrayBuffer(0), deriveNodes: true },
+      { edges: { source: 'source', target: 'target' } },
+      PARITY_OPTIONS,
+    );
+    const attrs = prepared.snapshot.edges[0]!.attrs as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(attrs, '__proto__')).toBe(true);
+    expect(attrs['__proto__']).toEqual({ evil: true });
+    expect((attrs as { evil?: unknown }).evil).toBeUndefined();
+    expect(Object.getPrototypeOf(attrs)).toBe(Object.prototype);
+  });
+
   it('reports a clear install hint when hyparquet is absent', async () => {
     _internals.importHyparquet = () =>
       Promise.reject(

@@ -144,6 +144,32 @@ describe('<GraphTooltip> delay & visibility', () => {
     expect(card(view)!.textContent).toBe('b'); // no attrs → id title only
   });
 
+  it('hides the previous target while the replacement target waits out its delay', async () => {
+    vi.useFakeTimers();
+    const { engine, view } = await setup();
+    act(() => {
+      engine.injectPointHover(0);
+    });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(card(view)!.textContent).toContain('Alpha');
+
+    act(() => {
+      engine.injectPointHover(1);
+    });
+    expect(card(view)).toBeNull(); // Alpha is no longer hovered: hide now
+
+    act(() => {
+      vi.advanceTimersByTime(149);
+    });
+    expect(card(view)).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(card(view)!.textContent).toBe('b');
+  });
+
   it('follows the pointer while visible (untracked id → cursor lane)', async () => {
     vi.useFakeTimers();
     const { engine, view } = await setup();

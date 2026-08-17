@@ -111,6 +111,13 @@ export function validateSnapshot<N = Record<string, unknown>, E = Record<string,
       record(invalidEdge, typeof edge.id === 'string' ? edge.id : `[${i}]`);
       continue;
     }
+    if (typeof edge.id === 'string' && edge.id.includes('\u0000')) {
+      // U+0000 prefixes the internal meta-edge scene-key codec. Physical
+      // edge ids share the rendered edge-id lane with those synthetic rows,
+      // so an explicit caller id in that namespace could alias a meta-edge.
+      record(invalidEdge, `[${i}]`);
+      continue;
+    }
     if (!nodeIndex.has(source)) {
       record(danglingEdge, source);
       continue;
@@ -170,7 +177,7 @@ export function validateSnapshot<N = Record<string, unknown>, E = Record<string,
     'invalid-edge',
     'error',
     invalidEdge,
-    `${invalidEdge.count} edge row(s) dropped: missing or non-string source/target`,
+    `${invalidEdge.count} edge row(s) dropped: missing or non-string source/target, or NUL-containing explicit id`,
   );
   pushDiagnostic(
     diagnostics,

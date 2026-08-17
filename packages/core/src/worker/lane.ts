@@ -12,6 +12,7 @@
 
 import { EnvelopeSequencer, RequestLedger } from '../workerProtocol';
 import type { RequestClass, WorkerEntity, WorkerEnvelope } from '../workerProtocol';
+import { createDefaultWorker } from '../workerAsset';
 
 export interface WorkerTransport {
   post(envelope: WorkerEnvelope, transfers: readonly ArrayBuffer[]): void;
@@ -28,12 +29,6 @@ export type WorkerFactoryOption =
   | { url: URL | string }
   | { create: () => Worker }
   | undefined;
-
-function defaultWorkerUrl(): URL {
-  // Resolves next to the built module (dist/worker/entry.js). Bundlers that
-  // rewrite `new URL(..., import.meta.url)` keep this working in app builds.
-  return new URL('./worker/entry.js', import.meta.url);
-}
 
 function transportFromWorker(worker: Worker): WorkerTransport {
   return {
@@ -101,10 +96,9 @@ export class WorkerLane {
         const worker =
           factory !== undefined && 'create' in factory
             ? factory.create()
-            : new Worker(
-                factory !== undefined && 'url' in factory ? factory.url : defaultWorkerUrl(),
-                { type: 'module' },
-              );
+            : factory !== undefined && 'url' in factory
+              ? new Worker(factory.url, { type: 'module' })
+              : createDefaultWorker();
         transport = transportFromWorker(worker);
       }
       transport.onReply((reply) => this.settle(reply));

@@ -17,6 +17,7 @@ import type { AccessibilityConfig, GraphInstance, GraphSnapshot } from '@modernr
 import { FakeEngine } from '@modernrelay/orbit-core/testing';
 import { GraphProvider } from '../src/GraphProvider';
 import { GraphNavigator } from '../src/components/Navigator/index';
+import { setSearchResultUnavailableCallback } from '../src/hooks';
 
 // --- fixtures -------------------------------------------------------------
 
@@ -391,6 +392,27 @@ describe('<GraphNavigator> search results section', () => {
     ).toBe(true);
     // …but the navigator does NOT re-root a neighborhood from a search row.
     expect(view.container.querySelector('[aria-label^="Focused node"]')).toBeNull();
+  });
+
+  it('forwards unavailable search activation to the Graph-level callback channel', async () => {
+    const { view, instance } = await setup({
+      snapshot: chainSnapshot(10),
+      accessibility: { navigatorWindow: 5 },
+    });
+    await act(async () => {
+      await instance.search('n3', { limit: 5 });
+    });
+    const onUnavailable = vi.fn();
+    setSearchResultUnavailableCallback(instance, onUnavailable);
+    act(() => {
+      instance.applyHostUpdate({ subgraph: { seedIds: ['n0'], hops: 0 } });
+    });
+
+    fireEvent.keyDown(listbox(view), { key: 'Enter' });
+
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
+    expect(onUnavailable.mock.calls[0]![0]).toMatchObject({ id: 'n3' });
+    expect(onUnavailable.mock.calls[0]![1]).toBe('out-of-scope');
   });
 
   it('search rows render the service label as a text node (hostile labels literal)', async () => {

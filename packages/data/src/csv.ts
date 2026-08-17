@@ -137,59 +137,74 @@ export async function csvTable(
   const columns = [...head.value];
 
   const rows = (async function* (): AsyncGenerator<Readonly<Record<string, unknown>>> {
-    // Pass 1: retain up to SAMPLE_ROWS records and decide column numericness.
-    const sample: (readonly string[])[] = [];
-    let sampleDone = false;
-    while (sample.length < SAMPLE_ROWS) {
-      const next = await iterator.next();
-      if (next.done) {
-        sampleDone = true;
-        break;
+    try {
+      // Pass 1: retain up to SAMPLE_ROWS records and decide column numericness.
+      const sample: (readonly string[])[] = [];
+      let sampleDone = false;
+      while (sample.length < SAMPLE_ROWS) {
+        const next = await iterator.next();
+        if (next.done) {
+          sampleDone = true;
+          break;
+        }
+        sample.push(next.value);
       }
-      sample.push(next.value);
-    }
-    const numeric = columns.map((name, index) => {
-      if (identityColumns.has(name)) return false;
-      let nonEmpty = 0;
-      for (const record of sample) {
-        const cell = record[index];
-        if (cell === undefined || cell === '') continue;
-        nonEmpty++;
-        if (coerceNumeric(cell) === null) return false;
-      }
-      return nonEmpty > 0;
-    });
+      const numeric = columns.map((name, index) => {
+        if (identityColumns.has(name)) return false;
+        let nonEmpty = 0;
+        for (const record of sample) {
+          const cell = record[index];
+          if (cell === undefined || cell === '') continue;
+          nonEmpty++;
+          if (coerceNumeric(cell) === null) return false;
+        }
+        return nonEmpty > 0;
+      });
 
-    const toRow = (record: readonly string[]): Readonly<Record<string, unknown>> => {
-      const row: Record<string, unknown> = {};
-      for (let i = 0; i < columns.length; i++) {
-        const cell = record[i];
-        if (cell === undefined || cell === '') continue; // empty cell → absent key
-        const name = columns[i]!;
-        if (numeric[i]) {
-          const value = coerceNumeric(cell);
+      const toRow = (record: readonly string[]): Readonly<Record<string, unknown>> => {
+        const row: Record<string, unknown> = {};
+        for (let i = 0; i < columns.length; i++) {
+          const cell = record[i];
+          if (cell === undefined || cell === '') continue; // empty cell → absent key
+          const name = columns[i]!;
+          const value = numeric[i] ? coerceNumeric(cell) : cell;
           if (value === null) continue; // post-sample outlier in a numeric column
-          row[name] = value;
-        } else {
-          row[name] = cell;
+          // A literal `__proto__` header must be data, never the legacy
+          // Object.prototype setter.
+          Object.defineProperty(row, name, {
+            value,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
+        }
+        return row;
+      };
+
+      // Pass 2: replay the sample, then keep streaming.
+      for (const record of sample) {
+        yield toRow(record);
+      }
+      if (!sampleDone) {
+        while (true) {
+          throwIfAborted(signal);
+          const next = await iterator.next();
+          if (next.done) break;
+          yield toRow(next.value);
         }
       }
-      return row;
-    };
-
-    // Pass 2: replay the sample, then keep streaming.
-    for (const record of sample) {
-      yield toRow(record);
-    }
-    if (!sampleDone) {
-      while (true) {
-        throwIfAborted(signal);
-        const next = await iterator.next();
-        if (next.done) break;
-        yield toRow(next.value);
-      }
+    } finally {
+      // `rows` manually drives the record iterator. Forward early return so
+      // mapping/materialization failures close the caller's byte source.
+      await iterator.return(undefined);
     }
   })();
 
-  return { columns, rows };
+  return {
+    columns,
+    rows,
+    close: async () => {
+      await iterator.return(undefined);
+    },
+  };
 }

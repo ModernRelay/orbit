@@ -306,6 +306,39 @@ describe('capability gating', () => {
     expect(commit.structure!.pointCount).toBe(5);
     expect(commit.config!.cluster!.pointClusters).toHaveLength(5);
   });
+
+  it('scope history keeps pointClusters aligned across isolate undo/redo (I2)', async () => {
+    const { instance, engine } = await rig({ capabilities: { clusterForce: true } });
+    instance.applyHostUpdate({ data: teamSnap(), clusters: { by: BY } });
+    instance.selectNodes(['a', 'c']);
+    instance.isolateSelection();
+
+    expect(instance.undo()).toBe(true);
+    const restored = engine.lastCommit!;
+    expect(restored.structure!.pointCount).toBe(4);
+    expect(Array.from(restored.config!.cluster!.pointClusters)).toEqual([0, 0, 1, NaN]);
+
+    expect(instance.redo()).toBe(true);
+    const isolated = engine.lastCommit!;
+    expect(isolated.structure!.pointCount).toBe(2);
+    expect(Array.from(isolated.config!.cluster!.pointClusters)).toEqual([0, 1]);
+  });
+
+  it('fold history keeps pointClusters aligned across undo/redo (I2)', async () => {
+    const { instance, engine } = await rig({ capabilities: { clusterForce: true } });
+    instance.applyHostUpdate({ data: teamSnap(), clusters: { by: BY } });
+    instance.foldNode('a', { memberIds: ['b'] });
+
+    expect(instance.undo()).toBe(true);
+    const restored = engine.lastCommit!;
+    expect(restored.structure!.pointCount).toBe(4);
+    expect(Array.from(restored.config!.cluster!.pointClusters)).toEqual([0, 0, 1, NaN]);
+
+    expect(instance.redo()).toBe(true);
+    const folded = engine.lastCommit!;
+    expect(folded.structure!.pointCount).toBe(3);
+    expect(Array.from(folded.config!.cluster!.pointClusters)).toEqual([0, 1, NaN]);
+  });
 });
 
 describe('stage-4 dirty discipline', () => {

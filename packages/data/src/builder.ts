@@ -52,97 +52,132 @@ export interface BuildArgs {
 
 export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
   const { nodeTable, edgeTable, mapping, format, options } = args;
-  validateOptions(options);
-  validateMapping({
-    mapping,
-    nodeColumns: nodeTable === null ? null : nodeTable.columns,
-    edgeColumns: edgeTable.columns,
-    deriveNodes: nodeTable === null,
-  });
-  const nodeSummarizer = new TableSummarizer();
-  const edgeSummarizer = new TableSummarizer();
+  let failed = false;
+  try {
+    validateOptions(options);
+    validateMapping({
+      mapping,
+      nodeColumns: nodeTable === null ? null : nodeTable.columns,
+      edgeColumns: edgeTable.columns,
+      deriveNodes: nodeTable === null,
+    });
+    const nodeSummarizer = new TableSummarizer();
+    const edgeSummarizer = new TableSummarizer();
 
-  // --- edges (first, so deriveNodes sees endpoint order) ------------------
-  const edgeIdentity = new Set<string>(
-    [mapping.edges.id, mapping.edges.source, mapping.edges.target].filter(
-      (c): c is string => c !== undefined,
-    ),
-  );
-  const edgeAttrPick = attrPicker(edgeTable.columns, edgeIdentity, mapping.edges.includeFields);
-  if (edgeTable.columns !== null) {
-    edgeSummarizer.seed(edgeAttrPick.seedColumns);
-    for (const column of edgeAttrPick.seedColumns) edgeAttrPick.admitted.add(column);
-  }
-  const edges: GraphEdge[] = [];
-  const endpointOrder = new Set<string>();
-  let edgeOrdinal = 0;
-  for await (const row of edgeTable.rows) {
-    const source = identityString(row[mapping.edges.source], 'edge source', edgeOrdinal, mapping.edges.source);
-    const target = identityString(row[mapping.edges.target], 'edge target', edgeOrdinal, mapping.edges.target);
-    const edge: GraphEdge = { source, target };
-    if (mapping.edges.id !== undefined) {
-      const raw = row[mapping.edges.id];
-      if (raw !== undefined && raw !== null) {
-        edge.id = identityString(raw, 'edge id', edgeOrdinal, mapping.edges.id);
+    // --- edges (first, so deriveNodes sees endpoint order) ----------------
+    const edgeIdentity = new Set<string>(
+      [mapping.edges.id, mapping.edges.source, mapping.edges.target].filter(
+        (c): c is string => c !== undefined,
+      ),
+    );
+    const edgeAttrPick = attrPicker(edgeTable.columns, edgeIdentity, mapping.edges.includeFields);
+    if (edgeTable.columns !== null) {
+      edgeSummarizer.seed(edgeAttrPick.seedColumns);
+      for (const column of edgeAttrPick.seedColumns) edgeAttrPick.admitted.add(column);
+    }
+    const edges: GraphEdge[] = [];
+    const endpointOrder = new Set<string>();
+    let edgeOrdinal = 0;
+    for await (const row of edgeTable.rows) {
+      const source = identityString(
+        row[mapping.edges.source],
+        'edge source',
+        edgeOrdinal,
+        mapping.edges.source,
+        true,
+      );
+      const target = identityString(
+        row[mapping.edges.target],
+        'edge target',
+        edgeOrdinal,
+        mapping.edges.target,
+        true,
+      );
+      const edge: GraphEdge = { source, target };
+      if (mapping.edges.id !== undefined) {
+        const raw = row[mapping.edges.id];
+        if (raw !== undefined && raw !== null) {
+          edge.id = identityString(raw, 'edge id', edgeOrdinal, mapping.edges.id, true);
+        }
+      }
+      const attrs = edgeAttrPick.pick(row);
+      if (attrs !== undefined) edge.attrs = attrs;
+      edgeSummarizer.addRow(attrs);
+      edges.push(edge);
+      if (nodeTable === null) {
+        endpointOrder.add(source);
+        endpointOrder.add(target);
+      }
+      edgeOrdinal++;
+    }
+
+    // --- nodes -------------------------------------------------------------
+    const nodes: GraphNode[] = [];
+    let nodeAdmitted: ReadonlySet<string> = new Set<string>();
+    if (nodeTable === null) {
+      // deriveNodes: ids only, first-occurrence order over edge endpoints.
+      for (const id of endpointOrder) nodes.push({ id });
+    } else {
+      const nodeMapping = mapping.nodes!; // validated above
+      const nodeIdentity = new Set<string>([nodeMapping.id]);
+      const nodeAttrPick = attrPicker(nodeTable.columns, nodeIdentity, nodeMapping.includeFields);
+      nodeAdmitted = nodeAttrPick.admitted;
+      if (nodeTable.columns !== null) {
+        nodeSummarizer.seed(nodeAttrPick.seedColumns);
+        for (const column of nodeAttrPick.seedColumns) nodeAttrPick.admitted.add(column);
+      }
+      let nodeOrdinal = 0;
+      for await (const row of nodeTable.rows) {
+        const id = identityString(row[nodeMapping.id], 'node id', nodeOrdinal, nodeMapping.id, true);
+        const node: GraphNode = { id };
+        const attrs = nodeAttrPick.pick(row);
+        if (attrs !== undefined) node.attrs = attrs;
+        nodeSummarizer.addRow(attrs);
+        nodes.push(node);
+        nodeOrdinal++;
       }
     }
-    const attrs = edgeAttrPick.pick(row);
-    if (attrs !== undefined) edge.attrs = attrs;
-    edgeSummarizer.addRow(attrs);
-    edges.push(edge);
-    if (nodeTable === null) {
-      endpointOrder.add(source);
-      endpointOrder.add(target);
+
+    // Fingerprint AFTER materialization (I4): the admitted union is only
+    // known once every row has streamed through. computeMappingFingerprint
+    // sorts the lists, so field DISCOVERY order can never move it.
+    const mappingFingerprint = computeMappingFingerprint(mapping, format, {
+      nodes: [...nodeAdmitted],
+      edges: [...edgeAttrPick.admitted],
+    });
+
+    const snapshot: GraphSnapshot = {
+      datasetKey: options.datasetKey,
+      sourceRevision: options.sourceRevision,
+      nodes,
+      edges,
+    };
+    return {
+      snapshot,
+      summaries: { nodes: nodeSummarizer.finalize(), edges: edgeSummarizer.finalize() },
+      mappingFingerprint,
+    };
+  } catch (cause) {
+    failed = true;
+    throw cause;
+  } finally {
+    // Column discovery peeks async sources before validation. Always release
+    // both tables so mapping errors, an error in either materialization pass,
+    // and successful exhaustion all settle caller-owned iterators. Both
+    // closes run even if one rejects. A teardown failure is surfaced after a
+    // successful build, but must never replace the useful validation/read
+    // failure already escaping the try block.
+    const closes = await Promise.allSettled([
+      Promise.resolve().then(() => edgeTable.close?.()),
+      Promise.resolve().then(() => nodeTable?.close?.()),
+    ]);
+    if (!failed) {
+      const rejected = closes.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      if (rejected !== undefined) throw rejected.reason;
     }
-    edgeOrdinal++;
   }
-
-  // --- nodes ---------------------------------------------------------------
-  const nodes: GraphNode[] = [];
-  let nodeAdmitted: ReadonlySet<string> = new Set<string>();
-  if (nodeTable === null) {
-    // deriveNodes: ids only, first-occurrence order over edge endpoints.
-    for (const id of endpointOrder) nodes.push({ id });
-  } else {
-    const nodeMapping = mapping.nodes!; // validated above
-    const nodeIdentity = new Set<string>([nodeMapping.id]);
-    const nodeAttrPick = attrPicker(nodeTable.columns, nodeIdentity, nodeMapping.includeFields);
-    nodeAdmitted = nodeAttrPick.admitted;
-    if (nodeTable.columns !== null) {
-      nodeSummarizer.seed(nodeAttrPick.seedColumns);
-      for (const column of nodeAttrPick.seedColumns) nodeAttrPick.admitted.add(column);
-    }
-    let nodeOrdinal = 0;
-    for await (const row of nodeTable.rows) {
-      const id = identityString(row[nodeMapping.id], 'node id', nodeOrdinal, nodeMapping.id);
-      const node: GraphNode = { id };
-      const attrs = nodeAttrPick.pick(row);
-      if (attrs !== undefined) node.attrs = attrs;
-      nodeSummarizer.addRow(attrs);
-      nodes.push(node);
-      nodeOrdinal++;
-    }
-  }
-
-  // Fingerprint AFTER materialization (I4): the admitted union is only known
-  // once every row has streamed through. computeMappingFingerprint sorts the
-  // lists, so field DISCOVERY order can never move the fingerprint.
-  const mappingFingerprint = computeMappingFingerprint(mapping, format, {
-    nodes: [...nodeAdmitted],
-    edges: [...edgeAttrPick.admitted],
-  });
-
-  const snapshot: GraphSnapshot = {
-    datasetKey: options.datasetKey,
-    sourceRevision: options.sourceRevision,
-    nodes,
-    edges,
-  };
-  return {
-    snapshot,
-    summaries: { nodes: nodeSummarizer.finalize(), edges: edgeSummarizer.finalize() },
-    mappingFingerprint,
-  };
 }
 
 function validateOptions(options: GraphPrepareOptions): void {
@@ -150,8 +185,13 @@ function validateOptions(options: GraphPrepareOptions): void {
     throw new TypeError('prepareGraphData: options.datasetKey must be a non-empty string');
   }
   const rev = options.sourceRevision;
-  if (typeof rev !== 'string' && typeof rev !== 'number') {
-    throw new TypeError('prepareGraphData: options.sourceRevision must be a string or number');
+  if (
+    (typeof rev !== 'string' && typeof rev !== 'number') ||
+    (typeof rev === 'number' && !Number.isFinite(rev))
+  ) {
+    throw new TypeError(
+      'prepareGraphData: options.sourceRevision must be a string or finite number',
+    );
   }
 }
 
@@ -160,11 +200,18 @@ function identityString(
   role: string,
   ordinal: number,
   column: string,
+  rejectNul = false,
 ): string {
   if (typeof value === 'string') {
     if (value === '') {
       throw new TypeError(
         `prepareGraphData: ${role} in column ${JSON.stringify(column)} is empty at row ${ordinal}`,
+      );
+    }
+    if (rejectNul && value.includes('\u0000')) {
+      throw new TypeError(
+        `prepareGraphData: ${role} in column ${JSON.stringify(column)} contains reserved NUL ` +
+          `at row ${ordinal}`,
       );
     }
     return value;
