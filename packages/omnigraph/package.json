@@ -1,6 +1,6 @@
 {
   "name": "@modernrelay/orbit-omnigraph",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Omnigraph adapter for Orbit: og.export() loader with drift policies, .pg schema parser, and typed codegen.",
   "license": "MIT",
   "repository": {
