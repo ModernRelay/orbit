@@ -26,7 +26,7 @@ Handles 100K+ node graphs. UI components included: search, tables, histograms, a
 npm install @modernrelay/orbit-react @modernrelay/orbit-core @modernrelay/orbit-engine-cosmos
 ```
 
-**Status:** `0.14.0` on npm — all five packages release in lockstep. See
+**Status:** `0.15.0` on npm — all five packages release in lockstep. See
 [Releases](https://github.com/ModernRelay/orbit/releases) for changelogs.
 
 ## Packages

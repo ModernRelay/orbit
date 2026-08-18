@@ -1,5 +1,21 @@
 # @modernrelay/orbit-omnigraph
 
+## 0.15.0
+
+### Minor Changes
+
+- 5771a0d: Correctness and lifecycle hardening across graph admission, worker packaging,
+  deferred engine commits, data preparation, Omnigraph parsing, and React
+  interactions. Invalid inputs are rejected consistently, deferred buffers and
+  asynchronous sources have explicit ownership, generated types match runtime
+  identity rules, and keyboard and pointer paths preserve host callback
+  contracts.
+
+### Patch Changes
+
+- Updated dependencies [5771a0d]
+  - @modernrelay/orbit-core@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes
