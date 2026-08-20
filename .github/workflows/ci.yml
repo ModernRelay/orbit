@@ -44,7 +44,29 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter orbit-demo exec playwright install --with-deps chromium
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        working-directory: apps/demo
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      # The browser CDN download can stall indefinitely (it once ate the whole
+      # 20-minute job budget). Kill a stalled attempt after 4 minutes and
+      # retry instead of hanging.
+      - name: Install Playwright Chromium
+        timeout-minutes: 15
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 240 pnpm --filter orbit-demo exec playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "playwright install attempt ${attempt} failed or stalled; retrying" >&2
+            sleep 5
+          done
+          exit 1
       - run: pnpm --filter orbit-demo e2e
         env:
           # Smaller streamed feed on CI: the runner renders through a software
