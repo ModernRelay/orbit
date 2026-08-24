@@ -17,6 +17,8 @@
     "check": "pnpm run boundaries && pnpm run anchors && pnpm run cosmos:pin-check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run perf:gate",
     "demo:dev": "pnpm --filter orbit-demo dev",
     "demo:build": "pnpm --filter orbit-demo build",
+    "storybook:dev": "pnpm --filter orbit-storybook dev",
+    "storybook:build": "pnpm --filter orbit-storybook build",
     "version": "changeset version && pnpm install --lockfile-only",
     "release": "pnpm run build && pnpm run smoke && changeset publish",
     "svg:node-fixture": "node scripts/svg-node-fixture.mjs"

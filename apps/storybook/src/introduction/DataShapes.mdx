@@ -1,0 +1,45 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction/Data shapes" />
+
+# Data shapes
+
+## The snapshot
+
+A graph is a plain object: identity fields plus nodes and edges.
+
+```ts
+const snapshot: GraphSnapshot = {
+  datasetKey: 'my-dataset',   // which dataset this is
+  sourceRevision: 1,          // which version of it
+  nodes: [{ id: 'a' }, { id: 'b', attrs: { label: 'B' } }],
+  edges: [{ source: 'a', target: 'b' }],
+};
+```
+
+- `attrs` is your typed payload — `GraphSnapshot<N, E>` carries your node and edge
+  attribute types end to end, into every accessor, dimension, and callback.
+- Node `x`/`y` are optional declared positions: the fixed layout renders them exactly,
+  and under the force layout they seed the simulation's starting placement.
+- Edges may carry an optional stable `id`; without one, orbit synthesizes a
+  deterministic id from the endpoints.
+- Malformed rows never throw mid-render — they are excluded with batched diagnostics.
+
+## Updates are diffs, not rebuilds
+
+Passing a new snapshot with the same `datasetKey` updates the live scene in place:
+appended nodes join the running simulation, attribute-only changes restyle without a
+relayout, and node identity (by `id`) is preserved across revisions.
+
+## Beyond object arrays
+
+- **Columnar snapshots** (typed arrays, transferable buffers) for large graphs.
+- **Streaming ingest** for feeding a graph in batches with atomic commit.
+- **Worker execution** (`execution="auto"`) moves columnar acceptance off the main thread.
+
+## The story fixtures
+
+Every story in this catalog uses one seeded, deterministic generator (clustered
+topology with per-node `cluster`, `label`, `degree`, `score`, and `createdAt` attrs).
+Same seed, same graph — stories are reproducible, and the metric attrs give the
+analytics stories real distributions to work with.
