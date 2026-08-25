@@ -128,9 +128,13 @@ describe('<GraphSimControls> applicability gating', () => {
     const { engine, view } = await setup({ layout: 'fixed' });
     expect(view.container.querySelector('[data-orbit-simcontrols]')).toBeNull();
     expect(view.container.textContent).toBe('');
-    // Rendering the gated-off panel never touches the engine.
-    const commitConfigs = engine.commits.filter((c) => c.config?.simulation !== undefined);
-    expect(commitConfigs).toEqual([]);
+    // Rendering the gated-off panel never touches the engine. (The mount
+    // replay itself carries the resolved DEFAULT simulation config — the
+    // 'calm' preset — so the assertion starts after setup.)
+    const baseline = engine.commits.length;
+    expect(view.container.querySelector('[data-orbit-simcontrols]')).toBeNull();
+    const appended = engine.commits.slice(baseline).filter((c) => c.config?.simulation !== undefined);
+    expect(appended).toEqual([]);
     // N/A note: the spec's "static while its convergence run is active" case
     // cannot be gated in v0.10 — `LayoutKind = 'force' | 'fixed'` (core
     // types.ts) has no 'static' variant and GraphStoreState publishes no

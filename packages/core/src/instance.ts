@@ -74,7 +74,7 @@ import type {
   TimelinePlayback,
   ViewportState,
 } from './types';
-import { DIAGNOSTIC_SAMPLE_CAP } from './types';
+import { DIAGNOSTIC_SAMPLE_CAP, resolveSimulation } from './types';
 import {
   AcceptanceQueue,
   INGEST_MAX_FLUSH_LATENCY_MS_DEFAULT,
@@ -343,6 +343,20 @@ export interface CreateGraphInstanceOptions<
   engine: EngineFactory;
   /** Fit the camera once when the first data-bearing commit reaches a fresh engine. Default true. */
   fitViewOnFirstData?: boolean;
+  /**
+   * Camera behavior while the FIRST force-layout settle runs. The fit at
+   * first data frames the seed ring; the simulation then contracts the graph
+   * to a fraction of that frame (measured 5-17% viewport fill across the
+   * parameter space), so without a follow-up the graph reads as a distant
+   * blob.
+   * - 'follow' (default): periodic animated refits ride the engine frame
+   *   fan-out while the first settle runs (no extra timers or rAF), with a
+   *   final fit at quiescence. Any user camera input cancels the follow.
+   * - 'once': a single animated fit at first quiescence.
+   * - false: v0.15 behavior (first-data fit only).
+   * Only force layouts follow; the fixed layout keeps the single fit.
+   */
+  fitViewOnSettle?: 'follow' | 'once' | false;
   /** revision-aware services (expansion + search). */
   services?: GraphServices<N, E>;
   /**
@@ -1111,6 +1125,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
 ): GraphInstance<N, E> {
   const engineFactory = opts.engine;
   const fitViewOnFirstData = opts.fitViewOnFirstData ?? true;
+  const fitViewOnSettle = opts.fitViewOnSettle ?? 'follow';
 
   const store = createStore<GraphStoreState>(() => ({
     status: 'idle',
@@ -1535,7 +1550,9 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   let linkColor: Accessor<AcceptedEdge<E>, string> | undefined;
   let linkWidth: Accessor<AcceptedEdge<E>, number> | undefined;
   let layout: LayoutKind = 'force';
-  let simulation: SimulationConfig | undefined;
+  // Default = the 'calm' preset: the engine's own defaults keep visible
+  // motion alive for tens of seconds, which reads as jitter on first load.
+  let simulation: SimulationConfig | undefined = resolveSimulation(undefined);
   /** resolved theme tokens — always defined (dark base by default). */
   let theme: GraphTheme = resolveTheme(undefined);
   /** desired arrowheads (capability-gated; inert when unsupported). */
@@ -5180,12 +5197,52 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     }
   }
 
+  // --- settle camera --------------------------------------------------------
+  // The first-data fit frames the SEED ring; the force simulation then
+  // contracts the graph to a fraction of that frame (measured 5-17% viewport
+  // fill across the parameter space), so without a follow-up the graph reads
+  // as a distant blob. Armed by maybeFitView under a force layout, the
+  // follow rides the engine frame fan-out — no timers and no rAF of its own,
+  // so it dies with the frames it rides on — and ends at first quiescence,
+  // any user camera input, or the frame cap.
+  const SETTLE_FOLLOW_INTERVAL_FRAMES = 55; // ~0.9s at 60fps
+  const SETTLE_FOLLOW_CAP_FRAMES = 480; // ~8s at 60fps
+  let settleFollowFrames: number | null = null; // null = not armed
+  let settleFollowContainer: HTMLElement | null = null;
+  const settleFollowCancelListener = (): void => {
+    cancelSettleFollow();
+  };
+  function cancelSettleFollow(): void {
+    if (settleFollowContainer !== null) {
+      // headless hosts (tests, exotic embeddings) may hand over a container
+      // without the DOM event surface — the camera math never needs it.
+      settleFollowContainer.removeEventListener?.('pointerdown', settleFollowCancelListener);
+      settleFollowContainer.removeEventListener?.('wheel', settleFollowCancelListener);
+      settleFollowContainer = null;
+    }
+    settleFollowFrames = null;
+  }
+  function armSettleFollow(s: MountSession): void {
+    if (fitViewOnSettle === false || layout !== 'force') return;
+    settleFollowFrames = 0;
+    if (typeof s.container.addEventListener === 'function') {
+      settleFollowContainer = s.container;
+      s.container.addEventListener('pointerdown', settleFollowCancelListener);
+      s.container.addEventListener('wheel', settleFollowCancelListener);
+    }
+  }
+  function settleFollowFit(eng: GraphEngine, durationMs: number): void {
+    if (effectiveReducedMotion()) eng.fitView({ durationMs: 0 });
+    else eng.fitView({ durationMs });
+  }
+
   function maybeFitView(eng: GraphEngine): void {
     if (!fitViewOnFirstData || session === null || session.fitDone) return;
     if (accepted === null) return; // "first data": only fit once data exists
     session.fitDone = true;
     if (effectiveReducedMotion()) eng.fitView({ durationMs: 0 });
     else eng.fitView();
+    armSettleFollow(session);
   }
 
   // -------------------------------------------------------------------------
@@ -8524,10 +8581,15 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     {
       const c: EngineConfigUpdate = {};
       let any = false;
-      if (update.simulation !== undefined && !Object.is(update.simulation, simulation)) {
-        simulation = update.simulation;
-        c.simulation = update.simulation;
-        any = true;
+      if (update.simulation !== undefined) {
+        // preset strings resolve to frozen singletons, so Object.is keeps
+        // detecting real changes for presets and objects alike.
+        const nextSimulation = resolveSimulation(update.simulation);
+        if (!Object.is(nextSimulation, simulation)) {
+          simulation = nextSimulation;
+          c.simulation = nextSimulation;
+          any = true;
+        }
       }
       if (update.theme !== undefined) {
         const nextTheme = resolveTheme(update.theme);
@@ -9319,6 +9381,14 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       onFrame(timeMs) {
         if (!active()) return;
         frameCadence += 1; // the ONE hit-test/overlay cadence clock
+        if (settleFollowFrames !== null && fitViewOnSettle === 'follow') {
+          settleFollowFrames += 1;
+          if (settleFollowFrames > SETTLE_FOLLOW_CAP_FRAMES) {
+            cancelSettleFollow();
+          } else if (settleFollowFrames % SETTLE_FOLLOW_INTERVAL_FRAMES === 0) {
+            settleFollowFit(s.engine, 650);
+          }
+        }
         // O(1) pressure accounting per tick; a tick while the
         // sim is settled is an idle wakeup (0 = the gated clock is honest).
         pressureSampler.noteFrame(timeMs, !store.getState().simulationRunning);
@@ -9377,6 +9447,12 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       },
       onSimulationEnd() {
         if (!active()) return;
+        // settle camera: one final animated fit at first quiescence — the
+        // single fit of 'once' mode, the finale of 'follow' mode.
+        if (settleFollowFrames !== null) {
+          settleFollowFit(s.engine, 800);
+          cancelSettleFollow();
+        }
         // Release pinned accretion — the expansion's arrivals settled,
         // so the engine pin set returns to just the user pin slice.
         if (accretionPinIds !== null) {
@@ -9693,6 +9769,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     s.alive = false;
     session = null;
     mountPromise = null;
+    cancelSettleFollow();
     cancelRerankTimer();
     flushCrossfilterNotify(); // a queued histogram batch must not strand
     // A pending quiescence assertion belongs to the session that armed it
@@ -10779,6 +10856,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     id: NodeId,
     opts?: { highlightNeighbors?: boolean; hops?: 1 },
   ): readonly NodeId[] {
+    cancelSettleFollow();
     const eng = engineIfReady();
     if (eng === null || scene === null) return EMPTY_IDS;
     const idx = scene.indexById.get(id);
@@ -10884,6 +10962,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
 
   /** camera durations coerce to 0 under effective reduced motion. */
   function cameraZoom(factor: number): void {
+    cancelSettleFollow();
     const eng = engineIfReady();
     if (eng === null) return;
     if (effectiveReducedMotion()) eng.zoom(factor, 0);
@@ -10951,6 +11030,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     destroy,
     on,
     fitView: () => {
+      cancelSettleFollow();
       const eng = engineIfReady();
       if (eng === null) return;
       if (effectiveReducedMotion()) eng.fitView({ durationMs: 0 });
@@ -10963,6 +11043,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       cameraZoom(1 / ZOOM_STEP);
     },
     setViewport: (v: Partial<ViewportState>) => {
+      cancelSettleFollow();
       const eng = engineIfReady();
       if (eng === null) return;
       if (effectiveReducedMotion()) eng.setViewport(v, { durationMs: 0 });
