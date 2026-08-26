@@ -10432,6 +10432,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
           }
 
           if (state.camera !== null) {
+            // A restored camera is an explicit statement of where the view
+            // belongs — the settle follow must not overwrite it with a later
+            // periodic or final fit.
+            cancelSettleFollow();
             const eng = engineIfReady();
             if (eng !== null) {
               if (effectiveReducedMotion()) eng.setViewport(state.camera, { durationMs: 0 });

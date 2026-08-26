@@ -130,6 +130,21 @@ describe('settle camera', () => {
     expect(fitCalls(engine.cameraCalls).length).toBe(afterHostFit);
   });
 
+  it('a restored view-state camera cancels the follow (deep links win)', async () => {
+    const { h, engine } = await mounted();
+    const initialFits = fitCalls(engine.cameraCalls).length;
+    const state = h.instance.getViewState();
+    const restored = { ...state, camera: { x: 100, y: 200, zoom: 2 } };
+    const result = await h.instance.setViewState(restored);
+    expect(result.status).toBe('applied');
+    for (let i = 0; i < 200; i++) engine.emitFrame();
+    engine.injectSimulationEnd();
+    // no follow fit after the restore — the deep-linked camera stands
+    expect(fitCalls(engine.cameraCalls).length).toBe(initialFits);
+    const viewports = engine.cameraCalls.filter((c) => c.method === 'setViewport');
+    expect(viewports[viewports.length - 1]!.args[0]).toEqual({ x: 100, y: 200, zoom: 2 });
+  });
+
   it('the fixed layout never arms the follow', async () => {
     const h = makeInstance();
     await h.instance.attach(container);
