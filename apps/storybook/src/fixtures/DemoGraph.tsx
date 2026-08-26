@@ -4,16 +4,21 @@
  * against a concrete component type), plus the standard story frame.
  */
 
+import { forwardRef } from 'react';
 import type { ReactNode } from 'react';
 import { Graph } from '@modernrelay/orbit-react';
-import type { GraphProps } from '@modernrelay/orbit-react';
+import type { GraphHandle, GraphProps } from '@modernrelay/orbit-react';
 import type { DemoEdgeAttrs, DemoNodeAttrs } from './generate';
 
 export type DemoGraphProps = GraphProps<DemoNodeAttrs, DemoEdgeAttrs>;
+export type DemoGraphHandle = GraphHandle<DemoNodeAttrs, DemoEdgeAttrs>;
 
-export function DemoGraph(props: DemoGraphProps): ReactNode {
-  return <Graph<DemoNodeAttrs, DemoEdgeAttrs> {...props} />;
-}
+export const DemoGraph = forwardRef<DemoGraphHandle, DemoGraphProps>(function DemoGraph(
+  props,
+  ref,
+) {
+  return <Graph<DemoNodeAttrs, DemoEdgeAttrs> ref={ref} {...props} />;
+});
 
 /** Standard story frame: the graph fills its parent, so stories mount inside
  * a fixed-height surface whose background matches the active theme. */

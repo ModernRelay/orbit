@@ -14,8 +14,11 @@ const preview: Preview = {
           'Introduction',
           ['What is orbit', 'Data shapes', 'Testing without WebGL'],
           'Graph',
-          ['Minimal', 'Styling', 'Themes', 'Layout: force'],
+          ['Minimal', 'Topologies', 'Nodes', 'Edges', 'Labels', 'Themes'],
+          'Layouts',
+          ['Force', 'Fixed', 'Fixed to force'],
           'Interaction',
+          ['Selection', 'Hover & emphasis', 'Context menu'],
           'Exploration',
           'Analytics',
           'Components',
@@ -35,9 +38,23 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
+    size: {
+      description: 'Graph size (nodes)',
+      toolbar: {
+        icon: 'grow',
+        items: [
+          { value: 'S', title: 'S — 300 nodes' },
+          { value: 'M', title: 'M — 1,500 nodes' },
+          { value: 'L', title: 'L — 8,000 nodes' },
+          { value: 'XL', title: 'XL — 40,000 nodes' },
+        ],
+        dynamicTitle: true,
+      },
+    },
   },
   initialGlobals: {
     theme: 'dark',
+    size: 'M',
   },
 };
 

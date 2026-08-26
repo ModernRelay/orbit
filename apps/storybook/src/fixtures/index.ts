@@ -5,3 +5,5 @@ export * from './config';
 export * from './positions';
 export * from './engines';
 export * from './DemoGraph';
+export * from './sizes';
+export * from './topologies';

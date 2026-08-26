@@ -2,18 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { DemoGraph, GraphFrame } from '../fixtures/DemoGraph';
 import { cosmosEngine } from '../fixtures/engines';
-import { generateGraph } from '../fixtures/generate';
+import { sizedCache } from '../fixtures/sizes';
 import { themeFromGlobals } from '../fixtures/themes';
+import { clustered } from '../fixtures/topologies';
 
-const data = generateGraph({
-  seed: 33,
-  nodes: 600,
-  clusters: 5,
-  intraEdgeFactor: 1.6,
-  interEdgeProb: 0.06,
-  datasetKey: 'selection',
-  sourceRevision: 1,
-});
+const data = sizedCache(clustered, 33);
 
 interface SelectionArgs {
   enableLasso: boolean;
@@ -58,7 +51,7 @@ export const Selection: Story = {
       <GraphFrame background={active.background}>
         <DemoGraph
           engine={cosmosEngine}
-          data={data}
+          data={data(globals)}
           theme={active.theme}
           linkColor={active.linkColor}
           enableLasso={args.enableLasso}

@@ -1,18 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { DemoGraph, GraphFrame } from '../fixtures/DemoGraph';
 import { cosmosEngine } from '../fixtures/engines';
-import { generateGraph } from '../fixtures/generate';
+import { sizedCache } from '../fixtures/sizes';
 import { themeFromGlobals } from '../fixtures/themes';
+import { clustered } from '../fixtures/topologies';
 
-const data = generateGraph({
-  seed: 7,
-  nodes: 300,
-  clusters: 4,
-  intraEdgeFactor: 1.6,
-  interEdgeProb: 0.06,
-  datasetKey: 'minimal',
-  sourceRevision: 1,
-});
+const data = sizedCache(clustered, 7);
 
 const meta = {
   title: 'Graph/Minimal',
@@ -22,7 +15,8 @@ const meta = {
       description: {
         component:
           'The smallest possible orbit graph: an engine factory and a data snapshot. ' +
-          'Everything else — layout, theme, interaction — is defaults.',
+          'Everything else — layout, camera, theme, interaction — is defaults: the ' +
+          'calm simulation preset, the settle-following camera, the fit zoom clamp.',
       },
       source: {
         code: `import { Graph } from '@modernrelay/orbit-react';
@@ -44,13 +38,12 @@ type Story = StoryObj<typeof meta>;
 export const Minimal: Story = {
   args: {
     engine: cosmosEngine,
-    data,
   },
   render: (args, { globals }) => {
     const active = themeFromGlobals(globals);
     return (
       <GraphFrame background={active.background}>
-        <DemoGraph {...args} theme={active.theme} linkColor={active.linkColor} />
+        <DemoGraph {...args} data={data(globals)} theme={active.theme} linkColor={active.linkColor} />
       </GraphFrame>
     );
   },
