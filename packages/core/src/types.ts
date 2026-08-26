@@ -295,6 +295,40 @@ export interface SimulationConfig {
   repulsionFromMouse?: number;
 }
 
+/**
+ * Named simulation presets, measured on the reference protocol (800-node
+ * clustered graph, max node displacement sampled at 500ms): the times below
+ * are seconds until visible stillness (< 1.5 space units/s sustained).
+ *
+ * - `calm` — damped and settles in ~5s; the DEFAULT when no `simulation`
+ *   value is given. The engine's own defaults (`lively`) keep visible motion
+ *   alive for tens of seconds, which reads as jitter on first load.
+ * - `spread` — airier inter-cluster spacing, ~7s to stillness.
+ * - `tight` — compact clusters, ~6s to stillness.
+ * - `lively` — the engine's own defaults: ambient continuous motion.
+ */
+export type SimulationPreset = 'calm' | 'spread' | 'tight' | 'lively';
+
+/** The `simulation` input surface: a full config or a named preset. */
+export type SimulationInput = SimulationConfig | SimulationPreset;
+
+export const SIMULATION_PRESETS: Readonly<Record<SimulationPreset, Readonly<SimulationConfig>>> =
+  Object.freeze({
+    calm: Object.freeze({ repulsion: 1.4, gravity: 0.15, friction: 0.6, decay: 1000 }),
+    spread: Object.freeze({ repulsion: 2, gravity: 0.1, friction: 0.6, decay: 1400 }),
+    tight: Object.freeze({ repulsion: 0.8, gravity: 0.3, friction: 0.55, decay: 1200 }),
+    lively: Object.freeze({ repulsion: 1, gravity: 0.25, friction: 0.85, decay: 5000 }),
+  });
+
+/** Resolve a `simulation` input to a concrete config. Omitted input resolves
+ * to the `calm` preset — the measured-good default. Preset strings resolve to
+ * frozen singletons, so identity comparison stays meaningful. */
+export function resolveSimulation(input: SimulationInput | undefined): SimulationConfig {
+  if (input === undefined) return SIMULATION_PRESETS.calm;
+  if (typeof input === 'string') return SIMULATION_PRESETS[input] ?? SIMULATION_PRESETS.calm;
+  return input;
+}
+
 // ---------------------------------------------------------------------------
 // Host update — the atomic boundary: one call carries data + config +
 // controlled state and publishes exactly one store revision and at most one
@@ -392,7 +426,7 @@ export interface GraphHostUpdate<N = Record<string, unknown>, E = Record<string,
    * suppresses every driver (hover, focusNode, emphasizeNode). */
   emphasisRing?: boolean;
   layout?: LayoutKind;
-  simulation?: SimulationConfig;
+  simulation?: SimulationInput;
   /** Controlled selection (uncontrolled when never provided; subset). */
   selection?: readonly NodeId[];
   theme?: ThemeInput;

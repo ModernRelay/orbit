@@ -68,7 +68,7 @@ import type {
   DegradeEvent,
   GraphPerfSnapshot,
   SetViewStateResult,
-  SimulationConfig,
+  SimulationInput,
   SubgraphSpec,
   ThemeInput,
   TimelinePlayback,
@@ -102,7 +102,9 @@ export interface GraphProps<N = Record<string, unknown>, E = Record<string, unkn
   linkColor?: Accessor<AcceptedEdge<E>, string>;
   linkWidth?: Accessor<AcceptedEdge<E>, number>;
   layout?: LayoutKind;
-  simulation?: SimulationConfig;
+  /** Full config or a named preset ('calm' | 'spread' | 'tight' |
+   * 'lively'). Omitted = the 'calm' preset — the measured-good default. */
+  simulation?: SimulationInput;
   /** theme tokens: full GraphTheme, Partial over a named base, or the
    * v0.1 `{background}` shorthand. Diffed structurally (JSON). */
   theme?: ThemeInput;
@@ -213,6 +215,14 @@ export interface GraphProps<N = Record<string, unknown>, E = Record<string, unkn
   onSearchResultUnavailable?: (result: SearchResult, reason: SearchUnavailableReason) => void;
   /** Captured at first render (instance construction option). Default true. */
   fitViewOnFirstData?: boolean;
+  /**
+   * Camera behavior while the FIRST force-layout settle runs (construction-
+   * only). 'follow' (default): the camera keeps the contracting graph framed
+   * with periodic animated refits and a final fit at quiescence; any user
+   * camera input cancels it. 'once': single fit at first quiescence.
+   * false: fit at first data only.
+   */
+  fitViewOnSettle?: 'follow' | 'once' | false;
   /** service seam (instance construction option, D7): custom
    * revision-aware services — most usefully an async `expansion` service
    * backed by the host's own data source, so `expandNode`/the context menu's
@@ -423,7 +433,7 @@ interface CommittedProps<N, E> {
   linkColor: Accessor<AcceptedEdge<E>, string> | undefined;
   linkWidth: Accessor<AcceptedEdge<E>, number> | undefined;
   layout: LayoutKind | undefined;
-  simulation: SimulationConfig | undefined;
+  simulation: SimulationInput | undefined;
   /** JSON form of the last committed `theme` prop (small token set). */
   themeJson: string | undefined;
   metrics: readonly MetricColumn[] | undefined;
@@ -606,6 +616,7 @@ function GraphInner<N, E>(
     if (props.fitViewOnFirstData !== undefined) {
       options.fitViewOnFirstData = props.fitViewOnFirstData;
     }
+    if (props.fitViewOnSettle !== undefined) options.fitViewOnSettle = props.fitViewOnSettle;
     if (props.searchIndex !== undefined) options.searchIndex = props.searchIndex;
     if (props.limits !== undefined) options.limits = props.limits;
     if (props.execution !== undefined) options.execution = props.execution;
