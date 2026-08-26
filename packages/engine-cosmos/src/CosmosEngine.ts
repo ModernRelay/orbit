@@ -373,8 +373,67 @@ export class CosmosEngine implements GraphEngine {
   // no duration bookkeeping is needed here.
 
   fitView(opts?: FitViewOptions): void {
-    this.activeGraph?.fitView(opts?.durationMs, opts?.padding);
+    const graph = this.activeGraph;
+    if (!graph) return;
+    const maxZoom = opts?.maxZoom;
+    if (maxZoom !== undefined && Number.isFinite(maxZoom) && maxZoom > 0) {
+      if (this.fitViewClamped(graph, maxZoom, opts)) return;
+    }
+    graph.fitView(opts?.durationMs, opts?.padding);
     this.requestTicks(2);
+  }
+
+  /**
+   * Zoom-clamped fit: when the natural fit zoom would exceed `maxZoom`
+   * (small scenes ballooning), center the scene bbox at `maxZoom` with one
+   * animated transform instead. Returns false to fall back to the native
+   * fit — unknown positions, detached container, or a fit that stays under
+   * the bound anyway (cosmos then applies its own padding semantics).
+   */
+  private fitViewClamped(
+    graph: NonNullable<CosmosEngine['graph']>,
+    maxZoom: number,
+    opts?: FitViewOptions,
+  ): boolean {
+    const div = this.innerDiv;
+    if (div === null) return false;
+    const w = div.clientWidth;
+    const h = div.clientHeight;
+    if (!(w > 0) || !(h > 0)) return false;
+    const raw = graph.getPointPositions();
+    if (raw === undefined || raw.length === 0) return false;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i + 1 < raw.length; i += 2) {
+      const x = raw[i]!;
+      const y = raw[i + 1]!;
+      if (Number.isNaN(x) || Number.isNaN(y)) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    if (minX > maxX || minY > maxY) return false;
+    const padding = opts?.padding ?? 0.1;
+    const availW = w * Math.max(0.1, 1 - 2 * padding);
+    const availH = h * Math.max(0.1, 1 - 2 * padding);
+    const bboxW = maxX - minX;
+    const bboxH = maxY - minY;
+    // degenerate bbox (single point / colinear) fits at ANY zoom → clamp
+    const fitZoom =
+      bboxW <= 0 && bboxH <= 0
+        ? Infinity
+        : Math.min(bboxW > 0 ? availW / bboxW : Infinity, bboxH > 0 ? availH / bboxH : Infinity);
+    if (fitZoom <= maxZoom) return false;
+    graph.setZoomTransformByPointPositions(
+      Float32Array.of((minX + maxX) / 2, (minY + maxY) / 2),
+      opts?.durationMs ?? 250,
+      maxZoom,
+    );
+    this.requestTicks(2);
+    return true;
   }
 
   zoom(factor: number, durationMs?: number): void {

@@ -31,6 +31,7 @@ export function snap(
 export interface MakeInstanceOptions {
   fitViewOnFirstData?: boolean;
   fitViewOnSettle?: 'follow' | 'once' | false;
+  fitViewMaxZoom?: number | null;
   /** Passed to every FakeEngine the factory constructs. */
   engineOptions?: FakeEngineOptions;
 }
@@ -55,6 +56,7 @@ export function makeInstance(opts: MakeInstanceOptions = {}): InstanceHarness {
       ? { fitViewOnFirstData: opts.fitViewOnFirstData }
       : {}),
     ...(opts.fitViewOnSettle !== undefined ? { fitViewOnSettle: opts.fitViewOnSettle } : {}),
+    ...(opts.fitViewMaxZoom !== undefined ? { fitViewMaxZoom: opts.fitViewMaxZoom } : {}),
   });
   return { instance, engines, factoryCalls: () => factoryCalls };
 }

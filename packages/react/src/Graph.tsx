@@ -223,6 +223,12 @@ export interface GraphProps<N = Record<string, unknown>, E = Record<string, unkn
    * false: fit at first data only.
    */
   fitViewOnSettle?: 'follow' | 'once' | false;
+  /**
+   * Upper bound on the zoom any internally issued fit lands at (construction-
+   * only). Small graphs otherwise fit until nodes balloon. Default 1.5;
+   * null disables the clamp.
+   */
+  fitViewMaxZoom?: number | null;
   /** service seam (instance construction option, D7): custom
    * revision-aware services — most usefully an async `expansion` service
    * backed by the host's own data source, so `expandNode`/the context menu's
@@ -617,6 +623,7 @@ function GraphInner<N, E>(
       options.fitViewOnFirstData = props.fitViewOnFirstData;
     }
     if (props.fitViewOnSettle !== undefined) options.fitViewOnSettle = props.fitViewOnSettle;
+    if (props.fitViewMaxZoom !== undefined) options.fitViewMaxZoom = props.fitViewMaxZoom;
     if (props.searchIndex !== undefined) options.searchIndex = props.searchIndex;
     if (props.limits !== undefined) options.limits = props.limits;
     if (props.execution !== undefined) options.execution = props.execution;
