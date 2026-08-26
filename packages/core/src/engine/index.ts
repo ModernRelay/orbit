@@ -193,6 +193,13 @@ export interface EngineHostEvents {
 export interface FitViewOptions {
   durationMs?: number;
   padding?: number;
+  /**
+   * Upper bound on the zoom the fit may land at. Small scenes otherwise fit
+   * until nodes balloon (measured: a 60-node graph fits at zoom 4.3). When
+   * the natural fit zoom exceeds the bound, the engine centers the scene at
+   * `maxZoom` instead. Omitted = unclamped.
+   */
+  maxZoom?: number;
 }
 
 export interface GraphEngine {

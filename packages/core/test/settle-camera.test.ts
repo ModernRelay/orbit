@@ -63,7 +63,7 @@ describe('settle camera', () => {
     for (let i = 0; i < 55; i++) engine.emitFrame();
     expect(fitCalls(engine.cameraCalls).length).toBe(initialFits + 1);
     const followFit = fitCalls(engine.cameraCalls)[initialFits]!;
-    expect(followFit.args[0]).toEqual({ durationMs: 650 });
+    expect(followFit.args[0]).toEqual({ durationMs: 650, maxZoom: 1.5 });
 
     for (let i = 0; i < 55; i++) engine.emitFrame();
     expect(fitCalls(engine.cameraCalls).length).toBe(initialFits + 2);
@@ -71,7 +71,7 @@ describe('settle camera', () => {
     engine.injectSimulationEnd();
     const afterSettle = fitCalls(engine.cameraCalls);
     expect(afterSettle.length).toBe(initialFits + 3);
-    expect(afterSettle[afterSettle.length - 1]!.args[0]).toEqual({ durationMs: 800 });
+    expect(afterSettle[afterSettle.length - 1]!.args[0]).toEqual({ durationMs: 800, maxZoom: 1.5 });
 
     // dead after quiescence: further frames fit nothing
     for (let i = 0; i < 200; i++) engine.emitFrame();
@@ -143,6 +143,21 @@ describe('settle camera', () => {
     expect(fitCalls(engine.cameraCalls).length).toBe(initialFits);
     const viewports = engine.cameraCalls.filter((c) => c.method === 'setViewport');
     expect(viewports[viewports.length - 1]!.args[0]).toEqual({ x: 100, y: 200, zoom: 2 });
+  });
+
+  it('every internal fit carries the default 1.5 zoom clamp; null strips it; custom rides', async () => {
+    const a = await mounted();
+    const aFits = fitCalls(a.engine.cameraCalls);
+    expect(aFits[0]!.args[0]).toEqual({ maxZoom: 1.5 });
+
+    const b = await mounted({ fitViewMaxZoom: null });
+    const bFits = fitCalls(b.engine.cameraCalls);
+    expect(bFits[0]!.args[0]).toEqual({});
+
+    const c = await mounted({ fitViewMaxZoom: 3 });
+    c.h.instance.fitView();
+    const cFits = fitCalls(c.engine.cameraCalls);
+    expect(cFits[cFits.length - 1]!.args[0]).toEqual({ maxZoom: 3 });
   });
 
   it('the fixed layout never arms the follow', async () => {

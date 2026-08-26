@@ -103,6 +103,7 @@ import type {
   EngineConfigUpdate,
   EngineFactory,
   EngineHostEvents,
+  FitViewOptions,
   GraphEngine,
 } from './engine/index';
 import type { ErrorPhase, GraphError, GraphOperationError } from './errors';
@@ -343,6 +344,13 @@ export interface CreateGraphInstanceOptions<
   engine: EngineFactory;
   /** Fit the camera once when the first data-bearing commit reaches a fresh engine. Default true. */
   fitViewOnFirstData?: boolean;
+  /**
+   * Upper bound on the zoom any internally issued fit may land at (first-data
+   * fit, settle follow, public fitView). Small graphs otherwise fit until
+   * nodes balloon — measured: a 60-node graph fits at zoom 4.3. Default 1.5;
+   * null disables the clamp.
+   */
+  fitViewMaxZoom?: number | null;
   /**
    * Camera behavior while the FIRST force-layout settle runs. The fit at
    * first data frames the seed ring; the simulation then contracts the graph
@@ -1126,6 +1134,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   const engineFactory = opts.engine;
   const fitViewOnFirstData = opts.fitViewOnFirstData ?? true;
   const fitViewOnSettle = opts.fitViewOnSettle ?? 'follow';
+  const fitViewMaxZoom = opts.fitViewMaxZoom === undefined ? 1.5 : opts.fitViewMaxZoom;
+  /** every internally issued fit carries the zoom clamp (null disables). */
+  const clampFit = (o: FitViewOptions): FitViewOptions =>
+    fitViewMaxZoom === null ? o : { ...o, maxZoom: fitViewMaxZoom };
 
   const store = createStore<GraphStoreState>(() => ({
     status: 'idle',
@@ -5232,16 +5244,16 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     }
   }
   function settleFollowFit(eng: GraphEngine, durationMs: number): void {
-    if (effectiveReducedMotion()) eng.fitView({ durationMs: 0 });
-    else eng.fitView({ durationMs });
+    if (effectiveReducedMotion()) eng.fitView(clampFit({ durationMs: 0 }));
+    else eng.fitView(clampFit({ durationMs }));
   }
 
   function maybeFitView(eng: GraphEngine): void {
     if (!fitViewOnFirstData || session === null || session.fitDone) return;
     if (accepted === null) return; // "first data": only fit once data exists
     session.fitDone = true;
-    if (effectiveReducedMotion()) eng.fitView({ durationMs: 0 });
-    else eng.fitView();
+    if (effectiveReducedMotion()) eng.fitView(clampFit({ durationMs: 0 }));
+    else eng.fitView(clampFit({}));
     armSettleFollow(session);
   }
 
@@ -11037,8 +11049,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       cancelSettleFollow();
       const eng = engineIfReady();
       if (eng === null) return;
-      if (effectiveReducedMotion()) eng.fitView({ durationMs: 0 });
-      else eng.fitView();
+      if (effectiveReducedMotion()) eng.fitView(clampFit({ durationMs: 0 }));
+      else eng.fitView(clampFit({}));
     },
     zoomIn: () => {
       cameraZoom(ZOOM_STEP);
