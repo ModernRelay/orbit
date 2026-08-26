@@ -285,7 +285,7 @@ describe('reduced motion', () => {
     h.instance.focusNode('a', { highlightNeighbors: false });
 
     expect(engine.cameraCalls).toEqual([
-      { method: 'fitView', args: [{ durationMs: 0 }] },
+      { method: 'fitView', args: [{ durationMs: 0, maxZoom: 1.5 }] },
       { method: 'setViewport', args: [{ zoom: 2 }, { durationMs: 0 }] },
       { method: 'zoom', args: [1.5, 0] },
       { method: 'zoomToIndex', args: [0, 0] },
@@ -303,7 +303,7 @@ describe('reduced motion', () => {
 
     h.instance.setReducedMotion(true); // config wins → full motion
     h.instance.fitView();
-    expect(engine.cameraCalls).toEqual([{ method: 'fitView', args: [] }]);
+    expect(engine.cameraCalls).toEqual([{ method: 'fitView', args: [{ maxZoom: 1.5 }] }]);
 
     expect(h.instance.getAccessibility()).toEqual({ reducedMotion: false });
   });

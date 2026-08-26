@@ -96,7 +96,8 @@ const h = vi.hoisted(() => {
       if (scale !== undefined) this.zoomLevel = scale;
     }
     getZoomLevel(): number { return this.zoomLevel; }
-    getPointPositions(): number[] { return [1, 2, 3, 4]; }
+    pointPositions: number[] = [1, 2, 3, 4];
+    getPointPositions(): number[] { return this.pointPositions; }
     screenToSpacePosition(p: [number, number]): [number, number] {
       return [p[0] * 2 - 5, p[1] * 2 - 5];
     }
@@ -1071,6 +1072,56 @@ describe('CosmosEngine', () => {
     engine.commit({ revision: 6, buffers: { pointSize: new Float32Array([2]) } });
     expect(engine.appliedRevision()).toBe(6);
     expect(graph.calls.filter((c) => c.method === 'render')).toHaveLength(2);
+  });
+
+  describe('fitView zoom clamp', () => {
+    async function mountedSized(w = 800, h = 600) {
+      const m = await mounted();
+      const inner = m.container.firstElementChild as HTMLElement;
+      Object.defineProperty(inner, 'clientWidth', { value: w, configurable: true });
+      Object.defineProperty(inner, 'clientHeight', { value: h, configurable: true });
+      m.graph.calls.length = 0;
+      return m;
+    }
+
+    it('clamps a small scene: centers the bbox at maxZoom instead of the native fit', async () => {
+      const { engine, graph } = await mountedSized();
+      graph.pointPositions = [0, 0, 100, 50]; // natural fit zoom 6.4 at 800x600/pad 0.1
+      engine.fitView({ durationMs: 300, padding: 0.1, maxZoom: 1.5 });
+      expect(graph.calls).toEqual([
+        {
+          method: 'setZoomTransformByPointPositions',
+          args: [Float32Array.of(50, 25), 300, 1.5, undefined],
+        },
+      ]);
+    });
+
+    it('falls back to the native fit when the natural zoom stays under the bound', async () => {
+      const { engine, graph } = await mountedSized();
+      graph.pointPositions = [0, 0, 4000, 3000]; // natural fit ~0.16
+      engine.fitView({ durationMs: 300, maxZoom: 1.5 });
+      expect(graph.calls).toEqual([{ method: 'fitView', args: [300, undefined] }]);
+    });
+
+    it('a single point clamps at maxZoom (degenerate bbox fits at any zoom)', async () => {
+      const { engine, graph } = await mountedSized();
+      graph.pointPositions = [10, 20];
+      engine.fitView({ maxZoom: 1.5 });
+      expect(graph.calls).toEqual([
+        {
+          method: 'setZoomTransformByPointPositions',
+          args: [Float32Array.of(10, 20), 250, 1.5, undefined],
+        },
+      ]);
+    });
+
+    it('a zero-sized container (headless) falls back to the native fit', async () => {
+      const { engine, graph } = await mounted(); // jsdom: clientWidth 0
+      graph.calls.length = 0;
+      engine.fitView({ maxZoom: 1.5 });
+      engine.fitView({ durationMs: 100 });
+      expect(methodsOf(graph.calls)).toEqual(['fitView', 'fitView']);
+    });
   });
 
   it('maps camera, selection, focus, and simulation controls to cosmos APIs', async () => {
