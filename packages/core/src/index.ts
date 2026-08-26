@@ -31,6 +31,8 @@ export type {
   Accessor,
   LayoutKind,
   SimulationConfig,
+  SimulationInput,
+  SimulationPreset,
   GraphHostUpdate,
   LabelConfig,
   AccessibilityConfig,
@@ -90,7 +92,7 @@ export type {
   GraphEventMap,
   GraphEventName,
 } from './types';
-export { DIAGNOSTIC_SAMPLE_CAP } from './types';
+export { DIAGNOSTIC_SAMPLE_CAP, SIMULATION_PRESETS, resolveSimulation } from './types';
 
 // error taxonomy
 export type {
