@@ -1,5 +1,42 @@
 # @modernrelay/orbit-core
 
+## 0.16.0
+
+### Minor Changes
+
+- 212b31f: Fit zoom clamp: small graphs no longer balloon.
+
+  Measured: a 60-node graph fit at zoom 4.3 (nodes render as balloons), 300
+  nodes at 3.3. Every internally issued fit (first-data fit, settle follow,
+  public `fitView`) now carries a zoom upper bound — new `fitViewMaxZoom`
+  option, default 1.5, `null` to disable. The engine contract's
+  `FitViewOptions` gains `maxZoom`; when the natural fit zoom exceeds the
+  bound, the cosmos engine centers the scene bbox at the bound with one
+  animated transform instead. Verified live: small-graph fits land at exactly
+  1.5 (previously 3.1–4.3).
+
+- 893a1d2: First-load feel: the settle camera and simulation presets.
+
+  Two measured problems on every fresh force-layout mount: the first-data fit
+  frames the seed ring while the simulation contracts the graph to 5–17% of
+  that frame (a distant blob), and the engine's default cooling keeps visible
+  motion alive for tens of seconds (reads as endless jitter).
+
+  - **Settle camera** — new `fitViewOnSettle` option (`'follow'` (default) |
+    `'once'` | `false`). Under `'follow'` the camera keeps the settling graph
+    framed with periodic animated refits riding the engine frame fan-out (no
+    timers, no extra rAF) and a final fit at first quiescence; any user camera
+    input cancels it. `'once'` fits a single time at quiescence; `false`
+    restores the previous behavior.
+  - **Simulation presets** — `simulation` now also accepts a preset name:
+    `'calm'`, `'spread'`, `'tight'`, or `'lively'` (`SIMULATION_PRESETS` and
+    `resolveSimulation` are exported). Presets were selected on a measured
+    protocol: seconds until sustained visible stillness on an 800-node
+    clustered graph.
+  - **Default changed**: an omitted `simulation` now resolves to the `'calm'`
+    preset (visually still in ~5s) instead of the engine's own defaults. The
+    old feel is one prop away: `simulation="lively"`.
+
 ## 0.15.0
 
 ### Minor Changes

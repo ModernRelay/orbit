@@ -1,6 +1,6 @@
 {
   "name": "@modernrelay/orbit-data",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Data preparation for Orbit: streaming CSV, JSON paths, Arrow and Parquet into typed graph snapshots.",
   "license": "MIT",
   "repository": {

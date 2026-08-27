@@ -1,5 +1,13 @@
 # @modernrelay/orbit-data
 
+## 0.16.0
+
+### Patch Changes
+
+- Updated dependencies [212b31f]
+- Updated dependencies [893a1d2]
+  - @modernrelay/orbit-core@0.16.0
+
 ## 0.15.0
 
 ### Minor Changes
