@@ -17,6 +17,7 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "orbit-demo",
-    "orbit-spike"
+    "orbit-spike",
+    "orbit-storybook"
   ]
 }

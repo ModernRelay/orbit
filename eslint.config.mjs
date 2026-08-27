@@ -8,6 +8,7 @@ export default tseslint.config(
       'apps/demo/.vite/**',
       '.smoke/**',
       'apps/spike/results/**',
+      'apps/storybook/storybook-static/**',
       '.evidence/**',
     ],
   },

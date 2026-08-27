@@ -1,0 +1,51 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction/Testing without WebGL" />
+
+# Testing without WebGL
+
+Orbit ships a headless engine double, so integration tests run in plain jsdom — no GPU,
+no browser, no flakes.
+
+```ts
+import { FakeEngine } from '@modernrelay/orbit-core/testing';
+```
+
+## Mounting a graph on the double
+
+```tsx
+import { render, act } from '@testing-library/react';
+import { Graph } from '@modernrelay/orbit-react';
+import { FakeEngine } from '@modernrelay/orbit-core/testing';
+
+test('selection follows a click', async () => {
+  const fake = new FakeEngine();
+  render(
+    <Graph engine={() => fake} data={snapshot} onSelectionChange={onSelectionChange} />,
+  );
+  await act(async () => {});
+  await act(async () => {}); // second pass drains engine readiness
+
+  fake.injectPointClick(0);   // click node at index 0 — no DOM gymnastics
+  expect(onSelectionChange).toHaveBeenCalled();
+});
+```
+
+## What the double gives you
+
+- **Deterministic positions** — declared `x`/`y` pass through verbatim; undeclared
+  nodes land on a fixed grid. Labels, exports, and hit tests all work.
+- **Event injection** — `injectPointClick`, `injectPointHover`, `injectLinkClick`,
+  `injectLinkHover`, `injectDragStart` / `injectDragEnd`, `injectContextMenu`,
+  `injectViewportChange`, `injectSimulationEnd`, plus error and context-loss paths.
+- **Inspection** — every engine call is recorded: commits, camera moves, selection
+  pushes, per-channel buffers (`lastBuffer('pointColor')`), pinned indices.
+- **Options** — `new FakeEngine({ capabilities, screenshot, manualFrames })`:
+  override capability flags (for example `linkPicking: true` to enable edge hover),
+  supply a screenshot blob, or queue commits and step them manually.
+
+## In this catalog
+
+The Components section mounts every packaged UI component on the double — a headless
+canvas with fully live component behavior. What you see there is exactly what your
+tests can drive.

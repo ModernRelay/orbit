@@ -16,3 +16,4 @@ packages/omnigraph/test/__generated__/
 
 # Local-only probe/perf evidence (never committed)
 .evidence/
+apps/storybook/storybook-static/

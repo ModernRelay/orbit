@@ -1,0 +1,49 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction/What is orbit" />
+
+# orbit
+
+A typed, declarative React library for rendering and exploring graphs with WebGL.
+Handles 100K+ node graphs. UI components included: search, tables, histograms, and more.
+
+## The mental model
+
+The graph is a prop. You hand `<Graph>` a data snapshot and an engine factory; orbit
+validates, projects, and renders it, and every later change is just another prop value:
+
+```tsx
+import { Graph } from '@modernrelay/orbit-react';
+import { CosmosEngine } from '@modernrelay/orbit-engine-cosmos';
+
+<Graph engine={() => new CosmosEngine()} data={snapshot} />
+```
+
+- **The engine is a factory** — one engine instance per mounted graph. `CosmosEngine`
+  renders with WebGL and runs the GPU force simulation; `FakeEngine` (from
+  `@modernrelay/orbit-core/testing`) is a headless double for tests and component demos.
+- **UI components are children.** Search, toolbar, minimap, histograms, tables, and the
+  rest mount inside `<Graph>` and find the live instance through context:
+
+```tsx
+<Graph engine={engineFactory} data={snapshot} crossfilter={dims}>
+  <GraphToolbar />
+  <GraphSearch />
+  <GraphHistogram dimension="score" />
+</Graph>
+```
+
+- **Styling is data-driven.** Node color and size accept per-node functions or
+  declarative scale descriptors; scales also feed the legend.
+
+## Packages
+
+| Package | What it is |
+|---|---|
+| `@modernrelay/orbit-react` | `<Graph>`, the UI components, hooks |
+| `@modernrelay/orbit-core` | engine-agnostic instance: data, exploration, analytics |
+| `@modernrelay/orbit-engine-cosmos` | the default WebGL rendering engine |
+| `@modernrelay/orbit-data` | columnar snapshot helpers |
+| `@modernrelay/orbit-omnigraph` | Omnigraph server adapter |
+
+Source and issues: [github.com/ModernRelay/orbit](https://github.com/ModernRelay/orbit)
