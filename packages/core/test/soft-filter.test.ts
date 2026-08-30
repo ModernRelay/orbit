@@ -280,7 +280,7 @@ describe('selection over the visible set', () => {
 describe('label lane × mask', () => {
   it('mask-hidden nodes leave the candidate set', async () => {
     const { instance, engine } = await readyChain();
-    instance.applyHostUpdate({ labels: { enabled: true } });
+    instance.applyHostUpdate({ labels: { enabled: true, overlap: 'allow' } });
     engine.injectSimulationEnd(); // bank positions so candidates are placeable
 
     let latest: readonly { id: string }[] = [];

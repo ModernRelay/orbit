@@ -37,7 +37,8 @@ async function setup(labelOverrides: Partial<LabelConfig<NAttrs>> = {}) {
   const engine = h.engines[0]!;
   h.instance.applyHostUpdate({
     data: snap(1, ['a', 'b', 'c'], [['a', 'b'], ['a', 'c']]),
-    labels: { minZoom: 0, ...labelOverrides },
+    // overlap-blind by default: this file pins scheduling, not declutter
+    labels: { minZoom: 0, overlap: 'allow', ...labelOverrides },
   });
   engine.emitFrame(0); // sim-hot: first tick refreshes the CPU cache
   engine.injectSimulationEnd(); // settle: bank + re-rank

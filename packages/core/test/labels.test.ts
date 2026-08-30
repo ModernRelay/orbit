@@ -262,3 +262,141 @@ describe('text and capacity policy', () => {
     expect(select({ ...f, viewport: vp(1), config: { maxVisible: 0 } }).placements).toHaveLength(0);
   });
 });
+
+describe('screen-space declutter (overlap: hide, the default)', () => {
+  // identity projection: space coords ARE screen px, boxes ~7px/char + 8 + padding
+  const RECT: readonly [number, number, number, number] = [0, 0, 1000, 1000];
+
+  it('culls a lower-ranked label stacked on a winner; the slot passes to the next candidate', () => {
+    // a and b share a spot; c is far away. k=2 → a (top weight) + c, never b.
+    const f = fixture(
+      ['a', 'b', 'c'],
+      [
+        [100, 100],
+        [104, 102],
+        [600, 600],
+      ],
+    );
+    const result = select({
+      ...f,
+      viewport: { zoom: 2, screenRect: RECT, spaceToScreen: identity },
+      config: { maxVisible: 2, getWeight: (n) => ({ a: 3, b: 2, c: 1 })[n.id] ?? 0 },
+    });
+    expect(ids(result)).toEqual(['a', 'c']);
+  });
+
+  it('rejected candidates do not consume capacity (stacked pairs each yield one)', () => {
+    // two stacked pairs + one free node; k=3 → one per pair + the free node
+    const f = fixture(
+      ['a', 'b', 'c', 'd', 'e'],
+      [
+        [100, 100],
+        [102, 101],
+        [500, 500],
+        [503, 499],
+        [900, 900],
+      ],
+    );
+    const result = select({
+      ...f,
+      viewport: { zoom: 2, screenRect: RECT, spaceToScreen: identity },
+      config: {
+        maxVisible: 3,
+        getWeight: (n) => ({ a: 5, b: 4, c: 3, d: 2, e: 1 })[n.id] ?? 0,
+      },
+    });
+    expect(ids(result)).toEqual(['a', 'c', 'e']);
+  });
+
+  it('showFor ids always render and claim their space from ranked fills', () => {
+    // forced pair stacked together both render; ranked candidate on the same
+    // spot is culled, a distant one fills instead.
+    const f = fixture(
+      ['f1', 'f2', 'r1', 'r2'],
+      [
+        [100, 100],
+        [101, 101],
+        [103, 99],
+        [700, 700],
+      ],
+    );
+    const result = select({
+      ...f,
+      viewport: { zoom: 2, screenRect: RECT, spaceToScreen: identity },
+      config: {
+        maxVisible: 4,
+        showFor: ['f1', 'f2'],
+        getWeight: (n) => (n.id === 'r1' ? 2 : 1),
+      },
+    });
+    expect(ids(result)).toEqual(['f1', 'f2', 'r2']);
+  });
+
+  it("overlap: 'allow' restores overlap-blind selection", () => {
+    const f = fixture(
+      ['a', 'b'],
+      [
+        [100, 100],
+        [101, 101],
+      ],
+    );
+    const result = select({
+      ...f,
+      viewport: { zoom: 2, screenRect: RECT, spaceToScreen: identity },
+      config: { maxVisible: 2, overlap: 'allow' },
+    });
+    expect(ids(result)).toEqual(['a', 'b']);
+  });
+
+  it('without a projectable viewport, selection stays overlap-blind', () => {
+    const f = fixture(
+      ['a', 'b'],
+      [
+        [100, 100],
+        [101, 101],
+      ],
+    );
+    const result = select({
+      ...f,
+      viewport: { zoom: 2 }, // no rect, no spaceToScreen
+      config: { maxVisible: 2 },
+    });
+    expect(ids(result)).toEqual(['a', 'b']);
+  });
+
+  it('overlapPadding widens the exclusion zone', () => {
+    // 60px apart: separate at default padding, colliding at padding 40
+    const f = fixture(
+      ['a', 'b'],
+      [
+        [100, 100],
+        [160, 100],
+      ],
+    );
+    const base = {
+      ...f,
+      viewport: { zoom: 2, screenRect: RECT, spaceToScreen: identity } as const,
+    };
+    expect(ids(select({ ...base, config: { maxVisible: 2 } }))).toEqual(['a', 'b']);
+    expect(ids(select({ ...base, config: { maxVisible: 2, overlapPadding: 40 } }))).toEqual(['a']);
+  });
+
+  it('is deterministic across repeated calls', () => {
+    const f = fixture(
+      ['a', 'b', 'c', 'd'],
+      [
+        [100, 100],
+        [102, 100],
+        [400, 400],
+        [402, 401],
+      ],
+    );
+    const args = {
+      ...f,
+      viewport: { zoom: 2, screenRect: RECT, spaceToScreen: identity } as const,
+      config: { maxVisible: 4 },
+    };
+    const first = ids(select(args));
+    for (let n = 0; n < 5; n++) expect(ids(select(args))).toEqual(first);
+  });
+});

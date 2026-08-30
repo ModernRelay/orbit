@@ -77,7 +77,7 @@ async function mountPayloadGraph(children?: ReactNode): Promise<{
     <Graph
       engine={() => engine}
       data={payloadDataset}
-      labels={{ minZoom: 0 }}
+      labels={{ minZoom: 0, overlap: 'allow' }} // every payload must render — subject is escaping, not declutter
       accessibility={{ label: 'Payload graph' }}
     >
       {children}
