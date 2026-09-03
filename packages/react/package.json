@@ -1,6 +1,6 @@
 {
   "name": "@modernrelay/orbit-react",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "React binding for Orbit: <Graph> plus tree-shakeable components (toolbar, search, minimap, tooltip, inspector, table, navigator, and more).",
   "license": "MIT",
   "repository": {
