@@ -19,7 +19,7 @@
  * is a true upsert (idempotent re-runs; no @card violations).
  * 3. Boots `omnigraph-server --cluster... --unauthenticated` on 127.0.0.1:8199,
  * waits for /healthz, and records the raw HTTP responses (verbatim bytes,
- * via curl) for exactly the requests the @modernrelay/omnigraph SDK 0.8.0
+ * via curl) for exactly the requests the @modernrelay/omnigraph SDK 0.10.x
  * issues (graph-scoped paths are prefixed /graphs/<graphId>):
  * recorded/health.json GET /healthz
  * recorded/schema.json GET /graphs/demo/schema
@@ -32,7 +32,7 @@
  * branch, headBefore/headAfter around the export, per-table rowCounts,
  * and the verified edge-before-node export line ordering).
  *
- * Requirements: the `omnigraph` CLI and `omnigraph-server` binaries (0.8.x)
+ * Requirements: the `omnigraph` CLI and `omnigraph-server` binaries (0.10.x)
  * on PATH, plus curl. When the binaries are absent the script prints a SKIP
  * message and exits 0 — CI never regenerates fixtures; it consumes the
  * committed recordings.
@@ -313,8 +313,13 @@ async function main() {
     '--store', STORE, '--as', ACTOR, '--json',
   ]);
   const loaded = JSON.parse(loadOut);
-  console.log(`  loaded ${loaded.nodes_loaded} nodes, ${loaded.edges_loaded} edges`);
-  if (loaded.nodes_loaded !== 300 || loaded.edges_loaded !== 500) {
+  // 0.10 CLI reports per-table arrays; pre-0.10 had top-level totals.
+  const sumTables = (tables) =>
+    (tables ?? []).reduce((total, t) => total + (t.entities_loaded ?? 0), 0);
+  const nodesLoaded = loaded.nodes_loaded ?? sumTables(loaded.nodes);
+  const edgesLoaded = loaded.edges_loaded ?? sumTables(loaded.edges);
+  console.log(`  loaded ${nodesLoaded} nodes, ${edgesLoaded} edges`);
+  if (nodesLoaded !== 300 || edgesLoaded !== 500) {
     throw new Error(`unexpected load counts: ${loadOut}`);
   }
 
@@ -376,7 +381,16 @@ async function main() {
     }
 
     const snap = JSON.parse(snapshot);
-    const rowCounts = Object.fromEntries(snap.tables.map((t) => [t.table_key, t.row_count]));
+    // 0.10 renamed snapshot `tables` (table_key/row_count) to `datasets`
+    // (entity_kind + type_name / entity_count); keys keep the old
+    // '<kind>:<Type>' form either way.
+    const snapEntries = snap.datasets ?? snap.tables ?? [];
+    const rowCounts = Object.fromEntries(
+      snapEntries.map((t) => [
+        t.table_key ?? `${t.entity_kind}:${t.type_name}`,
+        t.row_count ?? t.entity_count,
+      ]),
+    );
     const manifest = {
       recordedAt: new Date().toISOString(),
       serverVersion: JSON.parse(health).version,

@@ -717,7 +717,7 @@ describe('cancellation and error surface', () => {
 describe('server and SDK version mismatch surfacing', () => {
   it('the recorded fixture server and the SDK pin share major.minor — no warning', async () => {
     // The fixture is regenerated with the same server generation the SDK
-    // pins (currently 0.9.x) — a mismatch here means the pin and the
+    // pins (currently 0.10.x) — a mismatch here means the pin and the
     // fixture drifted apart and one of them needs regenerating/bumping.
     const { instance, source } = harness(recordedRoutes());
     const result = await source.load(instance);
@@ -728,15 +728,15 @@ describe('server and SDK version mismatch surfacing', () => {
     const { instance, source } = harness(
       recordedRoutes({
         'GET /healthz': json(
-          JSON.stringify({ status: 'ok', version: '0.10.0', internal_schema_version: 6 }),
+          JSON.stringify({ status: 'ok', version: '0.11.0', internal_schema_version: 6 }),
         ),
       }),
     );
 
     const result = await source.load(instance);
 
-    expect(result.serverVersion).toBe('0.10.0');
-    expect(result.warnings.some((w) => w.includes('0.10.0') && w.includes('0.9.0'))).toBe(true);
+    expect(result.serverVersion).toBe('0.11.0');
+    expect(result.warnings.some((w) => w.includes('0.11.0') && w.includes('0.10.0'))).toBe(true);
     expect(instance.store.getState().nodeCount).toBe(NODE_TOTAL); // load still succeeded
   });
 });
