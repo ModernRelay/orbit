@@ -146,7 +146,10 @@ export function selectLabelCandidates<N = Record<string, unknown>>(
   // intersection tests; without a projectable viewport there are no boxes
   // and selection stays overlap-blind.
   const declutter = config.overlap !== 'allow' && project !== undefined;
-  const pad = Math.max(0, config.overlapPadding ?? 2);
+  // non-finite padding would give the occupancy grid infinite loop bounds
+  // (a main-thread hang) — degenerate input falls back to the default.
+  const configuredPad = config.overlapPadding ?? 2;
+  const pad = Number.isFinite(configuredPad) ? Math.max(0, configuredPad) : 2;
   const CELL = 64;
   const CHAR_W = 7;
   const BOX_H = 18;

@@ -381,6 +381,26 @@ describe('screen-space declutter (overlap: hide, the default)', () => {
     expect(ids(select({ ...base, config: { maxVisible: 2, overlapPadding: 40 } }))).toEqual(['a']);
   });
 
+  it('non-finite overlapPadding falls back to the default instead of hanging', () => {
+    const f = fixture(
+      ['a', 'b', 'c'],
+      [
+        [100, 100],
+        [104, 102],
+        [600, 600],
+      ],
+    );
+    for (const bad of [Infinity, Number.NaN, -Infinity]) {
+      const result = select({
+        ...f,
+        viewport: { zoom: 2, screenRect: RECT, spaceToScreen: identity },
+        config: { maxVisible: 2, overlapPadding: bad, getWeight: (n) => ({ a: 3, b: 2, c: 1 })[n.id] ?? 0 },
+      });
+      // terminates AND behaves exactly like the default padding
+      expect(ids(result)).toEqual(['a', 'c']);
+    }
+  });
+
   it('is deterministic across repeated calls', () => {
     const f = fixture(
       ['a', 'b', 'c', 'd'],
