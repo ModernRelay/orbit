@@ -41,7 +41,8 @@ async function setup(labelOverrides: Partial<LabelConfig<NAttrs>> = {}) {
   const engine = h.engines[0]!;
   h.instance.applyHostUpdate({
     data: snap(1, IDS),
-    labels: { minZoom: 0, maxVisible: 64, ...labelOverrides },
+    // overlap-blind by default: this file pins frame-tick invariants
+    labels: { minZoom: 0, maxVisible: 64, overlap: 'allow', ...labelOverrides },
   });
   engine.emitFrame(0); // sim-hot: first tick refreshes the CPU cache
   engine.injectSimulationEnd(); // settle: bank + re-rank

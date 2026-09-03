@@ -217,7 +217,7 @@ describe('label lane × scope', () => {
     const engine = h.engines[0]!;
     h.instance.applyHostUpdate({
       data: snap(1, ['a', 'b', 'c'], [['a', 'b'], ['a', 'c']]),
-      labels: { minZoom: 0 },
+      labels: { minZoom: 0, overlap: 'allow' },
     });
     engine.injectSimulationEnd(); // settle: bank positions + re-rank
 

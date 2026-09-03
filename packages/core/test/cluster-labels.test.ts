@@ -56,7 +56,9 @@ interface Rig {
   placements: () => LabelPlacement[];
 }
 
-async function rig(labels: LabelConfig<NA> = { minZoom: 0 }): Promise<Rig> {
+// overlap: 'allow' — these tests pin the LOD hand-off, not declutter
+// (FakeEngine's 10px seed grid would otherwise cull stacked fixtures).
+async function rig(labels: LabelConfig<NA> = { minZoom: 0, overlap: 'allow' }): Promise<Rig> {
   const engines: FakeEngine[] = [];
   const instance = createGraphInstance<NA, EA>({
     engine: () => {
@@ -177,7 +179,7 @@ describe('label.maxZoom LOD hand-off', () => {
     const { instance, engine, placements } = await rig({ minZoom: 0, maxZoom: 2 });
     engine.injectViewportChange({ x: 0, y: 0, zoom: 5 });
     // Force the throttled re-rank synchronously through a labels-config write.
-    instance.applyHostUpdate({ labels: { minZoom: 0, maxZoom: 2 } });
+    instance.applyHostUpdate({ labels: { minZoom: 0, maxZoom: 2, overlap: 'allow' } });
 
     const list = placements();
     expect(clusterLabels(list)).toEqual([]);
@@ -185,14 +187,14 @@ describe('label.maxZoom LOD hand-off', () => {
   });
 
   it('without maxZoom the two bands coexist, each on its own gate', async () => {
-    const { placements } = await rig({ minZoom: 0 });
+    const { placements } = await rig({ minZoom: 0, overlap: 'allow' });
     const list = placements();
     expect(clusterLabels(list).map((p) => p.id)).toEqual(['red', 'blue']);
     expect(nodeLabels(list).map((p) => p.id)).toEqual(['a', 'c', 'b', 'd']); // degree rank
   });
 
   it('cluster labels lead the emitted order (coarse layer first)', async () => {
-    const { placements } = await rig({ minZoom: 0 });
+    const { placements } = await rig({ minZoom: 0, overlap: 'allow' });
     expect(placements().map((p) => p.kind ?? 'node')).toEqual([
       'cluster',
       'cluster',

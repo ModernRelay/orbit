@@ -318,7 +318,7 @@ describe('label lane × hard scope', () => {
     const engine = engines[0]!;
     instance.applyHostUpdate({
       data: snap(1, [...CHAIN_IDS], CHAIN_LINKS),
-      labels: { minZoom: 0, showFor: ['d'] },
+      labels: { minZoom: 0, showFor: ['d'], overlap: 'allow' },
     });
     engine.injectSimulationEnd(); // settle: bank positions + full-base rank
 
@@ -336,7 +336,7 @@ describe('label lane × hard scope', () => {
     engine.injectSimulationEnd();
     engine.injectViewportChange({ x: 0, y: 0, zoom: 2 });
     vi.advanceTimersByTime(100); // trailing viewport re-rank
-    instance.applyHostUpdate({ labels: { minZoom: 0, showFor: ['b', 'd'] } });
+    instance.applyHostUpdate({ labels: { minZoom: 0, showFor: ['b', 'd'], overlap: 'allow' } });
     expect(emissions.at(-1)).toEqual(['b', 'a']); // in-scope forced id first
     for (const list of emissions.slice(scopedFrom)) {
       for (const id of list) expect(['a', 'b']).toContain(id);

@@ -837,6 +837,19 @@ export interface LabelConfig<N = Record<string, unknown>> {
   getText?: (node: GraphNode<N>) => string;
   /** Ranking weight; default nodeSize result order, else degree. */
   getWeight?: (node: GraphNode<N>) => number;
+  /**
+   * Screen-space overlap policy for ranked labels. 'hide' (default)
+   * declutters: a candidate whose estimated label box intersects an
+   * already-placed label loses its slot to the next-ranked candidate, so
+   * dense clusters stop stacking text. `showFor` ids always render and claim
+   * their space first. 'allow' restores overlap-blind selection. Boxes are
+   * width ESTIMATES (fixed per-character size) — decluttering, not
+   * typesetting — and require a projectable viewport; with an engine that
+   * cannot project screen coordinates, selection stays overlap-blind.
+   */
+  overlap?: 'hide' | 'allow';
+  /** Extra padding (CSS px) inflating each estimated label box. Default 2. */
+  overlapPadding?: number;
 }
 
 /** accessibility runtime options. */

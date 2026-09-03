@@ -40,6 +40,20 @@ function frame(globals: Record<string, unknown>, props: Partial<DemoGraphProps>)
   );
 }
 
+/** the unbearable case: labels at every zoom, dense clusters — then declutter */
+const PILEUP_ALLOW: LabelConfig<DemoNodeAttrs> = {
+  minZoom: 0,
+  maxVisible: 64,
+  getText: labelOf,
+  overlap: 'allow',
+};
+const PILEUP_HIDE: LabelConfig<DemoNodeAttrs> = {
+  minZoom: 0,
+  maxVisible: 64,
+  getText: labelOf,
+  overlap: 'hide',
+};
+
 const meta = {
   title: 'Graph/Labels',
   parameters: {
@@ -86,4 +100,25 @@ export const CustomPills: Story = {
         </span>
       ),
     }),
+};
+
+interface OverlapArgs {
+  overlap: 'hide' | 'allow';
+}
+
+export const Declutter: StoryObj<OverlapArgs> = {
+  args: { overlap: 'hide' },
+  argTypes: { overlap: { control: 'radio', options: ['hide', 'allow'] } },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Screen-space declutter (the default): a ranked label whose box would " +
+          "land on an already-placed label passes its slot to the next candidate. " +
+          "Flip to 'allow' to see the old pileup.",
+      },
+    },
+  },
+  render: (args, { globals }) =>
+    frame(globals, { labels: args.overlap === 'hide' ? PILEUP_HIDE : PILEUP_ALLOW }),
 };
