@@ -1,5 +1,12 @@
 # @modernrelay/orbit-engine-cosmos
 
+## 0.17.0
+
+### Patch Changes
+
+- Updated dependencies [214d7f0]
+  - @modernrelay/orbit-core@0.17.0
+
 ## 0.16.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@modernrelay/orbit-core",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Headless graph-visualization core: typed declarative snapshots reconciled into atomic engine commits. No React, no DOM, no engine imports.",
   "license": "MIT",
   "repository": {
