@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modernrelay/omnigraph": "0.9.0",
+    "@modernrelay/omnigraph": "0.10.0",
     "@modernrelay/orbit-core": "workspace:*"
   },
   "devDependencies": {
