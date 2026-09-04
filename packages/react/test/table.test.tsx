@@ -259,6 +259,55 @@ describe('<GraphTable> virtualization', () => {
 // --- bidirectional sync -----------------------------------------------------------
 
 describe('<GraphTable> bidirectional sync', () => {
+  it('keeps attribute columns searchable after its brush hides every row', async () => {
+    const { instance, view } = await setup(
+      { data: syncSnapshot, crossfilter: [tableDim] },
+      <GraphTable />,
+    );
+
+    fireEvent.change(filterInput(view.container), { target: { value: 'no match' } });
+    await flush();
+    expect(instance.getVisibleNodeIds()).toEqual([]);
+    expect(rowIds(view.container)).toEqual([]);
+    expect(headerKeys(view.container)).toEqual(['id', 'name', 'v']);
+
+    // Correcting a typo must work without first clearing the filter. This
+    // matches an attribute value, not an ID.
+    fireEvent.change(filterInput(view.container), { target: { value: 'ant' } });
+    await flush();
+    expect(instance.getVisibleNodeIds()).toEqual(['a']);
+    expect(rowIds(view.container)).toEqual(['a']);
+
+    fireEvent.change(filterInput(view.container), { target: { value: 'fox' } });
+    await flush();
+    expect(instance.getVisibleNodeIds()).toEqual(['f']);
+    expect(rowIds(view.container)).toEqual(['f']);
+  });
+
+  it('keeps sampled attributes discoverable when another dimension hides their rows', async () => {
+    const { instance, view } = await setup(
+      {
+        data: {
+          datasetKey: 'table-heterogeneous', sourceRevision: 1,
+          nodes: [{ id: 'a', attrs: { first: 'ant', v: 0 } }, { id: 'b', attrs: { second: 'bat', v: 1 } }],
+          edges: [],
+        },
+        crossfilter: [vDim, tableDim],
+      },
+      <GraphTable />,
+    );
+    const session = instance.getCrossfilterSession()!;
+    await act(async () => { await session.setBrush('v', { min: 0, max: 0 }); });
+    fireEvent.change(filterInput(view.container), { target: { value: 'bat' } });
+    await flush();
+    expect(rowIds(view.container)).toEqual([]);
+    expect(headerKeys(view.container)).toContain('second');
+
+    await act(async () => { await session.setBrush('v', null); });
+    expect(instance.getVisibleNodeIds()).toEqual(['b']);
+    expect(rowIds(view.container)).toEqual(['b']);
+  });
+
   it('a crossfilter brush narrows the table rows (graph → table)', async () => {
     const { instance, view } = await setup(
       { data: syncSnapshot, crossfilter: [vDim, tableDim] },

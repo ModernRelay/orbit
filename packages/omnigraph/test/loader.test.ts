@@ -678,6 +678,33 @@ describe('source-revision drift policy', () => {
 });
 
 describe('cancellation and error surface', () => {
+  it.each(['reject', 'retry-once', 'accept-warn'] as const)(
+    '%s rejects cancellation from the final progress callback before publishing',
+    async (driftPolicy) => {
+      const controller = new AbortController();
+      let progressCalls = 0;
+      const { instance, source } = harness(recordedRoutes(), {
+        driftPolicy,
+        batchSize: Number.MAX_SAFE_INTEGER, // exactly one, final append
+        onProgress: () => {
+          progressCalls++;
+          controller.abort();
+        },
+      });
+      try {
+        await expect(source.load(instance, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+        expect(progressCalls).toBe(1);
+        const state = instance.store.getState();
+        expect(state.nodeCount).toBe(0);
+        expect(state.edgeCount).toBe(0);
+        expect(state.revisions.model).toBe(0);
+        expect(state.revisions.source).toBeNull();
+      } finally {
+        instance.destroy();
+      }
+    },
+  );
+
   it('abort mid-stream aborts the session — no partial graph', async () => {
     const controller = new AbortController();
     const { instance, source } = harness(recordedRoutes(), {

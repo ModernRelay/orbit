@@ -918,7 +918,8 @@ export interface GraphInstance<N = Record<string, unknown>, E = Record<string, u
   ): Promise<string>;
   /**
    * Bounded object export of the pinned model: 'visible' (default) is the
-   * mask-visible roster with both-endpoint-visible edges; 'accepted' the
+   * mask-visible roster and edges whose own mask and both endpoints are
+   * visible; 'accepted' the
    * full model. Rejects `export-materialization-too-large` past `limit`
    * (default 100 000 rows) BEFORE allocating — the stream is the remedy.
    */
@@ -1562,6 +1563,9 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   let linkColor: Accessor<AcceptedEdge<E>, string> | undefined;
   let linkWidth: Accessor<AcceptedEdge<E>, number> | undefined;
   let layout: LayoutKind = 'force';
+  /** An embedded layout restored before readiness freezes its first replay,
+   * matching a restore performed against an already-mounted engine. */
+  let pauseOnReadyAfterRestore = false;
   // Default = the 'calm' preset: the engine's own defaults keep visible
   // motion alive for tens of seconds, which reads as jitter on first load.
   let simulation: SimulationConfig | undefined = resolveSimulation(undefined);
@@ -3901,6 +3905,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     // reconcileScene; recomputing the scoped model alongside is a no-op for
     // folds but keeps ONE republication path for every structural slice.
     const structuralTouched = scopeTouched || effectiveTouched || foldsTouched;
+    // History changes the same domain populations as their forward actions.
+    // Bump their cache coordinates before projecting the restored scene.
+    if (scopeTouched || effectiveTouched) hardScopeGen += 1;
+    if (structuralTouched) visibleGen += 1;
     let structuralChange = false;
     let positionChange = false;
     if (structuralTouched && accepted !== null) {
@@ -3946,6 +3954,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     if (pinsNext !== null) patch.pins = pinsNext;
     if (pinnedNodesNext !== null) patch.pinnedNodeIds = pinnedNodesNext;
     if (scopeTouched) patch.scope = scopeSpec;
+    if (foldsTouched) {
+      const nextFoldCounts = foldCountsIfChanged(prev.folds);
+      if (nextFoldCounts !== null) patch.folds = nextFoldCounts;
+    }
 
     const eng = engineIfReady();
     let revisions = prev.revisions;
@@ -3995,16 +4007,29 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       const nodesAffected = drain.nodes.length > 0 || drain.nodesAlpha.length > 0;
       const edgesAffected = drain.edges.length > 0 || drain.edgesAlpha.length > 0;
       if (nodesAffected || edgesAffected) {
+        visibleGen += 1;
         revisions = { ...prev.revisions };
         revisions.scope += 1;
         revisions.render += 1;
         if (eng !== null) {
           nodeAlphaComposer.reset(); // drain unobserved by composers
           edgeAlphaComposer.reset();
-          const buffers: NonNullable<EngineCommit['buffers']> = {};
-          if (nodesAffected) buffers.pointColor = composeNodeAlphaBuffer(basePointColorBuffer());
+          const visDirty: DirtyChannels = {
+            nodeColor: scaleUsesVisibleDomain(nodeColor),
+            nodeSize: scaleUsesVisibleDomain(nodeSize),
+            linkColor: false,
+            linkWidth: false,
+          };
+          const buffers: NonNullable<EngineCommit['buffers']> =
+            visDirty.nodeColor || visDirty.nodeSize
+              ? { ...(projectChannelBuffers(visDirty) ?? {}) }
+              : {};
+          if (visDirty.nodeColor || visDirty.nodeSize) filterDiagsChanged = true;
+          if (nodesAffected && buffers.pointColor === undefined) {
+            buffers.pointColor = composeNodeAlphaBuffer(basePointColorBuffer());
+          }
           if (edgesAffected) buffers.linkColor = composeEdgeAlphaBuffer(baseLinkColorBuffer());
-          eng.commit({ revision: revisions.render, buffers });
+          commitToEngine(eng, { revision: revisions.render, buffers });
           revisions.appliedRender = eng.appliedRevision();
         }
       }
@@ -6257,6 +6282,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       abortExpansionsForDatasetSwap();
       abortSearchFlight('dataset-changed', 'search aborted: the datasetKey changed');
       resetMaskState();
+      failPendingRestore('restore-diverged', {
+        problem: 'the datasetKey changed while the restore was awaiting acknowledgement',
+        rollbackCursor: false,
+      });
       historyKernel.clear();
       stopTimelineTimer();
       timelinePlayingKey = null;
@@ -6280,6 +6309,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
     }
     accepted = p.merged;
+    pauseOnReadyAfterRestore = false;
+    // Ingestion publications supersede worker-derived snapshots just like
+    // synchronous host data: a late reply must not replace this newer model.
+    pendingDeriveToken += 1;
     // This publication invalidates expansion records
     // referencing nodes the merged snapshot no longer contains (replace
     // commits, overlay removals, rollbacks).
@@ -8173,6 +8206,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
           abortExpansionsForDatasetSwap();
           abortSearchFlight('dataset-changed', 'search aborted: the datasetKey changed');
           resetMaskState();
+          failPendingRestore('restore-diverged', {
+            problem: 'the datasetKey changed while the restore was awaiting acknowledgement',
+            rollbackCursor: false,
+          });
           historyKernel.clear();
           stopTimelineTimer();
           timelinePlayingKey = null;
@@ -8194,6 +8231,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
           bankReadyEnginePositions();
         }
         accepted = nextAccepted;
+        pauseOnReadyAfterRestore = false;
         // The publication pass invalidates expansion records
         // referencing nodes the new accepted snapshot no longer contains.
         invalidateExpansionRecords();
@@ -8678,7 +8716,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         c.cluster = clusterConfigPayload();
         any = true;
       }
-      if (layoutChanged) layout = nextLayout;
+      if (layoutChanged) {
+        layout = nextLayout;
+        pauseOnReadyAfterRestore = false;
+      }
       if (any) configPatch = c;
     }
 
@@ -9556,10 +9597,15 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
           try {
             // Coalesced full replay: updates applied while lost advanced the
             // desired revisions CPU-side; ONE commit now realizes the latest.
+            const pauseRestoredLayout = pauseOnReadyAfterRestore;
+            const restartAlpha =
+              layout === 'force' && !pauseRestoredLayout ? RECOVERY_RESTART_ALPHA : null;
             const restarted =
-              buildAndCommitFullReplay(s, layout === 'force' ? RECOVERY_RESTART_ALPHA : null) &&
+              buildAndCommitFullReplay(s, restartAlpha) &&
               accepted !== null &&
-              layout === 'force';
+              restartAlpha !== null;
+            pauseOnReadyAfterRestore = false;
+            if (pauseRestoredLayout) s.engine.pause();
             const { viewport } = store.getState();
             if (viewport !== null) s.engine.setViewport(viewport);
             // highlight remap: recovery re-applies selection, pins, and
@@ -9568,7 +9614,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
             publish({
               status: 'ready',
               revisions: { ...store.getState().revisions, appliedRender: s.engine.appliedRevision() },
-              ...(restarted ? { simulationRunning: true } : {}),
+              ...(restarted ? { simulationRunning: true } : pauseRestoredLayout ? { simulationRunning: false } : {}),
             });
           } catch (err) {
             emitInstanceError({ code: 'context-lost' }, 'recovery', err as Error);
@@ -9698,20 +9744,22 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       linkVisible: (linkIndex) => maskEdgeVisibleAt(linkIndex),
     });
 
-    const restartAlpha = layout === 'force' ? 1 : null;
+    const pauseRestoredLayout = pauseOnReadyAfterRestore;
+    const restartAlpha = layout === 'force' && !pauseRestoredLayout ? 1 : null;
     const committed = buildAndCommitFullReplay(s, restartAlpha);
+    pauseOnReadyAfterRestore = false;
     const restarted = committed && accepted !== null && restartAlpha !== null;
     // Cosmos holds positions without start (max delta 0.00px over 2.5s), but the pause
     // is still issued so an INITIALLY-fixed mount reaches the same engine
     // state as a force→fixed transition, insulating against an engine whose
     // simulation free-runs by default.
-    if (layout === 'fixed') eng.pause();
+    if (layout === 'fixed' || pauseRestoredLayout) eng.pause();
 
     publish({
       status: 'ready',
       revisions: { ...store.getState().revisions, appliedRender: eng.appliedRevision() },
       diagnostics: composeDiagnostics(),
-      ...(restarted ? { simulationRunning: true } : {}),
+      ...(restarted ? { simulationRunning: true } : pauseRestoredLayout ? { simulationRunning: false } : {}),
     });
 
     // highlight remap: a fresh engine gets the surviving interaction
@@ -9859,6 +9907,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   function destroy(): void {
     if (destroyed) return;
     destroyed = true;
+    failPendingRestore('restore-diverged', {
+      problem: 'the instance was destroyed while the restore was awaiting acknowledgement',
+      rollbackCursor: false,
+    });
     workerLane?.terminate(); // in-flight derives reject and the thread terminates
     workerLane = null;
     stopTimelineTimer(); // no leaked timers
@@ -10135,19 +10187,24 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     return (listeners.get('viewStateRestore')?.size ?? 0) > 0;
   }
 
-  function failPendingRestore(code: 'restore-timeout' | 'restore-diverged'): void {
+  function failPendingRestore(
+    code: 'restore-timeout' | 'restore-diverged',
+    options: { problem?: string; rollbackCursor?: boolean } = {},
+  ): void {
     const pending = pendingRestore;
     if (pending === null) return;
     pendingRestore = null;
     clearTimeout(pending.timer);
-    pending.rollbackCursor?.();
+    // Dataset replacement clears both history stacks. Its cancelled walk
+    // must never move a cursor in the replacement dataset's history.
+    if (options.rollbackCursor !== false) pending.rollbackCursor?.();
     pending.resolve({
       status: 'rejected',
       code,
       problems: [
-        code === 'restore-timeout'
+        options.problem ?? (code === 'restore-timeout'
           ? `the host did not reflect the restore intent within ${RESTORE_ACK_TIMEOUT_MS}ms`
-          : 'the host reflected different values than the intent asked for',
+          : 'the host reflected different values than the intent asked for'),
       ],
     });
   }
@@ -10408,38 +10465,46 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
 
           if (state.positions !== undefined && scene !== null) {
             const eng = engineIfReady();
-            if (eng !== null) {
-              const next = new Float32Array(scene.positions);
-              let touched = 0;
-              for (const [id, x, y] of state.positions) {
-                const idx = scene.indexById.get(id);
-                if (idx === undefined) continue; // stale id — ignored per spec
-                next[2 * idx] = x;
-                next[2 * idx + 1] = y;
-                touched++;
-              }
-              if (touched > 0) {
-                reconciler.noteEnginePositions(next);
-                scene = { ...scene, positions: next };
-                const prevState = store.getState();
-                const nextRevisions: Revisions = {
-                  ...prevState.revisions,
-                  render: prevState.revisions.render + 1,
-                };
-                commitToEngine(eng, {
+            const next = new Float32Array(scene.positions);
+            let touched = 0;
+            for (const [id, x, y] of state.positions) {
+              const idx = scene.indexById.get(id);
+              if (idx === undefined) continue; // stale id — ignored per spec
+              next[2 * idx] = x;
+              next[2 * idx + 1] = y;
+              touched++;
+            }
+            if (touched > 0) {
+              // CPU state owns the restored layout even while detached or
+              // mounting; the next full replay reads this reconciler cache.
+              reconciler.noteEnginePositions(next);
+              scene = { ...scene, positions: next };
+              labelPositionCache = null;
+              const prevState = store.getState();
+              const nextRevisions: Revisions = {
+                ...prevState.revisions,
+                render: prevState.revisions.render + 1,
+              };
+              if (eng !== null) {
+                const commit: EngineCommit = {
                   revision: nextRevisions.render,
                   structure: {
                     pointCount: scene.count,
                     positions: next,
                     links: scene.links,
                   },
-                });
+                };
+                const syncIndex = structuralPointImageIndex();
+                if (syncIndex !== null) commit.resources = { pointImageIndex: syncIndex };
+                commitToEngine(eng, commit);
                 nextRevisions.appliedRender = eng.appliedRevision();
                 eng.pause();
-                const patch: Partial<GraphStoreState> = { revisions: nextRevisions };
-                if (prevState.simulationRunning) patch.simulationRunning = false;
-                publish(patch);
+              } else {
+                pauseOnReadyAfterRestore = true;
               }
+              const patch: Partial<GraphStoreState> = { revisions: nextRevisions };
+              if (prevState.simulationRunning) patch.simulationRunning = false;
+              publish(patch);
             }
           }
 
@@ -10728,18 +10793,47 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
      * stored reference is not a pin — a filter change between obtaining
      * and consuming a stream would alter its supposedly frozen output. */
     visibleIds: ReadonlySet<NodeId> | null;
+    visibleEdgeIds: ReadonlySet<EdgeId> | null;
   }
 
-  function captureExportPin(): ExportPin | null {
+  function captureExportPin(scope: 'visible' | 'accepted'): ExportPin | null {
     if (accepted === null) return null;
     let visibleIds: ReadonlySet<NodeId> | null = null;
-    if (scene !== null) {
+    let visibleEdgeIds: ReadonlySet<EdgeId> | null = null;
+    if (scope === 'visible' && scene !== null) {
       const slots = visibleSlotsOf(scene, softMask);
       const ids = new Set<NodeId>();
       for (const i of slots) ids.add(scene.idByIndex[i]!);
       visibleIds = ids;
+      const edgeIds = new Set<EdgeId>();
+      const physicalLinks = scene.groups?.physicalLinkCount ?? scene.linkCount;
+      for (let k = 0; k < physicalLinks; k++) {
+        if (!maskEdgeVisibleAt(k)) continue;
+        const source = scene.idByIndex[scene.links[2 * k]!]!;
+        const target = scene.idByIndex[scene.links[2 * k + 1]!]!;
+        if (ids.has(source) && ids.has(target)) edgeIds.add(scene.edgeIdByIndex[k]!);
+      }
+      // Parallel grouping replaces physical edges with aggregate scene rows.
+      // Export their accepted rows, never synthetic keys. An aggregate's mask
+      // says ANY member passes, so check each underlying edge's hide predicate
+      // before pinning it; dimmed rows remain visible and exportable.
+      if (groupRewrite !== null) {
+        const model = renderModel()!;
+        for (let j = 0; j < groupRewrite.metaEdges.length; j++) {
+          if (!maskEdgeVisibleAt(physicalLinks + j)) continue;
+          for (const k of groupRewrite.metaEdges[j]!.underlying) {
+            const edge = model.edges[k]!;
+            if (!ids.has(edge.source) || !ids.has(edge.target)) continue;
+            if (activeFilterMode === 'hide' && compiledEdgeSelector !== null && !compiledEdgeSelector.test(edge)) {
+              continue;
+            }
+            edgeIds.add(edge.id);
+          }
+        }
+      }
+      visibleEdgeIds = edgeIds;
     }
-    return { accepted, scene, visibleIds };
+    return { accepted, scene, visibleIds, visibleEdgeIds };
   }
 
   /** Visible-node id set under a pin; null = everything visible (no scene). */
@@ -10754,18 +10848,14 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     if (scope === 'accepted') return pin.accepted.nodes.length + pin.accepted.edges.length;
     const visible = pinnedVisibleIds(pin);
     if (visible === null) return pin.accepted.nodes.length + pin.accepted.edges.length;
-    let count = visible.size;
-    for (const e of pin.accepted.edges) {
-      if (visible.has(e.source) && visible.has(e.target)) count++;
-    }
-    return count;
+    return visible.size + pin.visibleEdgeIds!.size;
   }
 
   async function exportData(
     scope: 'visible' | 'accepted' = 'visible',
     opts?: { limit?: number },
   ): Promise<{ nodes: readonly GraphNode<N>[]; edges: readonly AcceptedEdge<E>[] }> {
-    const pin = captureExportPin();
+    const pin = captureExportPin(scope);
     if (pin === null) return { nodes: [], edges: [] };
     const rowCount = pinnedRowCount(pin, scope);
     const limit = opts?.limit ?? 100_000;
@@ -10781,16 +10871,14 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     if (visible === null) return { nodes: pin.accepted.nodes, edges: pin.accepted.edges };
     return {
       nodes: pin.accepted.nodes.filter((n) => visible.has(n.id)),
-      edges: pin.accepted.edges.filter(
-        (e) => visible.has(e.source) && visible.has(e.target),
-      ),
+      edges: pin.accepted.edges.filter((e) => pin.visibleEdgeIds!.has(e.id)),
     };
   }
 
   function exportDataStream(
     scope: 'visible' | 'accepted' = 'visible',
   ): AsyncGenerator<string, void, undefined> {
-    const pin = captureExportPin(); // EAGER — see ExportPin
+    const pin = captureExportPin(scope); // EAGER — see ExportPin
     return (async function* dataRows(): AsyncGenerator<string, void, undefined> {
       if (pin === null) return;
       const visible = scope === 'visible' ? pinnedVisibleIds(pin) : null;
@@ -10801,7 +10889,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         yield JSON.stringify({ kind: 'node', value: n }) + '\n';
       }
       for (const e of pin.accepted.edges) {
-        if (visible !== null && (!visible.has(e.source) || !visible.has(e.target))) continue;
+        if (pin.visibleEdgeIds !== null && !pin.visibleEdgeIds.has(e.id)) continue;
         yield JSON.stringify({ kind: 'edge', value: e }) + '\n';
       }
     })();
@@ -11129,6 +11217,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     },
     resumeSimulation: () => {
       if (destroyed) return;
+      pauseOnReadyAfterRestore = false;
       const eng = engineIfReady();
       if (eng === null) return;
       eng.start();

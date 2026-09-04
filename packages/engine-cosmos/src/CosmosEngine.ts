@@ -114,6 +114,17 @@ interface CosmosStoreLike {
 }
 
 /**
+ * Exact-pin 3.4.0 camera seam: private in the d.ts, but the runtime helper
+ * used by native fitView. It reads transition destinations while positions
+ * animate and live GPU positions otherwise. Using the same helper keeps
+ * the clamp decision and native fallback on the same coordinate snapshot.
+ * The real-engine transition regression pins this dependency.
+ */
+interface CosmosFitViewReader {
+  getFitViewPositions(): Float32Array;
+}
+
+/**
  * Extracts click modifiers from a cosmos-forwarded event. Duck-typed rather
  * than `instanceof MouseEvent`: node-safe and cross-realm-safe. Returns
  * undefined when the event carries no modifier state.
@@ -400,8 +411,8 @@ export class CosmosEngine implements GraphEngine {
     const w = div.clientWidth;
     const h = div.clientHeight;
     if (!(w > 0) || !(h > 0)) return false;
-    const raw = graph.getPointPositions();
-    if (raw === undefined || raw.length === 0) return false;
+    const raw = (graph as unknown as CosmosFitViewReader).getFitViewPositions();
+    if (raw.length === 0) return false;
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
@@ -409,7 +420,7 @@ export class CosmosEngine implements GraphEngine {
     for (let i = 0; i + 1 < raw.length; i += 2) {
       const x = raw[i]!;
       const y = raw[i + 1]!;
-      if (Number.isNaN(x) || Number.isNaN(y)) continue;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;

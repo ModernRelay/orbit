@@ -128,6 +128,26 @@ describe('normalizeNode identity and value normalization', () => {
     expect((node.attrs as Record<string, unknown>)['at']).toBe('2023-11-14T22:13:20.123Z');
   });
 
+  it.each(['node', 'edge'] as const)('normalizes scalar encodings inside %s list properties', (kind) => {
+    const properties = 'days: [Date] times: [DateTime] payloads: [Blob] missing: [Date]? tags: [String]';
+    const schema = parsePgSchema(`node Event { ${properties} } edge Next: Event -> Event { ${properties} }`);
+    const data = {
+      id: 'e', days: [0, -1], times: [0, 1000], missing: null,
+      payloads: ['base64:aGVsbG8=', 's3://bucket/key.bin'], tags: ['one', 'two'],
+    };
+    const normalized = kind === 'node'
+      ? normalizeNode({ type: 'Event', data }, schema)
+      : normalizeEdge({ edge: 'Next', from: 'a', to: 'b', data }, schema);
+    expect(normalized.attrs).toMatchObject({
+      days: ['1970-01-01', '1969-12-31'],
+      times: ['1970-01-01T00:00:00.000Z', '1970-01-01T00:00:01.000Z'],
+      payloads: ['data:application/octet-stream;base64,aGVsbG8=', 's3://bucket/key.bin'],
+      missing: null,
+      tags: ['one', 'two'],
+    });
+    expect(data.days).toEqual([0, -1]); // normalization leaves source rows intact
+  });
+
   it('converts inline base64: blobs to data: URIs, leaves URI refs verbatim', () => {
     const inline = normalizeNode(
       { type: 'Event', data: { id: 'e', payload: 'base64:aGVsbG8=' } },

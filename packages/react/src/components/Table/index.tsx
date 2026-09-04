@@ -3,8 +3,8 @@
  * virtualized crossfiltered tabular view.
  *
  * Rows are nodes (default) or edges; columns derive from the union of attr
- * keys over a BOUNDED sampled prefix (`columnSample`, default 200) plus the
- * identity keys, or are picked explicitly via `columns`. Every cell renders
+ * keys over a BOUNDED sampled prefix before masking (`columnSample`, default
+ * 200) plus the identity keys, or are picked explicitly via `columns`. Every cell renders
  * as a TEXT NODE; `renderCell` replaces cell content.
  *
  * ## Virtualization
@@ -324,15 +324,16 @@ function GraphTableInner(
   const columnsProp = props.columns;
   const columns = useMemo<readonly GraphTableColumn[]>(() => {
     if (columnsProp !== undefined) return normalizeColumns(columnsProp);
-    const sample = baseRows.slice(0, columnSample).map((row) => {
-      return row.edge !== undefined
-        ? (row.edge.attrs as Record<string, unknown> | undefined)
-        : ((instance.getNode(row.key) as GraphNode<any> | undefined)?.attrs as
-            | Record<string, unknown>
-            | undefined);
-    });
+    void version;
+    // The table's own brush can hide every row. Discovering columns from
+    // those masked rows would discard the attributes needed to match the
+    // next query, trapping a nonempty filter at zero results.
+    const sample =
+      mode === 'edges'
+        ? (edgesProp ?? []).slice(0, columnSample).map((edge) => edge.attrs)
+        : instance.getSceneNodeIds().slice(0, columnSample).map((id) => instance.getNode(id)?.attrs);
     return deriveColumns(mode, sample);
-  }, [instance, baseRows, mode, columnsProp, columnSample]);
+  }, [instance, version, mode, edgesProp, columnsProp, columnSample]);
 
   const valueOf = useCallback(
     (row: GraphTableRowRef, key: string): unknown =>

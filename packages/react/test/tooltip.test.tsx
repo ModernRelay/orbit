@@ -218,6 +218,36 @@ describe('<GraphTooltip> delay & visibility', () => {
 });
 
 describe('<GraphTooltip> content', () => {
+  it('refreshes same-ID attributes without restarting an active hover delay', async () => {
+    vi.useFakeTimers();
+    const { instance, engine, view } = await setup();
+    act(() => { engine.injectPointHover(0); });
+    act(() => { vi.advanceTimersByTime(100); });
+    act(() => {
+      instance.applyHostUpdate({
+        data: {
+          ...defaultSnapshot, sourceRevision: 2,
+          nodes: [{ id: 'a', attrs: { label: 'Updated', weight: 4 } }, { id: 'b' }],
+        },
+      });
+    });
+    act(() => { vi.advanceTimersByTime(49); });
+    expect(card(view)).toBeNull();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(card(view)!.textContent).toBe('Updatedweight4');
+
+    act(() => {
+      instance.applyHostUpdate({
+        data: {
+          ...defaultSnapshot, sourceRevision: 3,
+          nodes: [{ id: 'a', attrs: { label: 'Newest', weight: 5 } }, { id: 'b' }],
+        },
+      });
+    });
+    expect(instance.store.getState().hover.nodeId).toBe('a');
+    expect(card(view)!.textContent).toBe('Newestweight5');
+  });
+
   it('renders label + attr rows as TEXT NODES only (hostile attrs stay literal)', async () => {
     vi.useFakeTimers();
     const payload = '<script>alert(1)</script><img src=x onerror=alert(1)>';

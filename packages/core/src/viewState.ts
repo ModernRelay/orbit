@@ -500,7 +500,8 @@ export type SetViewStateResult =
         | 'restore-pending'
         /** The host never reflected the intent within the window. */
         | 'restore-timeout'
-        /** The host reflected DIFFERENT values than the intent asked for. */
+        /** The host reflected different values, or dataset replacement /
+         * destruction invalidated the staged transaction. */
         | 'restore-diverged';
       problems: readonly string[];
     };

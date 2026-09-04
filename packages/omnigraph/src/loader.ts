@@ -398,6 +398,7 @@ export function createOmnigraphSource(options: OmnigraphSourceOptions): Omnigrap
         onProgress?.(buffered.progress);
       }
       bufferedBatches.length = 0;
+      throwIfAborted(signal);
       await finalSession.commit();
     }
 
@@ -446,6 +447,7 @@ export function createOmnigraphSource(options: OmnigraphSourceOptions): Omnigrap
       // BEFORE commit.
       throwIfAborted(signal);
       const headAfter = await newestHead(signal);
+      throwIfAborted(signal);
       const counts = { lines, nodes: nodeCount, edges: edgeCount, bytes };
 
       if (driftPolicy === 'accept-warn') {

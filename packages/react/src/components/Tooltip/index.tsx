@@ -153,6 +153,11 @@ function useHoveredTarget(instance: AnyGraphInstance, edges: boolean): HoverKey 
     if (edges && hover.edgeId !== null) return encodeHover('edge', hover.edgeId);
     return null;
   }, [instance, edges]);
+  // The same hovered ID can receive new attrs in a newer snapshot. Refresh
+  // content on that publication without changing the hover key, so neither
+  // an already visible card nor its pending delay restarts.
+  const getModelRevision = useCallback(() => instance.store.getState().revisions.model, [instance]);
+  useSyncExternalStore(subscribe, getModelRevision, getModelRevision);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 

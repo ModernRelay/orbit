@@ -98,6 +98,11 @@ const h = vi.hoisted(() => {
     getZoomLevel(): number { return this.zoomLevel; }
     pointPositions: number[] = [1, 2, 3, 4];
     getPointPositions(): number[] { return this.pointPositions; }
+    /** Native fit uses destination positions while a position transition runs. */
+    fitViewPositions: number[] | null = null;
+    getFitViewPositions(): Float32Array {
+      return Float32Array.from(this.fitViewPositions ?? this.pointPositions);
+    }
     screenToSpacePosition(p: [number, number]): [number, number] {
       return [p[0] * 2 - 5, p[1] * 2 - 5];
     }
@@ -1101,6 +1106,27 @@ describe('CosmosEngine', () => {
       graph.pointPositions = [0, 0, 4000, 3000]; // natural fit ~0.16
       engine.fitView({ durationMs: 300, maxZoom: 1.5 });
       expect(graph.calls).toEqual([{ method: 'fitView', args: [300, undefined] }]);
+    });
+
+    it('clamps the destination of a shrinking position transition', async () => {
+      const { engine, graph } = await mountedSized(1000, 1000);
+      graph.pointPositions = [0, 0, 1000, 1000];
+      graph.fitViewPositions = [0, 0, 10, 10];
+      engine.fitView({ durationMs: 0, maxZoom: 1.5 });
+      expect(graph.calls).toEqual([
+        {
+          method: 'setZoomTransformByPointPositions',
+          args: [Float32Array.of(5, 5), 0, 1.5, undefined],
+        },
+      ]);
+    });
+
+    it('fits the expanding destination instead of clamping around old positions', async () => {
+      const { engine, graph } = await mountedSized(1000, 1000);
+      graph.pointPositions = [0, 0, 10, 10];
+      graph.fitViewPositions = [0, 0, 1000, 1000];
+      engine.fitView({ durationMs: 0, maxZoom: 1.5 });
+      expect(graph.calls).toEqual([{ method: 'fitView', args: [0, undefined] }]);
     });
 
     it('a single point clamps at maxZoom (degenerate bbox fits at any zoom)', async () => {

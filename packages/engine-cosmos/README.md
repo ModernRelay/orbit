@@ -39,6 +39,12 @@ Chromium):
 
 ## Interaction surface
 
+The `fitView({ maxZoom })` clamp uses the same position snapshot as native
+Cosmos fitting: destination positions during a position transition, live GPU
+positions otherwise. This uses the exact-pin 3.4.0 runtime helper
+`getFitViewPositions` (private in its TypeScript declaration), with shrinking
+and expanding transitions covered by the demo's real-engine regression suite.
+
 Coordinate-space facts verified against the exact-pin 3.4.0 dist (see the
 `CosmosEngine.ts` module header for the exact evidence):
 

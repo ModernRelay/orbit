@@ -361,6 +361,15 @@ describe('async source cleanup across preparation failures', () => {
 });
 
 describe('deep BigInt normalization in the Arrow/Parquet shared utility', () => {
+  it('recurses into null-prototype records and records with an own constructor', () => {
+    const nested = Object.assign(Object.create(null) as Record<string, unknown>, { value: 7n });
+    const source = Object.fromEntries([['constructor', 1n], ['__proto__', nested]]);
+    const normalized = normalizeJsonSafeValue(source) as Record<string, unknown>;
+    expect(normalized).toEqual(Object.fromEntries([['constructor', 1], ['__proto__', { value: 7 }]]));
+    expect(Object.getPrototypeOf(normalized)).toBe(Object.prototype);
+    expect(Object.prototype.hasOwnProperty.call(normalized, '__proto__')).toBe(true);
+  });
+
   it('reaches list/struct leaves; safe integers become numbers, wide ones strings', () => {
     const nested = normalizeJsonSafeValue({
       scalar: 7n,
