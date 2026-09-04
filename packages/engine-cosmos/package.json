@@ -1,6 +1,6 @@
 {
   "name": "@modernrelay/orbit-engine-cosmos",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "cosmos.gl engine adapter for Orbit: GPU force layout, native picking, context-loss recovery.",
   "license": "MIT",
   "repository": {
