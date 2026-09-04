@@ -231,8 +231,8 @@ function headerBanner(fingerprintLine: string, extra: string | undefined): strin
 /**
  * Generate a self-contained TypeScript module of typed attrs from a parsed
  * `.pg` schema: one `<Name>Props` interface per node type, one
- * `<Name>EdgeProps` per edge type (suffixed so a node and an edge sharing a
- * name cannot collide), `NodeAttrs`/`EdgeAttrs` discriminated unions on the
+ * `<Name>EdgeProps` per edge type (with an additional numeric suffix when
+ * either preferred name is already used), `NodeAttrs`/`EdgeAttrs` discriminated unions on the
  * adapter-injected `'orbit:type'` field, and a `TypeMap` lookup interface with
  * `NodeTypeName`/`EdgeTypeName` key unions.
  *
@@ -245,13 +245,32 @@ export function generateTypes(schema: PgSchema, opts?: GenerateTypesOptions): st
       : `Schema fingerprint: ${schemaFingerprint(JSON.stringify(schema))} (parsed model — regenerate from .pg source for the source fingerprint).`;
   const lines = headerBanner(fingerprintLine, opts?.header);
 
+  // Reserve every preferred name before allocating collision suffixes, so
+  // disambiguating one member cannot steal a later member's public name.
+  const reserved = new Set([
+    'NodeAttrs', 'EdgeAttrs', 'TypeMap', 'NodeTypeName', 'EdgeTypeName',
+    ...schema.nodes.map((n) => `${n.name}Props`),
+    ...schema.edges.map((e) => `${e.name}EdgeProps`),
+  ]);
+  const used = new Set<string>();
+  function allocateName(preferred: string): string {
+    let name = preferred;
+    let suffix = 2;
+    while (used.has(name)) {
+      do {
+        name = `${preferred}_${suffix++}`;
+      } while (reserved.has(name));
+    }
+    used.add(name);
+    return name;
+  }
   const nodeMembers = schema.nodes.map((n) => ({
     typeName: n.name,
-    interfaceName: `${n.name}Props`,
+    interfaceName: allocateName(`${n.name}Props`),
   }));
   const edgeMembers = schema.edges.map((e) => ({
     typeName: e.name,
-    interfaceName: `${e.name}EdgeProps`,
+    interfaceName: allocateName(`${e.name}EdgeProps`),
   }));
 
   schema.nodes.forEach((n, i) => {

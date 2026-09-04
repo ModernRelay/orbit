@@ -19,6 +19,7 @@
 
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import type { GraphViewState } from '@modernrelay/orbit-core';
 
 const READY_DOT = '[data-testid="status-dot"][title="ready"]';
 const SELECTED_COUNT = '[data-testid="selected-count"]';
@@ -109,6 +110,55 @@ test('a corrupted ?view= applies NOTHING (the atomic rule, adversarially)', asyn
   await expect(page.locator(SELECTED_COUNT)).toHaveText('0');
   await page.getByRole('button', { name: 'Select all' }).click();
   await expect(page.locator(SELECTED_COUNT)).toHaveText('3,000');
+});
+
+test('share → reload restores selected styling and keeps the style controls live', async ({ page }) => {
+  await page.goto('/');
+  await ready(page);
+  const simulation = page.locator('[data-orbit-toolbar-button="simulation"]');
+  if (await simulation.getAttribute('aria-pressed') === 'true') await simulation.click();
+
+  // Use the semantic surface to select one node without GPU picking. A
+  // nonempty controlled selection exercises aggregate host reflection.
+  await page.getByTestId('navigator-toggle').click();
+  await page.getByRole('option').first().press('Space');
+  await expect(page.locator(SELECTED_COUNT)).toHaveText('1');
+  await page.getByTestId('navigator-toggle').click();
+  await page.getByTestId('node-color-mode').selectOption('degree');
+  await page.getByTestId('node-size-mode').selectOption('scale');
+  await page.getByTestId('edge-arrows').check();
+  await page.getByTestId('show-links').uncheck();
+  await page.getByTestId('theme-light').check();
+  await page.getByTestId('share-view').click();
+  await page.waitForFunction(() => window.location.search.includes('view='));
+  const url = page.url();
+  const saved = JSON.parse(new URL(url).searchParams.get('view')!) as GraphViewState;
+  expect(saved.selection.nodeIds).toHaveLength(1);
+  expect(saved.styling).toMatchObject({ showLinks: false, edgeArrows: true, theme: 'light' });
+
+  await page.goto(url);
+  await ready(page);
+  await expect(page.locator(SELECTED_COUNT)).toHaveText('1');
+  await expect(page.getByTestId('app-root')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByTestId('node-color-mode')).toHaveValue('degree');
+  await expect(page.getByTestId('node-size-mode')).toHaveValue('scale');
+  await expect(page.getByTestId('edge-arrows')).toBeChecked();
+  await expect(page.getByTestId('show-links')).not.toBeChecked();
+  await expect(page.getByTestId('legend-panel')).toContainText('degree');
+  await expect(page.getByTestId('legend-panel-size')).toBeVisible();
+
+  // Re-sharing reads actual instance state, so these assertions cover more
+  // than the controls' checked/value attributes.
+  await page.getByTestId('share-view').click();
+  const restored = JSON.parse(new URL(page.url()).searchParams.get('view')!) as GraphViewState;
+  expect(restored.selection).toEqual(saved.selection);
+  expect(restored.styling).toEqual(saved.styling);
+
+  await page.getByTestId('node-color-mode').selectOption('category');
+  await page.getByTestId('node-size-mode').selectOption('accessor');
+  await page.getByTestId('show-links').check();
+  await expect(page.getByTestId('legend-panel').locator('[data-orbit-legend-row]')).toHaveCount(6);
+  await expect(page.getByTestId('legend-panel-size')).toHaveCount(0);
 });
 
 test('a stale dataRef trips the mismatch banner; Restore anyway opts in', async ({ page }) => {

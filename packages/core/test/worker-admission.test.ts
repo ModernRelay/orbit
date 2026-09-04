@@ -78,6 +78,85 @@ async function rig(over: Partial<CreateGraphInstanceOptions<NAttrs, EAttrs>> = {
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
+/** Run the real worker runtime, but let the test decide when replies land. */
+function delayedWorkerDouble() {
+  const double = createWorkerDouble();
+  const replies: WorkerEnvelope[] = [];
+  const shim = {
+    onmessage: null as ((ev: { data: unknown }) => void) | null,
+    postMessage(msg: unknown, transfers?: Transferable[]) {
+      double.post(msg as WorkerEnvelope, (transfers ?? []) as ArrayBuffer[]);
+    },
+    terminate: () => double.terminate(),
+  };
+  double.onReply((reply) => replies.push(reply));
+  return {
+    worker: shim as unknown as Worker,
+    release() {
+      expect(replies.length).toBeGreaterThan(0);
+      for (const reply of replies.splice(0)) shim.onmessage?.({ data: reply });
+    },
+  };
+}
+
+describe('worker supersession by ingestion', () => {
+  it('a newer replace commit survives a late worker reply without detaching rejected data', async () => {
+    const delayed = delayedWorkerDouble();
+    const { instance, engine } = await rig({
+      execution: 'worker',
+      workerFactory: { create: () => delayed.worker },
+    });
+    try {
+      const stale = { ...columnarFixture(), bufferOwnership: 'transfer' as const };
+      instance.applyHostUpdate({ data: stale });
+      const replacement = instance.beginIngest({
+        purpose: 'replace', datasetKey: 'new', sourceRevision: 2, baseModelRevision: 0,
+      });
+      await replacement.append({
+        sequence: 0, batchId: 'new', nodes: [{ id: 'new', attrs: { label: 'NEW' } }], edges: [],
+      });
+      await replacement.commit();
+      expect(instance.getSceneNodeIds()).toEqual(['new']);
+      const before = instance.store.getState();
+      const commits = engine.commits.length;
+      delayed.release();
+      await flush();
+      expect(instance.store.getState()).toBe(before);
+      expect(engine.commits).toHaveLength(commits);
+      expect(stale.nodes.ids.codes.byteLength).toBeGreaterThan(0);
+    } finally {
+      instance.destroy();
+    }
+  });
+
+  it('a newer overlay publication survives a late worker snapshot', async () => {
+    const delayed = delayedWorkerDouble();
+    const { instance } = await rig({
+      execution: 'worker', workerFactory: { create: () => delayed.worker },
+    });
+    try {
+      instance.applyHostUpdate({ data: snap(1, ['base']) });
+      instance.applyHostUpdate({ data: columnarFixture() });
+      const overlay = instance.beginIngest({
+        purpose: 'overlay', datasetKey: 'ds', overlayId: 'latest',
+        baseModelRevision: instance.getRevisions().model,
+      });
+      await overlay.append({
+        sequence: 0, batchId: 'extra', nodes: [{ id: 'extra', attrs: { label: 'EXTRA' } }], edges: [],
+      });
+      await overlay.commit();
+      const before = instance.store.getState();
+      delayed.release();
+      await flush();
+      expect(instance.store.getState()).toBe(before);
+      expect(instance.getSceneNodeIds()).toEqual(['base', 'extra']);
+      expect(instance.getOverlayIds()).toEqual(['latest']);
+    } finally {
+      instance.destroy();
+    }
+  });
+});
+
 describe('async admission (execution: auto + a live lane)', () => {
   it('rejects non-string entries in every dictionary before worker encoding', async () => {
     const create = vi.fn(workerFromDouble);

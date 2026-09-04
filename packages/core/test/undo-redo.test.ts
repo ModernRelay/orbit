@@ -35,6 +35,75 @@ const vDim: DimensionSpec<NAttrs> = {
   get: (n) => n.id.length + (n.id.codePointAt(0)! - 96), // a→1, b→2, c→3 (+1 length) — monotonic
 };
 
+describe('history restores scope-dependent scales', () => {
+  it.each(['scope', 'hidden', 'brush'] as const)(
+    'undo/redo and view-state restore refresh %s domains, colors, and sizes atomically',
+    async (action) => {
+      for (const mounted of [true, false]) {
+        const h = makeInstance({ fitViewOnFirstData: false });
+        const { instance } = h;
+        try {
+          if (mounted) await instance.attach(container);
+          const scope = action === 'scope' ? 'hard-scope' : 'visible';
+          instance.applyHostUpdate({
+            data: snap(1, ['a', 'b', 'c'], [['a', 'b'], ['b', 'c']]),
+            nodeColor: { kind: 'sequential', metric: 'degree', range: ['#000', '#fff'], domain: { scope } },
+            nodeSize: { kind: 'sequential', metric: 'degree', range: [2, 10], domain: { scope } },
+            crossfilter: [{ key: 'id', kind: 'categorical', get: (node) => node.id }],
+          });
+          // DomainPolicy stays with the app; the wire styling intentionally
+          // omits it. Restore exploration alone to keep testing these scales.
+          const { styling: _styling, ...saved } = instance.getViewState();
+          const engine = h.engines[0];
+          const initialColors = engine?.lastBuffer('pointColor')?.slice();
+          expect(instance.getScaleInfo('nodeSize')!.domain).toEqual([1, 2]);
+          if (action === 'scope') instance.applyHostUpdate({ subgraph: { seedIds: ['a', 'c'] } });
+          else if (action === 'hidden') instance.hideNodes(['b']);
+          else await instance.getCrossfilterSession()!.setBrush('id', { excluded: ['b'] });
+          expect(instance.getScaleInfo('nodeColor')!.domain).toEqual([1, 1]);
+          expect(instance.getScaleInfo('nodeSize')!.domain).toEqual([1, 1]);
+
+          let publications = 0;
+          const unsubscribe = instance.store.subscribe(() => { publications++; });
+          const walk = async (direction: 'undo' | 'redo' | 'restore') => {
+            publications = 0;
+            const commits = engine?.commits.length ?? 0;
+            if (direction === 'restore') await instance.setViewState(saved);
+            else expect(instance[direction]()).toBe(true);
+            expect(publications).toBe(1);
+            if (engine !== undefined) expect(engine.commits.length - commits).toBe(1);
+          };
+          await walk('undo');
+          expect(instance.getVisibleNodeIds()).toEqual(['a', 'b', 'c']);
+          expect(instance.getScaleInfo('nodeColor')!.domain).toEqual([1, 2]);
+          expect(instance.getScaleInfo('nodeSize')!.domain).toEqual([1, 2]);
+          if (engine !== undefined) {
+            expect(engine.lastBuffer('pointColor')).toEqual(initialColors);
+            expect(Array.from(engine.lastBuffer('pointSize')!)).toEqual([2, 10, 2]);
+          }
+          await walk('redo');
+          expect(instance.getVisibleNodeIds()).toEqual(['a', 'c']);
+          expect(instance.getScaleInfo('nodeSize')!.domain).toEqual([1, 1]);
+          if (engine !== undefined) {
+            expect(engine.lastBuffer('pointSize')![0]).toBe(6);
+            expect(engine.lastBuffer('pointColor')![0]).toBeCloseTo(128 / 255);
+          }
+          await walk('restore');
+          expect(instance.getScaleInfo('nodeSize')!.domain).toEqual([1, 2]);
+          expect(instance.getScaleInfo('nodeColor')!.domain).toEqual([1, 2]);
+          if (engine !== undefined) {
+            expect(engine.lastBuffer('pointColor')).toEqual(initialColors);
+            expect(Array.from(engine.lastBuffer('pointSize')!)).toEqual([2, 10, 2]);
+          }
+          unsubscribe();
+        } finally {
+          instance.destroy();
+        }
+      }
+    },
+  );
+});
+
 describe('selection undo/redo', () => {
   it('undoes and redoes selection mutations exactly, re-pushing indices', async () => {
     const { instance, engine } = await readyRig();

@@ -132,6 +132,17 @@ afterEach(() => {
 // --- tests ------------------------------------------------------------------
 
 describe('<GraphNavigator> bounded rendering & paging', () => {
+  it('updates the entry roster immediately when isolation changes or clears', async () => {
+    const { instance, view } = await setup({ snapshot: handSnapshot });
+    act(() => {
+      instance.applyHostUpdate({ subgraph: { seedIds: ['b'], hops: 0 } });
+    });
+    expect(optionTexts(view)).toEqual(['b']);
+    expect(pageStatus(view).textContent).toBe('All nodes: page 1 of 1 (1 item)');
+    act(() => { instance.resetIsolation(); });
+    expect(optionTexts(view)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
   it('renders a bounded, paged entry list — never one DOM row per entity', async () => {
     const { view } = await setup({ snapshot: chainSnapshot(200) });
 
@@ -228,6 +239,28 @@ describe('<GraphNavigator> roving tabindex & keyboard model', () => {
 });
 
 describe('<GraphNavigator> Enter → focusNode neighborhood re-rooting', () => {
+  it('invalidates the focused neighborhood and learned degrees on scene rewrites', async () => {
+    const { instance, view } = await setup({ snapshot: handSnapshot });
+    fireEvent.keyDown(listbox(view), { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox(view), { key: 'Enter' });
+    expect(optionTexts(view)).toEqual(['b · 2 neighbors', 'a', 'c']);
+
+    act(() => {
+      instance.applyHostUpdate({ subgraph: { seedIds: ['b', 'c'], hops: 0 } });
+    });
+    expect(optionTexts(view)).toEqual(['b', 'c']);
+    expect(view.queryByText('Focused node')).toBeNull();
+    fireEvent.keyDown(listbox(view), { key: 'Enter' });
+    expect(optionTexts(view)).toEqual(['b · 1 neighbor', 'c']);
+
+    act(() => { instance.resetIsolation(); });
+    expect(optionTexts(view)).toEqual(['a', 'b', 'c', 'd']);
+    act(() => { instance.foldNode('b', { memberIds: ['a'] }); });
+    expect(optionTexts(view)).toEqual(['b', 'c', 'd']);
+    act(() => { instance.unfoldNode('b'); });
+    expect(optionTexts(view)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
   it('calls focusNode and re-roots to the 1-hop neighborhood (engine adjacency route)', async () => {
     const { view, instance, engine } = await setup({ snapshot: handSnapshot });
     const focusSpy = vi.spyOn(instance, 'focusNode');

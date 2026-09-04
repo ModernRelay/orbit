@@ -54,8 +54,8 @@
  * and invalidated on model change; self-loops are excluded and parallel
  * edges deduplicate. The navigator caches the resolved neighborhood and the
  * per-node neighbor counts it has learned in refs keyed by
- * `revisions.model`; a model change drops the (now stale) transient root and
- * returns to the entry list. Neighbor counts therefore appear on items whose
+ * `revisions.model` and `revisions.scope`; a scene change drops the stale
+ * transient root and returns to the entry list. Neighbor counts therefore appear on items whose
  * neighborhood has been resolved (the current and previously visited roots);
  * a public O(1) degree read is a post-v0.4 core surface.
  *
@@ -129,8 +129,9 @@ interface NavSection {
 interface NavRoot {
   id: NodeId;
   neighbors: readonly NodeId[];
-  /** Model revision the neighborhood was resolved against. */
+  /** Model and scope revisions the neighborhood was resolved against. */
   model: number;
+  scope: number;
 }
 
 interface NavStoreSlice {
@@ -138,6 +139,7 @@ interface NavStoreSlice {
   pins: ReadonlyMap<NodeId, readonly [number, number]>;
   hidden: ReadonlySet<NodeId>;
   model: number;
+  scope: number;
   nodeCount: number;
   /** Last completed search; null hides the section. */
   search: { query: string; results: readonly SearchResult[] } | null;
@@ -160,6 +162,7 @@ function useNavStoreSlice(instance: AnyGraphInstance): NavStoreSlice {
       prev.pins === s.pins &&
       prev.hidden === s.hiddenNodeIds &&
       prev.model === s.revisions.model &&
+      prev.scope === s.revisions.scope &&
       prev.nodeCount === s.nodeCount &&
       prev.search === s.search
     ) {
@@ -170,6 +173,7 @@ function useNavStoreSlice(instance: AnyGraphInstance): NavStoreSlice {
       pins: s.pins,
       hidden: s.hiddenNodeIds,
       model: s.revisions.model,
+      scope: s.revisions.scope,
       nodeCount: s.nodeCount,
       search: s.search,
     };
@@ -228,7 +232,9 @@ export function GraphNavigator(props: GraphNavigatorProps): ReactElement {
   void props.keyboardMode;
 
   const baseId = useId();
-  const [root, setRoot] = useState<NavRoot | null>(null);
+  const [storedRoot, setRoot] = useState<NavRoot | null>(null);
+  const root =
+    storedRoot?.model === slice.model && storedRoot.scope === slice.scope ? storedRoot : null;
   const [pages, setPages] = useState<Record<PagedListKey, number>>({
     search: 0,
     neighbors: 0,
@@ -240,20 +246,21 @@ export function GraphNavigator(props: GraphNavigatorProps): ReactElement {
 
   /** Stable per-node DOM-id tokens (node ids may contain arbitrary text). */
   const tokensRef = useRef<Map<NodeId, number>>(new Map());
-  /** Learned neighbor counts, cached per model revision (see module JSDoc). */
-  const degreesRef = useRef<{ model: number; counts: Map<NodeId, number> }>({
+  /** Neighborhoods depend on both the accepted model and scene rewrites. */
+  const degreesRef = useRef<{ model: number; scope: number; counts: Map<NodeId, number> }>({
     model: -1,
+    scope: -1,
     counts: new Map(),
   });
   const itemsRef = useRef<Map<string, HTMLElement>>(new Map());
   /** Set by keyboard handlers so the focus effect moves DOM focus once. */
   const pendingFocusRef = useRef(false);
 
-  // A model change invalidates the resolved neighborhood: drop the transient
-  // root (back to the entry list) rather than rendering stale rows.
+  // Drop the transient root after a scope/fold/group or model change. The
+  // render gate above already prevents one frame of stale neighborhood rows.
   useEffect(() => {
-    if (root !== null && root.model !== slice.model) setRoot(null);
-  }, [root, slice.model]);
+    if (storedRoot !== null && root === null) setRoot(null);
+  }, [storedRoot, root]);
 
   // release the keyboard ring — but ONLY when no pointer hover owns the
   // shared channel (blur while the pointer rests on a canvas node must not
@@ -267,8 +274,8 @@ export function GraphNavigator(props: GraphNavigatorProps): ReactElement {
   useEffect(() => () => releaseEmphasis(), [releaseEmphasis]);
 
   // Idempotent render-time cache reset (ref only — safe under StrictMode).
-  if (degreesRef.current.model !== slice.model) {
-    degreesRef.current = { model: slice.model, counts: new Map() };
+  if (degreesRef.current.model !== slice.model || degreesRef.current.scope !== slice.scope) {
+    degreesRef.current = { model: slice.model, scope: slice.scope, counts: new Map() };
   }
 
   const accessibility = instance.getAccessibility() as
@@ -487,7 +494,7 @@ export function GraphNavigator(props: GraphNavigatorProps): ReactElement {
     }
     const neighbors = instance.focusNode(row.nodeId);
     degreesRef.current.counts.set(row.nodeId, neighbors.length);
-    setRoot({ id: row.nodeId, neighbors, model: slice.model });
+    setRoot({ id: row.nodeId, neighbors, model: slice.model, scope: slice.scope });
     setPages((p) => ({ ...p, neighbors: 0 }));
     setActiveKey(`root:${row.nodeId}`);
     focusItemSoon();

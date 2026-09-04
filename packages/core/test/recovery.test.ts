@@ -92,6 +92,32 @@ describe('context lost', () => {
 });
 
 describe('context restore', () => {
+  it('replays positions restored while lost without reheating, then consumes that pending pause', async () => {
+    const { instance, engine, engines } = await setupReady();
+    try {
+      engine.injectContextLost();
+      const commits = engine.commits.length;
+      await instance.setViewState({
+        ...instance.getViewState(), positions: [['a', 30, 40]],
+      });
+      expect(engine.commits).toHaveLength(commits); // CPU-only while lost
+      expect(instance.isSimulationRunning()).toBe(false);
+      engine.injectContextRestored();
+      expect(engine.commits).toHaveLength(commits + 1);
+      expect(Array.from(engine.lastStructure!.positions).slice(0, 2)).toEqual([30, 40]);
+      expect(engine.lastCommit!.restart).toBeUndefined();
+      expect(instance.isSimulationRunning()).toBe(false);
+      expect(callsOf(engine, 'pause').length).toBeGreaterThan(0);
+
+      instance.detach();
+      await instance.attach(container);
+      expect(engines.at(-1)!.lastCommit!.restart).toEqual({ alpha: 1 });
+      expect(instance.isSimulationRunning()).toBe(true);
+    } finally {
+      instance.destroy();
+    }
+  });
+
   it('replays the full scene as one commit and re-pushes viewport, selection, pins, positions', async () => {
     const { instance, engine } = await setupReady();
 

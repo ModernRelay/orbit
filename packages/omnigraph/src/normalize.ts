@@ -135,6 +135,9 @@ function formatEpochDay(days: number): string {
 
 function normalizeValue(type: PgType | undefined, value: unknown): unknown {
   if (type === undefined || value === null || value === undefined) return value;
+  if (typeof type === 'object' && type.kind === 'list' && Array.isArray(value)) {
+    return value.map((item) => normalizeValue(type.element, item));
+  }
   if (type === 'Date' && typeof value === 'number' && Number.isInteger(value)) {
     return formatEpochDay(value);
   }

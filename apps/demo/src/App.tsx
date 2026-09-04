@@ -93,6 +93,7 @@ import type {
   GraphSnapshot,
   GraphPerfSnapshot,
   GraphStoreState,
+  GraphViewState,
   GroupSpec,
   InstanceStatus,
   LabelConfig,
@@ -594,6 +595,9 @@ export function App() {
   // --- style state (Style panel) ---
   const [themeBase, setThemeBase] = useState<ThemeBase>('dark');
   const [colorMode, setColorMode] = useState<ColorMode>('category');
+  const [restoredNodeColor, setRestoredNodeColor] = useState<Scale<string, AppNodeAttrs> | null>(
+    null,
+  );
   const [showLabelType, setShowLabelType] = useState(true);
   /**
    * fold counts mirrored from `store.folds` (subscribed below, once
@@ -606,6 +610,9 @@ export function App() {
    */
   const [foldCounts, setFoldCounts] = useState<ReadonlyMap<NodeId, number>>(EMPTY_FOLD_COUNTS);
   const [sizeMode, setSizeMode] = useState<SizeMode>('accessor');
+  const [restoredNodeSize, setRestoredNodeSize] = useState<Scale<number, AppNodeAttrs> | null>(
+    null,
+  );
   const [edgeArrows, setEdgeArrows] = useState(false);
   const [showLinks, setShowLinks] = useState(true);
 
@@ -764,18 +771,20 @@ export function App() {
   // Stream mode keeps the plain accessor in 'category' mode (its cluster
   // count differs from the declared declarative domain).
   const nodeColorProp: Scale<string, AppNodeAttrs> | typeof nodeColor =
-    colorMode === 'degree'
+    restoredNodeColor ??
+    (colorMode === 'degree'
       ? DEGREE_COLOR_SCALE
       : mode.kind === 'omnigraph'
         ? ogColorScale ?? nodeColor
         : mode.kind === 'declarative'
           ? CLUSTER_COLOR_SCALE
-          : nodeColor;
+          : nodeColor);
 
   // M5 keeps a fixed point size in accessor mode (see M5_NODE_SIZE); the
   // degree Scale still applies when the Style panel selects it.
   const nodeSizeProp: Scale<number, AppNodeAttrs> | typeof nodeSize | typeof M5_NODE_SIZE =
-    sizeMode === 'scale' ? DEGREE_SIZE_SCALE : mode.kind === 'semantic' ? M5_NODE_SIZE : nodeSize;
+    restoredNodeSize ??
+    (sizeMode === 'scale' ? DEGREE_SIZE_SCALE : mode.kind === 'semantic' ? M5_NODE_SIZE : nodeSize);
 
   const filter = useMemo<FilterSpec<AppNodeAttrs, AppEdgeAttrs> | null>(() => {
     if (mode.kind === 'omnigraph') {
@@ -1192,18 +1201,56 @@ export function App() {
     [mode.kind, gen],
   );
 
-  /** aggregate reflection: selection is this app's ONE controlled
-   * lane, so the intent reduces to reflecting it in one commit. */
-  const onViewStateRestore = useCallback((intent: { next: unknown }) => {
-    const next = intent.next as { selection?: { nodeIds?: readonly string[] } };
-    setSelection([...(next.selection?.nodeIds ?? [])]);
+  /** Keep both the graph props and their visible controls aligned with a
+   * restored view. Retain serialized scale descriptors verbatim; choosing a
+   * new style in the panel releases the restored override. */
+  const reflectStyling = useCallback((styling: GraphViewState['styling']) => {
+    if (styling === undefined) return;
+    if (styling.theme !== undefined) setThemeBase(styling.theme);
+    if (styling.showLinks !== undefined) setShowLinks(styling.showLinks);
+    if (styling.edgeArrows !== undefined) setEdgeArrows(styling.edgeArrows);
+    if (styling.nodeColor !== undefined) {
+      setRestoredNodeColor(styling.nodeColor);
+      setColorMode(styling.nodeColor.kind === 'categorical' ? 'category' : 'degree');
+    }
+    if (styling.nodeSize !== undefined) {
+      setRestoredNodeSize(styling.nodeSize);
+      setSizeMode('scale');
+    }
   }, []);
+
+  /** A controlled restore delegates styling to the host too. Reflect every
+   * participating prop in this same React commit before acknowledging it. */
+  const onViewStateRestore = useCallback((intent: { next: unknown }) => {
+    const next = intent.next as GraphViewState;
+    setSelection([...next.selection.nodeIds]);
+    setM5Pinned([...next.pinnedNodeIds]);
+    if (m5GroupingRef.current === 'manual') {
+      setM5Groups(next.groups.filter((group): group is GroupSpec => 'id' in group));
+    }
+    reflectStyling(next.styling);
+  }, [reflectStyling]);
+
+  const restoreView = useCallback(async (raw: unknown, ignoreMismatch = false) => {
+    const instance = graphRef.current?.instance;
+    if (instance === undefined) return undefined;
+    const result = await instance.setViewState(raw, { ignoreMismatch });
+    // With no changed controlled slices, core restores internally and emits
+    // no aggregate intent. Mirror styling into the controls after admission.
+    if (result.status === 'applied' && graphRef.current?.instance === instance) {
+      reflectStyling((raw as GraphViewState).styling);
+    }
+    return result;
+  }, [reflectStyling]);
 
   /** Share the current view: ?view= in the URL bar + clipboard best-effort. */
   const shareView = useCallback(() => {
     const handle = graphRef.current;
     if (handle === null) return;
     const state = handle.getViewState();
+    // The demo customizes the base theme's background, which the core
+    // intentionally omits. The host still knows its serializable base.
+    state.styling = { ...state.styling, theme: themeBase };
     const url = new URL(window.location.href);
     url.searchParams.set('view', JSON.stringify(state));
     // Deep-links are for HUMAN-scale state. A pathological state (say, all
@@ -1219,7 +1266,7 @@ export function App() {
     }
     void navigator.clipboard?.writeText(text).catch(() => {});
     window.setTimeout(() => setShareNote(null), 4000);
-  }, []);
+  }, [themeBase]);
 
   /** exports. Each mirrors its output onto window.__lastExport (the
    * e2e observability hook) and triggers a real download. The ?svgcap= param
@@ -1291,21 +1338,21 @@ export function App() {
       // the restored camera wins.
       if (st.status !== 'ready' || st.viewport === null) return;
       restoredRef.current = true;
-      void instance.setViewState(raw).then((result) => {
-        if (result.status === 'mismatch') setMismatchRaw(raw);
+      void restoreView(raw).then((result) => {
+        if (result?.status === 'mismatch') setMismatchRaw(raw);
       });
     };
     attempt();
     const unsubscribe = instance.store.subscribe(attempt);
     return unsubscribe;
-  }, [mode.kind]);
+  }, [mode.kind, restoreView]);
 
   const restoreAnyway = useCallback(() => {
     const raw = mismatchRaw;
     setMismatchRaw(null);
     if (raw === null) return;
-    void graphRef.current?.instance.setViewState(raw, { ignoreMismatch: true });
-  }, [mismatchRaw]);
+    void restoreView(raw, true);
+  }, [mismatchRaw, restoreView]);
 
     const graphKey =
     mode.kind === 'stream'
@@ -1480,9 +1527,15 @@ export function App() {
                 themeBase={themeBase}
                 onThemeBaseChange={setThemeBase}
                 colorMode={colorMode}
-                onColorModeChange={setColorMode}
+                onColorModeChange={(next) => {
+                  setRestoredNodeColor(null);
+                  setColorMode(next);
+                }}
                 sizeMode={sizeMode}
-                onSizeModeChange={setSizeMode}
+                onSizeModeChange={(next) => {
+                  setRestoredNodeSize(null);
+                  setSizeMode(next);
+                }}
                 edgeArrows={edgeArrows}
                 onEdgeArrowsChange={setEdgeArrows}
                 showLinks={showLinks}

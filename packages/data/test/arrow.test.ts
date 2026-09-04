@@ -4,10 +4,10 @@
  * the missing-optional-dependency error path via the _internals seam.
  */
 
-import { tableFromArrays, tableToIPC, type Table } from 'apache-arrow';
-import { afterEach, describe, expect, it } from 'vitest';
+import { Field, Int64, Struct, Table, tableFromArrays, tableToIPC, vectorFromArray } from 'apache-arrow';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { _internals, prepareArrowGraphData, type ArrowTableLike } from '../src/arrow';
-import { prepareGraphData } from '../src/index';
+import { loadPrepared, prepareGraphData, serializePrepared } from '../src/index';
 import {
   PARITY_EXPECTED_SNAPSHOT,
   PARITY_EXPECTED_SUMMARIES,
@@ -117,6 +117,85 @@ describe('prepareArrowGraphData', () => {
       { id: 'b', attrs: { views: 20 } },
     ]);
     expect(prepared.summaries.nodes['views']).toMatchObject({ min: 10, max: 20 });
+  });
+
+  it.each(['table', 'ipc'] as const)('materializes real nested Arrow containers from %s inputs', async (inputKind) => {
+    const wide = 2n ** 60n;
+    const nodes = tableFromArrays({
+      id: ['a'],
+      values: [[1n, wide]],
+      object: [{ small: 3n, nested: [{ big: wide }] }],
+    });
+    const edges = tableFromArrays({ source: ['a'], target: ['a'], details: [{ weights: [4n] }] });
+    const source = (table: Table) => {
+      if (inputKind === 'table') return asLike(table);
+      const bytes = tableToIPC(table);
+      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    };
+    const prepared = await prepareArrowGraphData(
+      { nodes: source(nodes), edges: source(edges) },
+      { nodes: { id: 'id' }, edges: { source: 'source', target: 'target' } },
+      PARITY_OPTIONS,
+    );
+    expect(prepared.snapshot.nodes[0]!.attrs).toEqual({
+      values: [1, wide.toString()],
+      object: { small: 3, nested: [{ big: wide.toString() }] },
+    });
+    expect(prepared.snapshot.edges[0]!.attrs).toEqual({ details: { weights: [4] } });
+    expect(loadPrepared(serializePrepared(prepared))).toEqual(prepared);
+  });
+
+  it('preserves special field names inside a real Arrow struct', async () => {
+    const payload = Object.fromEntries([['__proto__', 1n], ['constructor', 2n], ['toJSON', 3n]]);
+    const fields = Object.keys(payload).map((name) => new Field(name, new Int64(), false));
+    const nodes = new Table({
+      id: vectorFromArray(['a']),
+      payload: vectorFromArray([payload], new Struct(fields)),
+    });
+    const prepared = await prepareArrowGraphData(
+      { nodes: asLike(nodes), edges: asLike(tableFromArrays({ source: ['a'], target: ['a'] })) },
+      { nodes: { id: 'id' }, edges: { source: 'source', target: 'target' } },
+      PARITY_OPTIONS,
+    );
+    const actual = prepared.snapshot.nodes[0]!.attrs!['payload'] as Record<string, unknown>;
+    expect(actual).toEqual(Object.fromEntries([['__proto__', 1], ['constructor', 2], ['toJSON', 3]]));
+    expect(Object.getPrototypeOf(actual)).toBe(Object.prototype);
+    expect(Object.prototype.hasOwnProperty.call(actual, '__proto__')).toBe(true);
+    expect(loadPrepared(serializePrepared(prepared))).toEqual(prepared);
+  });
+
+  it('rejects an already-aborted signal for existing Arrow tables', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(prepareArrowGraphData(
+      { nodes: asLike(parityNodesTable()), edges: asLike(parityEdgesTable()) },
+      PARITY_MAPPING,
+      { ...PARITY_OPTIONS, signal: controller.signal },
+    )).rejects.toBe(controller.signal.reason);
+  });
+
+  it('stops materializing a real Arrow table when cancellation arrives between rows', async () => {
+    const controller = new AbortController();
+    const nodes = parityNodesTable();
+    const ids = nodes.getChild('id')!;
+    const originalGet = ids.get.bind(ids);
+    const read = vi.spyOn(ids, 'get').mockImplementation((index) => {
+      // The abort runs after the row yields, while the builder awaits it.
+      queueMicrotask(() => controller.abort());
+      return originalGet(index);
+    });
+    // Preserve the vector instance the spy observes (Table#getChild creates wrappers).
+    const observedNodes: ArrowTableLike = {
+      numRows: nodes.numRows,
+      schema: nodes.schema,
+      getChild: (name) => name === 'id' ? ids : asLike(nodes).getChild(name),
+    };
+    await expect(prepareArrowGraphData(
+      { nodes: observedNodes, edges: asLike(parityEdgesTable()) },
+      PARITY_MAPPING,
+      { ...PARITY_OPTIONS, signal: controller.signal },
+    )).rejects.toMatchObject({ name: 'AbortError' });
+    expect(read).toHaveBeenCalledTimes(1);
   });
 
   it('preserves an Arrow schema column literally named __proto__ as own data', async () => {

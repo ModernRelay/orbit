@@ -210,19 +210,54 @@ describe('fold ops on the instance', () => {
   });
 
   it('undo/redo round-trips a fold through the history', async () => {
-    const { instance } = await ready();
+    const { instance, engine } = await ready();
     const before = [...drawn(instance)];
 
     instance.foldNode('hub');
     expect(drawn(instance)).toEqual(['hub', 'far']);
+    expect(instance.store.getState().folds.get('hub')).toBe(3);
+
+    let publications = 0;
+    const unsubscribe = instance.store.subscribe(() => { publications++; });
+    const commits = engine.commits.length;
 
     instance.undo();
     expect(drawn(instance)).toEqual(before);
     expect(instance.getFold('hub')).toBeNull();
+    expect(instance.store.getState().folds.size).toBe(0);
+    expect(publications).toBe(1);
+    expect(engine.commits.length - commits).toBe(1);
 
     instance.redo();
     expect(drawn(instance)).toEqual(['hub', 'far']);
     expect(instance.getFold('hub')).toEqual({ memberIds: ['s1', 's2', 'other'] });
+    expect(instance.store.getState().folds.get('hub')).toBe(3);
+    expect(publications).toBe(2);
+    expect(engine.commits.length - commits).toBe(2);
+    unsubscribe();
+  });
+
+  it('view-state fold restores publish the current count in the same scene update', async () => {
+    const { instance, engine } = await ready();
+    try {
+      const expanded = instance.getViewState();
+      instance.foldNode('hub');
+      const folded = instance.getViewState();
+      let publications = 0;
+      const unsubscribe = instance.store.subscribe(() => { publications++; });
+      const commits = engine.commits.length;
+      await instance.setViewState(expanded);
+      expect(instance.store.getState().folds.size).toBe(0);
+      expect(publications).toBe(1);
+      expect(engine.commits.length - commits).toBe(1);
+      await instance.setViewState(folded);
+      expect(instance.store.getState().folds.get('hub')).toBe(3);
+      expect(publications).toBe(2);
+      expect(engine.commits.length - commits).toBe(2);
+      unsubscribe();
+    } finally {
+      instance.destroy();
+    }
   });
 
   it('nests under a collapsed group at the instance level', async () => {

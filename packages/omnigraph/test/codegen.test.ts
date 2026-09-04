@@ -18,6 +18,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { generateTypes, generateTypesFromPgSource } from '../src/codegen';
@@ -237,6 +238,37 @@ describe('demo.pg fixture — committed golden file', () => {
 });
 
 describe('generateTypes — mapping edge cases', () => {
+  it('disambiguates node/edge interface collisions in unions and TypeMap and compiles their distinct props', () => {
+    const source = `
+node Foo { slug: String @key }
+node FooEdge { slug: String @key value: String node_only: Bool }
+node FooEdgeEdge { slug: String @key value: Bool }
+edge Foo: Foo -> FooEdge { value: F64 edge_only: I32 }
+edge FooEdge: FooEdge -> FooEdgeEdge { value: String }
+`;
+    const out = generateTypesFromPgSource(source);
+    const names = [...out.matchAll(/export interface (\w+) \{/g)].map((match) => match[1]);
+    expect(new Set(names).size).toBe(names.length);
+    expect(interfaceBody(out, 'FooEdgeProps')).toContain('value: string;');
+    expect(interfaceBody(out, 'FooEdgeProps_2')).toContain('value: number;');
+    expect(out).toContain("'orbit:type': 'Foo' } & FooEdgeProps_2");
+    expect(out).toContain('    Foo: FooEdgeProps_2;');
+    expect(out).toContain('    FooEdge: FooEdgeEdgeProps_2;');
+    expect(generateTypesFromPgSource(source)).toBe(out);
+    const dir = fileURLToPath(new URL('./__generated__/', import.meta.url));
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, 'collisions.ts');
+    writeFileSync(path, out + `
+const node: NodeAttrs = { 'orbit:type': 'FooEdge', id: 'n', slug: 'n', value: 's', node_only: true };
+const edge: EdgeAttrs = { 'orbit:type': 'Foo', id: 'e', value: 1, edge_only: 2 };
+const nodeProps: TypeMap['nodes']['FooEdge'] = node;
+const edgeProps: TypeMap['edges']['Foo'] = edge;
+void nodeProps; void edgeProps;
+`);
+    const program = ts.createProgram([path], { strict: true, noEmit: true, skipLibCheck: true });
+    expect(ts.getPreEmitDiagnostics(program).map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))).toEqual([]);
+  });
+
   it('maps Vector(n), [T] lists, Bool, Blob, and unknown types', () => {
     const out = generateTypesFromPgSource(`
 node Embedding {

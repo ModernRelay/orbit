@@ -501,6 +501,66 @@ describe('setViewState', () => {
     expect(store.revisions.appliedRender).toBe(commit.revision);
   });
 
+  it.each(['idle', 'mounting', 'detached'] as const)(
+    'preserves embedded positions restored while %s through the next engine replay',
+    async (phase) => {
+      for (const kind of ['fixed', 'force'] as const) {
+        const h = makeInstance({ fitViewOnFirstData: false });
+        const { instance } = h;
+        try {
+          instance.applyHostUpdate({
+            data: {
+              ...snap(1, ['a', 'b']),
+              nodes: [{ id: 'a', x: 1, y: 2 }, { id: 'b', x: 5, y: 6 }],
+            },
+            layout: kind,
+          });
+          if (phase === 'detached') {
+            await instance.attach(container);
+            instance.detach();
+          }
+          const mounting = phase === 'mounting' ? instance.attach(container) : null;
+          const before = instance.getRevisions();
+          let publications = 0;
+          const unsubscribe = instance.store.subscribe(() => { publications++; });
+          const restored = instance.setViewState({
+            ...instance.getViewState(), positions: [['a', 30, 40], ['unknown', 90, 100]],
+          });
+          expect(publications).toBe(1); // CPU restore is one publication before readiness
+          expect(instance.getRevisions().render).toBe(before.render + 1);
+          unsubscribe();
+          await expect(restored).resolves.toEqual({ status: 'applied' });
+          expect(await instance.exportLayout()).toEqual(new Map([
+            ['a', [30, 40]], ['b', [5, 6]],
+          ]));
+          if (mounting !== null) await mounting;
+          else await instance.attach(container);
+          const engine = h.engines.at(-1)!;
+          expect(Array.from(engine.lastStructure!.positions)).toEqual([30, 40, 5, 6]);
+          expect(engine.lastCommit!.restart).toBeUndefined();
+          expect(instance.isSimulationRunning()).toBe(false);
+          expect(instance.getRevisions().appliedRender).toBe(instance.getRevisions().render);
+        } finally {
+          instance.destroy();
+        }
+      }
+    },
+  );
+
+  it('a new data acceptance after a pre-ready restore can restart force layout', async () => {
+    const h = makeInstance({ fitViewOnFirstData: false });
+    try {
+      h.instance.applyHostUpdate({ data: snap(1, ['a']) });
+      await h.instance.setViewState({ ...h.instance.getViewState(), positions: [['a', 30, 40]] });
+      h.instance.applyHostUpdate({ data: snap(2, ['a', 'b']) });
+      await h.instance.attach(container);
+      expect(h.engines[0]!.lastCommit!.restart).toEqual({ alpha: 1 });
+      expect(h.instance.isSimulationRunning()).toBe(true);
+    } finally {
+      h.instance.destroy();
+    }
+  });
+
   it('rejects malformed scale shapes through setViewState without applying any lane', async () => {
     const h = await ready();
     const before = h.instance.getRevisions();
@@ -542,6 +602,94 @@ describe('aggregate restore protocol', () => {
     });
     return h;
   }
+
+  it.each(['snapshot', 'ingest'] as const)(
+    'cancels a staged restore when a %s replaces the dataset',
+    async (source) => {
+      const h = makeInstance({ fitViewOnFirstData: false });
+      const { instance } = h;
+      const replace = async (datasetKey: string) => {
+        const session = instance.beginIngest({
+          purpose: 'replace', datasetKey, sourceRevision: 1,
+          baseModelRevision: instance.getRevisions().model,
+        });
+        await session.append({
+          sequence: 0, batchId: datasetKey,
+          nodes: [{ id: datasetKey, attrs: { label: datasetKey } }], edges: [],
+        });
+        await session.commit();
+      };
+      try {
+        await instance.attach(container);
+        if (source === 'snapshot') instance.applyHostUpdate({ data: snap(1, ['old'], [], 'old') });
+        else await replace('old');
+        instance.applyHostUpdate({ selection: [] });
+        instance.on('viewStateRestore', () => {});
+        const pending = instance.setViewState({
+          ...instance.getViewState(),
+          selection: { nodeIds: ['old'], edgeIds: [], groupIds: [] },
+          subgraph: { seedIds: ['old'] },
+        });
+        let publications = 0;
+        const unsubscribe = instance.store.subscribe(() => { publications++; });
+        const commits = h.engines[0]!.commits.length;
+        if (source === 'snapshot') instance.applyHostUpdate({ data: snap(1, ['new'], [], 'new') });
+        else await replace('new');
+        expect(publications).toBe(1);
+        expect(h.engines[0]!.commits.length - commits).toBe(1);
+        unsubscribe();
+        await expect(pending).resolves.toMatchObject({ status: 'rejected', code: 'restore-diverged' });
+        instance.applyHostUpdate({ selection: ['old'] }); // late acknowledgement
+        expect(instance.getVisibleNodeIds()).toEqual(['new']);
+        expect(instance.store.getState().scope).toBeNull();
+        expect(instance.store.getState().history).toEqual({ undoDepth: 0, redoDepth: 0 });
+        await expect(instance.setViewState(instance.getViewState())).resolves.toEqual({ status: 'applied' });
+      } finally {
+        instance.destroy();
+      }
+    },
+  );
+
+  it('a cancelled history acknowledgement cannot later move the replacement history cursor', async () => {
+    vi.useFakeTimers();
+    const { instance } = makeInstance();
+    try {
+      instance.applyHostUpdate({ data: snap(1, ['old'], [], 'old') });
+      instance.selectNodes(['old']);
+      instance.applyHostUpdate({ selection: ['old'] });
+      instance.on('viewStateRestore', () => {});
+      expect(instance.undo()).toBe(true);
+      expect(vi.getTimerCount()).toBe(1);
+      instance.applyHostUpdate({ data: snap(1, ['new'], [], 'new') });
+      expect(vi.getTimerCount()).toBe(0);
+      instance.hideNodes(['new']);
+      const before = instance.store.getState().history;
+      vi.advanceTimersByTime(6000);
+      expect(instance.store.getState().history).toBe(before);
+      expect(instance.undo()).toBe(true);
+      expect(instance.getVisibleNodeIds()).toEqual(['new']);
+    } finally {
+      instance.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  it('destroy settles a staged restore and releases its acknowledgement timer', async () => {
+    vi.useFakeTimers();
+    const h = await controlledRig();
+    try {
+      h.instance.on('viewStateRestore', () => {});
+      const pending = h.instance.setViewState({
+        ...h.instance.getViewState(), selection: { nodeIds: ['a'], edgeIds: [], groupIds: [] },
+      });
+      h.instance.destroy();
+      await expect(pending).resolves.toMatchObject({ status: 'rejected', code: 'restore-diverged' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      h.instance.destroy();
+      vi.useRealTimers();
+    }
+  });
 
   it('stages, emits ONE intent, applies nothing until the matching reflection', async () => {
     const h = await controlledRig();

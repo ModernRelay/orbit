@@ -13,14 +13,15 @@
  * through `getChild` vectors and feed the shared builder; columns come from
  * the SCHEMA (exact, not sampled). Value normalization for the object lane:
  * arrow nulls → absent keys, bigints → number when safely representable else
- * decimal string (JSON-safe artifacts), everything else passes through.
+ * decimal string, and LIST/STRUCT values recursively become plain JSON
+ * containers. Other values pass through.
  */
 
 import { normalizeJsonSafeValue } from './jsonSafe';
 
 import { buildPrepared } from './builder';
 import { EMPTY_ROW_TABLE, type RowTable } from './rowTable';
-import { collectBytes } from './sources';
+import { collectBytes, throwIfAborted } from './sources';
 import type {
   GraphByteSource,
   GraphColumnMapping,
@@ -46,9 +47,12 @@ export const _internals = {
   importArrow: (): Promise<unknown> => import('apache-arrow'),
 };
 
-async function loadArrowModule(): Promise<{
+interface ArrowModule {
   tableFromIPC(bytes: Uint8Array): ArrowTableLike;
-}> {
+  materialize(value: object): unknown;
+}
+
+async function loadArrowModule(): Promise<ArrowModule> {
   let mod: unknown;
   try {
     mod = await _internals.importArrow();
@@ -66,7 +70,18 @@ async function loadArrowModule(): Promise<{
         '(unsupported version?)',
     );
   }
-  return { tableFromIPC: tableFromIPC as (bytes: Uint8Array) => ArrowTableLike };
+  const { Vector, StructRow } = mod as typeof import('apache-arrow');
+  return {
+    tableFromIPC: tableFromIPC as (bytes: Uint8Array) => ArrowTableLike,
+    materialize(value) {
+      if (value instanceof Vector) return Array.from(value);
+      // Iterate entries instead of using toJSON/Object.entries: Arrow's
+      // property access and toJSON can shadow or lose fields such as
+      // __proto__ and constructor. fromEntries always creates own data.
+      if (value instanceof StructRow) return Object.fromEntries(value);
+      return value;
+    },
+  };
 }
 
 export async function prepareArrowGraphData<
@@ -77,8 +92,10 @@ export async function prepareArrowGraphData<
   mapping: GraphColumnMapping,
   options: Omit<GraphPrepareOptions, 'format'>,
 ): Promise<PreparedGraph<N, E>> {
-  const arrow = await loadArrowModule();
   const signal = options.signal;
+  throwIfAborted(signal);
+  const arrow = await loadArrowModule();
+  throwIfAborted(signal);
   const deriveNodes = 'deriveNodes' in input && input.deriveNodes === true;
   const edgeTable = await arrowRowTable(input.edges, arrow, signal);
   const nodeTable = deriveNodes
@@ -105,12 +122,14 @@ function isArrowTable(source: ArrowGraphSource): source is ArrowTableLike {
 
 async function arrowRowTable(
   source: ArrowGraphSource,
-  arrow: { tableFromIPC(bytes: Uint8Array): ArrowTableLike },
+  arrow: ArrowModule,
   signal: AbortSignal | undefined,
 ): Promise<RowTable> {
+  throwIfAborted(signal);
   const table = isArrowTable(source)
     ? source
     : arrow.tableFromIPC(await collectBytes(source as GraphByteSource, signal));
+  throwIfAborted(signal);
   const columns = table.schema.fields.map((f) => f.name);
   if (columns.length === 0 && table.numRows === 0) return EMPTY_ROW_TABLE;
   const vectors = columns.map((name) => table.getChild(name));
@@ -118,6 +137,7 @@ async function arrowRowTable(
     columns,
     rows: (async function* () {
       for (let i = 0; i < table.numRows; i++) {
+        throwIfAborted(signal);
         const row: Record<string, unknown> = {};
         for (let j = 0; j < columns.length; j++) {
           const value = vectors[j]?.get(i);
@@ -125,16 +145,16 @@ async function arrowRowTable(
           // Arrow schemas may legally contain a `__proto__` column. Plain
           // assignment would invoke the legacy prototype setter and lose it.
           Object.defineProperty(row, columns[j]!, {
-            value: normalizeArrowValue(value),
+            value: normalizeJsonSafeValue(value, arrow.materialize),
             enumerable: true,
             writable: true,
             configurable: true,
           });
         }
+        throwIfAborted(signal);
         yield row;
       }
+      throwIfAborted(signal);
     })(),
   };
 }
-
-const normalizeArrowValue = normalizeJsonSafeValue;

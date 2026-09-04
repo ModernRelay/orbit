@@ -69,6 +69,62 @@ describe('exportImage("png")', () => {
 });
 
 describe('exportData / exportDataStream', () => {
+  it.each([false, true])(
+    'pins edge masks, counts exportable rows, and preserves accepted edges (parallel grouping: %s)',
+    async (parallelEdgeGrouping) => {
+      const { instance } = makeInstance({ fitViewOnFirstData: false });
+      try {
+        instance.applyHostUpdate({
+          data: {
+            ...snap(1, ['a', 'b', 'c']),
+            edges: [
+              { id: 'hidden', source: 'a', target: 'b', attrs: { weight: 1 } },
+              { id: 'shown', source: 'a', target: 'b', attrs: { weight: 2 } },
+              { id: 'other', source: 'b', target: 'c', attrs: { weight: 1 } },
+            ],
+          },
+          parallelEdgeGrouping,
+          filter: { edges: (edge) => edge.attrs?.weight === 2 },
+        });
+        const visible = await instance.exportData('visible', { limit: 4 });
+        expect(visible.nodes.map((node) => node.id)).toEqual(['a', 'b', 'c']);
+        expect(visible.edges.map((edge) => edge.id)).toEqual(['shown']);
+        await expect(instance.exportData('visible', { limit: 3 })).rejects.toMatchObject({
+          detail: { code: 'export-materialization-too-large', rowCount: 4, limit: 3 },
+        });
+        const accepted = await instance.exportData('accepted');
+        expect(accepted.edges.map((edge) => edge.id)).toEqual(['hidden', 'shown', 'other']);
+
+        const visibleStream = instance.exportDataStream('visible');
+        const acceptedStream = instance.exportDataStream('accepted');
+        instance.applyHostUpdate({ filter: { edges: () => false } });
+        expect((await instance.exportData('visible', { limit: 3 })).edges).toEqual([]);
+        // Change the live mask before the first read, then again mid-stream.
+        const first = await visibleStream.next();
+        expect(JSON.parse(first.value!).value.id).toBe('a');
+        instance.applyHostUpdate({ filter: null });
+        const streamedEdges: string[] = [];
+        for await (const line of visibleStream) {
+          const row = JSON.parse(line) as { kind: string; value: { id: string } };
+          if (row.kind === 'edge') streamedEdges.push(row.value.id);
+        }
+        expect(streamedEdges).toEqual(['shown']);
+        const acceptedEdges: string[] = [];
+        for await (const line of acceptedStream) {
+          const row = JSON.parse(line) as { kind: string; value: { id: string } };
+          if (row.kind === 'edge') acceptedEdges.push(row.value.id);
+        }
+        expect(acceptedEdges).toEqual(['hidden', 'shown', 'other']);
+
+        instance.applyHostUpdate({ filter: { mode: 'dim', edges: () => false } });
+        expect((await instance.exportData('visible')).edges.map((edge) => edge.id))
+          .toEqual(['hidden', 'shown', 'other']);
+      } finally {
+        instance.destroy();
+      }
+    },
+  );
+
   it('visible scope honors the mask; accepted scope is the full model', async () => {
     const { instance } = await ready();
     instance.hideNodes(['d']);
