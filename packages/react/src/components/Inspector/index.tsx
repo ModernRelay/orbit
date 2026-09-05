@@ -29,9 +29,17 @@
 
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
-import type { GraphNode, GraphStoreState, NodeId } from '@modernrelay/orbit-core';
+import type { EdgeId, GraphNode, GraphStoreState, NodeId } from '@modernrelay/orbit-core';
 import type { AnyGraphInstance } from '../../GraphProvider';
 import { useResolvedInstance } from '../shared';
+import { PassiveInspector } from './passive';
+
+/** An inspection subject is independent of selection and camera position. */
+export type GraphInspectionSubject =
+  | { kind: 'node'; id: NodeId }
+  | { kind: 'edge'; id: EdgeId }
+  | { kind: 'selection'; nodeIds: readonly NodeId[] }
+  | null;
 
 export interface GraphInspectorAction {
   /** Stable key; default actions use 'expand' | 'isolate' | 'pin' | 'unpin'
@@ -46,6 +54,14 @@ export interface GraphInspectorAction {
 export interface GraphInspectorProps {
   /** Explicit instance (multi-instance pages); ambient context otherwise. */
   instance?: AnyGraphInstance;
+  /** Omit for the legacy selected-single inspector; null shows an empty
+   * panel. Explicit subjects use passive reads and never move the camera. */
+  subject?: GraphInspectionSubject;
+  onInspect?: (subject: GraphInspectionSubject) => void;
+  /** 'panel' participates in its parent's layout; default 'dock'. */
+  layout?: 'dock' | 'panel';
+  /** Attribute containing relationship type. Default 'type'. */
+  typeField?: string;
   /** Docking side. Default 'right'. */
   dock?: 'left' | 'right';
   /** Replaces the default attrs table. */
@@ -185,6 +201,10 @@ const ACTION_BUTTON_STYLE: CSSProperties = {
 const EMPTY_STYLE: CSSProperties = { fontStyle: 'italic', opacity: 0.8 };
 
 export function GraphInspector(props: GraphInspectorProps): ReactElement {
+  return props.subject !== undefined ? <PassiveInspector {...props} /> : <SelectedInspector {...props} />;
+}
+
+function SelectedInspector(props: GraphInspectorProps): ReactElement {
   const instance = useResolvedInstance(props.instance, '<GraphInspector>');
   const slice = useInspectorSlice(instance);
   const dock = props.dock ?? 'right';
@@ -214,7 +234,9 @@ export function GraphInspector(props: GraphInspectorProps): ReactElement {
   };
 
   const panelLabel = props.label ?? 'Graph inspector';
-  const dockStyle: CSSProperties = dock === 'left' ? { left: 12 } : { right: 12 };
+  const dockStyle: CSSProperties = props.layout === 'panel'
+    ? { position: 'relative', width: '100%', top: 'auto', bottom: 'auto' }
+    : dock === 'left' ? { left: 12 } : { right: 12 };
 
   if (subjectId === null || subject === undefined) {
     return (

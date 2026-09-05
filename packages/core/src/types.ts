@@ -717,9 +717,79 @@ export interface ExpansionBatch<N = Record<string, unknown>, E = Record<string, 
   edges?: readonly GraphEdge<E>[];
 }
 
+export interface RelationshipOptions {
+  direction?: 'outgoing' | 'incoming' | 'either';
+  /** Exact string values in edge.attrs[relationshipTypeField]. */
+  relationshipTypes?: readonly string[];
+  /** JSON attribute field name; default 'type'. */
+  relationshipTypeField?: string;
+}
+
+export type NodeVisibility = 'visible' | 'filtered' | 'out-of-scope';
+
+export interface NeighborhoodOptions extends RelationshipOptions {
+  /** Default 'loaded'; a read never reveals nodes or changes filters. */
+  visibility?: 'loaded' | 'visible';
+  /** Neighbor node page size, default 50, maximum 1000. */
+  limit?: number;
+  /** Maximum returned relationship rows, default 200, maximum 10000. */
+  edgeLimit?: number;
+  cursor?: string;
+}
+
+export interface NeighborhoodResult<N = Record<string, unknown>, E = Record<string, unknown>> {
+  seedId: NodeId;
+  status: 'loaded' | 'not-loaded';
+  nodes: readonly GraphNode<N>[];
+  edges: readonly AcceptedEdge<E>[];
+  visibility: ReadonlyMap<NodeId, NodeVisibility>;
+  /** Counts before relationshipTypes filtering, within direction/visibility. */
+  relationshipTypes: readonly { type: string; count: number }[];
+  totalNeighbors: number;
+  totalEdges: number;
+  edgesTruncated: boolean;
+  nextCursor?: string;
+}
+
+export interface ExpansionPage {
+  /** Unique returned nodes excluding the seed, and returned edge rows. */
+  returnedNodes: number;
+  returnedEdges: number;
+  /** Omitted when the service cannot know the full matching universe. */
+  totalNeighbors?: number;
+  nextCursor?: string;
+  truncated: boolean;
+}
+
+export interface ExpansionProgress {
+  requestId: string;
+  seedId: NodeId;
+  batches: number;
+  receivedNodes: number;
+  receivedEdges: number;
+  status: 'loading' | 'committed';
+}
+
+export interface ExpansionOptions extends RelationshipOptions {
+  hops?: number;
+  /** New query API defaults to 50 neighbors; maximum 1000. */
+  limit?: number;
+  /** Maximum relationship rows, default 10000, maximum 10000. */
+  edgeLimit?: number;
+  cursor?: string;
+  /** Hold established nodes and cancel automatic camera following. Holds
+   * survive settle and release on resumeSimulation, a layout-kind change,
+   * or a dataset-key change; user-owned pinnedNodeIds are unchanged. */
+  preserveLayout?: boolean;
+  onProgress?: (progress: ExpansionProgress) => void;
+}
+
+/** Serializable query passed only to services implementing queryNeighbors. */
+export type ExpansionQuery = Omit<ExpansionOptions, 'onProgress' | 'preserveLayout'>;
+
 export type ExpansionResponse<N = Record<string, unknown>, E = Record<string, unknown>> =
-  | (ExpansionBatch<N, E> & { provenance?: unknown })
-  | { batches: AsyncIterable<ExpansionBatch<N, E>>; provenance?: unknown };
+  | (ExpansionBatch<N, E> & { provenance?: unknown; page?: ExpansionPage })
+  | { batches: AsyncIterable<ExpansionBatch<N, E>>; provenance?: unknown; page?: ExpansionPage };
 
 /**
  * path resolver seam. `find` resolves the node/edge id path
@@ -734,6 +804,13 @@ export interface PathService extends RevisionAwareService {
     options: PathOptions,
     ctx: RequestContext,
   ): Promise<PathResult | null>;
+  /** Optional richer query contract; legacy find services remain valid. */
+  findDetailed?(
+    sourceId: NodeId,
+    targetId: NodeId,
+    options: PathOptions,
+    ctx: RequestContext,
+  ): Promise<PathOutcome>;
 }
 
 export interface ExpansionService<N = Record<string, unknown>, E = Record<string, unknown>>
@@ -741,6 +818,14 @@ export interface ExpansionService<N = Record<string, unknown>, E = Record<string
   neighbors(
     seedIds: readonly NodeId[],
     hops: number,
+    ctx: RequestContext,
+  ): Promise<ExpansionResponse<N, E>>;
+  /** Typed bounded query. Required when richer options are requested.
+   * Responses must include page metadata matching their aggregate rows.
+   * Exceeding the requested node/edge budget rejects the entire response. */
+  queryNeighbors?(
+    seedIds: readonly NodeId[],
+    options: ExpansionQuery,
     ctx: RequestContext,
   ): Promise<ExpansionResponse<N, E>>;
 }
@@ -1006,10 +1091,19 @@ export interface MetaEdge {
 }
 
 /** path query options (PathService). */
-export interface PathOptions {
+export interface PathOptions extends RelationshipOptions {
   /** Edge-direction rule for traversal. Default 'outgoing'. */
   direction?: 'outgoing' | 'incoming' | 'either';
+  /** Default visible; loaded deliberately traverses hidden/out-of-scope rows. */
+  universe?: 'visible' | 'loaded';
+  /** Maximum traversed hops, 0..1000; omission means unlimited. */
+  maxHops?: number;
 }
+
+export type PathOutcome =
+  | { status: 'found'; path: PathResult }
+  | { status: 'not-loaded' | 'filtered'; nodeIds: readonly NodeId[] }
+  | { status: 'unreachable' | 'hop-limit' };
 
 /** A resolved path: node ids in order plus the edge ids walked. */
 export interface PathResult {

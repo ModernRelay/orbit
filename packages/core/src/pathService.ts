@@ -2,23 +2,17 @@
  * path resolution — the built-in LOCAL PathService plus the
  * pure emphasis-plan helper the instance wires into `findPath`.
  *
- * The default service runs an unweighted BFS over the LOADED VISIBLE edge
- * list — it never fetches, never touches scope/filters, and never reads the
- * engine. `null` is a RESULT (unreachable), not an error; an endpoint id not
- * in the loaded base is unreachable by definition and also resolves `null`.
- * Direction ('outgoing' default | 'incoming' | 'either') decides which way
- * an edge may be walked. Ties break deterministically: neighbors are visited
- * in base edge order, so among equal-length paths the first in edge order
- * wins. `ctx.signal` is honored between scan chunks (an awaited microtask
- * every {@link PATH_SCAN_CHUNK} scanned edges, as in search.ts) — abort is
- * an optimization; the instance's revision admission gate is authoritative.
- * Declares `revisionDependencies: ['source', 'model', 'scope']`: a
- * path is a point-in-scene answer, so ANY revision drift discards it.
+ * The default service runs deterministic unweighted BFS over visible or
+ * loaded relationships. It never fetches or changes scope/filters. Direction,
+ * exact relationship types, and an optional hop budget constrain traversal.
+ * Detailed results distinguish missing endpoints, visibility obstacles,
+ * unreachable targets, and exhausted hop budgets; the legacy find method
+ * maps every non-found outcome to null.
  *
- * Nothing is cached across calls: visibility is mask-derived and moves
- * WITHOUT advancing any revision dimension, so a revision-keyed adjacency
- * cache would serve stale reachability. One O(V + E) build per call is the
- * "O(n) per action" budget.
+ * Adjacency is rebuilt per query. Every PATH_SCAN_CHUNK scanned edges yields
+ * to a browser task, permitting input and cancellation. The service declares
+ * source/model/scope dependencies; the instance discards revision drift at
+ * admission, regardless of whether the producer honored cancellation.
  *
  * EMPHASIS CONTRACT ({@link computePathEmphasis}, wired by the integrator):
  * one findPath application is ONE atomic action — path-node point indices to
@@ -33,6 +27,7 @@
 import { nextSynthesizedEdgeId } from './edgeIdentity';
 import type { EdgePairCounters } from './edgeIdentity';
 import { OrbitOperationError } from './errors';
+import { validatePath, matchesRelationship } from './exploration';
 import type {
   EdgeId,
   GraphEdge,
@@ -40,6 +35,8 @@ import type {
   NodeId,
   PathOptions,
   PathResult,
+  PathOutcome,
+  AcceptedEdge,
   PathService,
   RequestContext,
 } from './types';
@@ -59,10 +56,10 @@ export interface LocalPathBase<N = Record<string, unknown>, E = Record<string, u
   /** visibility by EDGE ID; absent = every loaded edge is traversable.
    * BFS walks only edges for which this returns true. */
   isEdgeVisible?: (id: EdgeId) => boolean;
+  isNodeVisible?: (id: NodeId) => boolean;
 }
 
-/** Edges scanned between cooperative yields (awaited microtask + signal
- * check) — same cadence as SEARCH_SCAN_CHUNK. */
+/** Edges scanned between cooperative task yields and abort checks. */
 export const PATH_SCAN_CHUNK = 4096;
 
 function throwAborted(signal: AbortSignal, sourceId: NodeId, targetId: NodeId): never {
@@ -87,96 +84,97 @@ function throwAborted(signal: AbortSignal, sourceId: NodeId, targetId: NodeId): 
 export function createLocalPathService<N = Record<string, unknown>, E = Record<string, unknown>>(
   getBase: () => LocalPathBase<N, E>,
 ): PathService {
-  return {
-    revisionDependencies: ['source', 'model', 'scope'],
-    async find(
-      sourceId: NodeId,
-      targetId: NodeId,
-      options: PathOptions,
-      ctx: RequestContext,
-    ): Promise<PathResult | null> {
-      if (ctx.signal.aborted) throwAborted(ctx.signal, sourceId, targetId);
-      const direction = options.direction ?? 'outgoing';
-      const { nodes, edges, isEdgeVisible } = getBase();
-
-      // Ordinal index over the loaded nodes (first-wins, matching dedup).
-      const ordinalOf = new Map<NodeId, number>();
-      for (let i = 0; i < nodes.length; i++) {
-        const id = nodes[i]!.id;
-        if (!ordinalOf.has(id)) ordinalOf.set(id, i);
+  async function findDetailed(
+    sourceId: NodeId,
+    targetId: NodeId,
+    rawOptions: PathOptions,
+    ctx: RequestContext,
+  ): Promise<PathOutcome> {
+    const options = validatePath(rawOptions);
+    if (ctx.signal.aborted) throwAborted(ctx.signal, sourceId, targetId);
+    const direction = options.direction ?? 'outgoing';
+    const { nodes, edges, isEdgeVisible, isNodeVisible } = getBase();
+    const ordinalOf = new Map<NodeId, number>();
+    for (let i = 0; i < nodes.length; i++) if (!ordinalOf.has(nodes[i]!.id)) ordinalOf.set(nodes[i]!.id, i);
+    const missing = [...new Set([sourceId, targetId])].filter((id) => !ordinalOf.has(id));
+    if (missing.length > 0) return { status: 'not-loaded', nodeIds: missing };
+    const filtered = options.universe === 'loaded' ? [] : [...new Set([sourceId, targetId])].filter((id) => isNodeVisible !== undefined && !isNodeVisible(id));
+    if (filtered.length > 0) return { status: 'filtered', nodeIds: filtered };
+    const src = ordinalOf.get(sourceId)!;
+    const dst = ordinalOf.get(targetId)!;
+    if (src === dst) return { status: 'found', path: { nodeIds: [sourceId], edgeIds: [] } };
+    const adjacency: number[][] = new Array<number[]>(nodes.length);
+    const edgeIds: EdgeId[] = new Array<EdgeId>(edges.length);
+    const counters: EdgePairCounters = new Map();
+    let scanned = 0;
+    for (let e = 0; e < edges.length; e++) {
+      if (++scanned % PATH_SCAN_CHUNK === 0) {
+        // A task yield lets input/paint and cancellation run, unlike a microtask.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (ctx.signal.aborted) throwAborted(ctx.signal, sourceId, targetId);
       }
-      const src = ordinalOf.get(sourceId);
-      const dst = ordinalOf.get(targetId);
-      if (src === undefined || dst === undefined) return null; // unloaded = unreachable
-      if (src === dst) return { nodeIds: [nodes[src]!.id], edgeIds: [] };
-
-      // Directed adjacency over VISIBLE edges: adj[u] holds [v, edgeOrdinal]
-      // pairs flat, filled in base edge order (the determinism tie-break).
-      // Synthesized-id counters advance for EVERY id-less edge — visible or
-      // not — so ordinals match the accepted model's synthesis.
-      const adjacency: number[][] = new Array<number[]>(nodes.length);
-      const edgeIds: EdgeId[] = new Array<EdgeId>(edges.length);
-      const counters: EdgePairCounters = new Map();
-      let scanned = 0;
-      for (let e = 0; e < edges.length; e++) {
+      const edge = edges[e]!;
+      const id = edge.id ?? nextSynthesizedEdgeId(counters, edge.source, edge.target);
+      edgeIds[e] = id;
+      if (!matchesRelationship({ ...edge, id } as AcceptedEdge<E>, options)) continue;
+      if (options.universe !== 'loaded' && ((isEdgeVisible !== undefined && !isEdgeVisible(id)) || (isNodeVisible !== undefined && (!isNodeVisible(edge.source) || !isNodeVisible(edge.target))))) continue;
+      const s = ordinalOf.get(edge.source);
+      const t = ordinalOf.get(edge.target);
+      if (s === undefined || t === undefined) continue;
+      if (direction !== 'incoming') (adjacency[s] ??= []).push(t, e);
+      if (direction !== 'outgoing') (adjacency[t] ??= []).push(s, e);
+    }
+    const prevNode = new Int32Array(nodes.length).fill(-1);
+    const prevEdge = new Int32Array(nodes.length).fill(-1);
+    const depth = new Int32Array(nodes.length).fill(-1);
+    depth[src] = 0;
+    const queue: number[] = [src];
+    let found = false;
+    let limited = false;
+    outer: for (let head = 0; head < queue.length; head++) {
+      const u = queue[head]!;
+      const list = adjacency[u];
+      if (list === undefined) continue;
+      for (let j = 0; j < list.length; j += 2) {
         if (++scanned % PATH_SCAN_CHUNK === 0) {
-          // Cooperative yield between scan chunks; the signal is the
-          // cancellation seam.
-          await Promise.resolve();
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
           if (ctx.signal.aborted) throwAborted(ctx.signal, sourceId, targetId);
         }
-        const edge = edges[e]!;
-        const id = edge.id ?? nextSynthesizedEdgeId(counters, edge.source, edge.target);
-        edgeIds[e] = id;
-        if (isEdgeVisible !== undefined && !isEdgeVisible(id)) continue;
-        const s = ordinalOf.get(edge.source);
-        const t = ordinalOf.get(edge.target);
-        if (s === undefined || t === undefined) continue; // dangling endpoint
-        if (direction !== 'incoming') (adjacency[s] ??= []).push(t, e);
-        if (direction !== 'outgoing') (adjacency[t] ??= []).push(s, e);
+        const v = list[j]!;
+        if (depth[v]! >= 0) continue;
+        if (options.maxHops !== undefined && depth[u]! >= options.maxHops) { limited = true; continue; }
+        depth[v] = depth[u]! + 1;
+        prevNode[v] = u;
+        prevEdge[v] = list[j + 1]!;
+        if (v === dst) { found = true; break outer; }
+        queue.push(v);
       }
-
-      // BFS with predecessor arrays; queue is an array with a head cursor.
-      const prevNode = new Int32Array(nodes.length).fill(-1);
-      const prevEdge = new Int32Array(nodes.length).fill(-1);
-      const visited = new Uint8Array(nodes.length);
-      visited[src] = 1;
-      const queue: number[] = [src];
-      let found = false;
-      outer: for (let head = 0; head < queue.length; head++) {
-        const u = queue[head]!;
-        const list = adjacency[u];
-        if (list === undefined) continue;
-        for (let j = 0; j < list.length; j += 2) {
-          if (++scanned % PATH_SCAN_CHUNK === 0) {
-            await Promise.resolve();
-            if (ctx.signal.aborted) throwAborted(ctx.signal, sourceId, targetId);
-          }
-          const v = list[j]!;
-          if (visited[v] !== 0) continue;
-          visited[v] = 1;
-          prevNode[v] = u;
-          prevEdge[v] = list[j + 1]!;
-          if (v === dst) {
-            found = true;
-            break outer;
-          }
-          queue.push(v);
-        }
+    }
+    if (ctx.signal.aborted) throwAborted(ctx.signal, sourceId, targetId);
+    if (!found) {
+      if (!limited && options.universe !== 'loaded' && (isNodeVisible !== undefined || isEdgeVisible !== undefined)) {
+        const loaded = await findDetailed(sourceId, targetId, { ...options, universe: 'loaded' }, ctx);
+        if (loaded.status === 'found') return { status: 'filtered', nodeIds: loaded.path.nodeIds.filter((id) => isNodeVisible !== undefined && !isNodeVisible(id)) };
       }
-      if (!found) return null;
-
-      // Reconstruct dst → src, then reverse into path order.
-      const nodeIds: NodeId[] = [];
-      const pathEdgeIds: EdgeId[] = [];
-      for (let at = dst; at !== src; at = prevNode[at]!) {
-        nodeIds.push(nodes[at]!.id);
-        pathEdgeIds.push(edgeIds[prevEdge[at]!]!);
-      }
-      nodeIds.push(nodes[src]!.id);
-      nodeIds.reverse();
-      pathEdgeIds.reverse();
-      return { nodeIds, edgeIds: pathEdgeIds };
+      return { status: limited ? 'hop-limit' : 'unreachable' };
+    }
+    const nodeIds: NodeId[] = [];
+    const pathEdgeIds: EdgeId[] = [];
+    for (let at = dst; at !== src; at = prevNode[at]!) {
+      nodeIds.push(nodes[at]!.id);
+      pathEdgeIds.push(edgeIds[prevEdge[at]!]!);
+    }
+    nodeIds.push(nodes[src]!.id);
+    nodeIds.reverse();
+    pathEdgeIds.reverse();
+    return { status: 'found', path: { nodeIds, edgeIds: pathEdgeIds } };
+  }
+  return {
+    revisionDependencies: ['source', 'model', 'scope'],
+    findDetailed,
+    async find(sourceId, targetId, options, ctx) {
+      const outcome = await findDetailed(sourceId, targetId, options, ctx);
+      return outcome.status === 'found' ? outcome.path : null;
     },
   };
 }
