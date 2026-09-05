@@ -77,6 +77,15 @@ export type {
   ExpansionBatch,
   ExpansionResponse,
   ExpansionService,
+  RelationshipOptions,
+  NodeVisibility,
+  NeighborhoodOptions,
+  NeighborhoodResult,
+  ExpansionPage,
+  ExpansionProgress,
+  ExpansionOptions,
+  ExpansionQuery,
+  PathOutcome,
   BeginIngestOptions,
   IngestBatch,
   AppendReceipt,
@@ -171,8 +180,22 @@ export type {
   LabelSubscriptions,
   GraphServices,
   ExpandNodeResult,
+  ExpansionRecord,
   ExpansionOverlayRecord,
 } from './instance';
+
+// Durable, host-loadable exploration checkpoints and replayable intent.
+export { createInvestigationSession, parseInvestigation, serializeInvestigation, InvestigationError } from './investigation';
+export type {
+  InvestigationSource,
+  InvestigationExpansionOptions,
+  InvestigationExpansion,
+  SavedInvestigationPath,
+  GraphInvestigation,
+  InvestigationSessionState,
+  InvestigationSessionOptions,
+  InvestigationSession,
+} from './investigation';
 
 // Label lane: pure candidate selector + overlay types
 export {

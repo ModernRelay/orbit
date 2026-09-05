@@ -82,6 +82,8 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type { ReactNode } from 'react';
+import { flushSync } from 'react-dom';
+import { ExplorationWorkspace, EXPLORATION_CSS } from './ExplorationWorkspace';
 
 import type {
   AcceptedEdge,
@@ -96,6 +98,7 @@ import type {
   GraphViewState,
   GroupSpec,
   InstanceStatus,
+  JsonValue,
   LabelConfig,
   MetaEdge,
   NodeId,
@@ -413,7 +416,7 @@ const CREATED_DIM: DimensionSpec<AppNodeAttrs> = {
   },
 };
 
-const CROSSFILTER_DIMS: readonly DimensionSpec<AppNodeAttrs>[] = [SCORE_DIM, CREATED_DIM];
+const CROSSFILTER_DIMS: readonly DimensionSpec<AppNodeAttrs>[] = [SCORE_DIM, CREATED_DIM, M5_TABLE_DIMENSION];
 
 // Omnigraph mode: intel-style graphs carry no generated metrics, but the
 // adapter injects `type`, most content nodes declare a `domain` enum, and the
@@ -441,6 +444,7 @@ const OG_CREATED_DIM: DimensionSpec<AppNodeAttrs> = {
 const OG_CROSSFILTER_DIMS: readonly DimensionSpec<AppNodeAttrs>[] = [
   OG_DOMAIN_DIM,
   OG_CREATED_DIM,
+  M5_TABLE_DIMENSION,
 ];
 
 /** M5 mode adds the id-keyed dimension `<GraphTable>`'s filter brushes
@@ -574,6 +578,8 @@ declare global {
 }
 
 export function App() {
+  const [explorerOpen, setExplorerOpen] = useState(false);
+  const [explorerControlsOpen, setExplorerControlsOpen] = useState(false);
   const graphRef = useRef<GraphHandle<AppNodeAttrs, AppEdgeAttrs> | null>(null);
   const [gen, setGen] = useState<GenState>(INITIAL_GEN);
   const [mode, setMode] = useState<DataMode>(DECLARATIVE);
@@ -1175,8 +1181,13 @@ export function App() {
   );
   const onBackgroundClick = useCallback(() => setSelection([]), []);
   const onEdgeClick = useCallback(
-    ({ edge }: { edge: AcceptedEdge<AppEdgeAttrs> }) => setSelection([edge.source, edge.target]),
-    [],
+    ({ edge }: { edge: AcceptedEdge<AppEdgeAttrs> }) => {
+      if (explorerOpen) {
+        flushSync(() => setSelection([]));
+        graphRef.current?.instance.selectEdges([edge.id]);
+      } else setSelection([edge.source, edge.target]);
+    },
+    [explorerOpen],
   );
   const onNodeDragStart = useCallback(({ node }: { node: GraphNode<AppNodeAttrs> }) => {
     setDragNote(`dragging ${labelOf(node)}…`);
@@ -1376,6 +1387,21 @@ export function App() {
     sync();
     return instance.store.subscribe(sync);
   }, [graphKey]);
+  const clearExplorerFilters = useCallback(() => {
+    flushSync(() => { setExcludedClusters(EMPTY_CLUSTER_SET); setExcludedTypes(EMPTY_TYPE_SET); });
+  }, []);
+  const restoreExplorerFilters = useCallback((raw: JsonValue) => {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid saved filters');
+    const { clusters, types, mode: savedMode } = raw;
+    if (!Array.isArray(clusters) || !clusters.every((value) => typeof value === 'number') ||
+        !Array.isArray(types) || !types.every((value) => typeof value === 'string') ||
+        (savedMode !== 'hide' && savedMode !== 'dim')) throw new Error('Invalid saved filters');
+    flushSync(() => {
+      setExcludedClusters(new Set(clusters as number[]));
+      setExcludedTypes(new Set(types as string[]));
+      setFilterMode(savedMode);
+    });
+  }, []);
   const semantic = mode.kind === 'semantic';
   const streaming = meter !== null && meter.phase === 'streaming';
   // In stream mode the cluster ids exist only once the replace committed;
@@ -1388,8 +1414,9 @@ export function App() {
       style={{ ...S.appRoot, ...S.themeVars(themeBase) }}
       data-theme={themeBase}
       data-testid="app-root"
+      data-exploring={explorerOpen}
     >
-      <style>{BUTTON_CSS}</style>
+      <style>{BUTTON_CSS + EXPLORATION_CSS}</style>
       {mismatchRaw !== null && (
         <div data-testid="view-mismatch-banner" style={S.mismatchBanner}>
           This view was saved over different data — restoring it may not show what the sender saw.
@@ -1403,6 +1430,7 @@ export function App() {
       )}
       <Graph<AppNodeAttrs, AppEdgeAttrs>
         key={graphKey}
+        className="demo-graph"
         ref={graphRef}
         engine={engineFactory}
         {...(mode.kind === 'declarative'
@@ -1486,7 +1514,20 @@ export function App() {
         onError={onError}
         style={S.graphStyle}
       >
-        <div style={S.overlayRoot}>
+        <ExplorationWorkspace
+          open={explorerOpen}
+          typeField={mode.kind === 'omnigraph' ? ORBIT_TYPE_KEY : 'type'}
+          filters={{ clusters: [...excludedClusters], types: [...excludedTypes], mode: filterMode }}
+          filterLabels={excludedClusters.size + excludedTypes.size === 0 ? [] : [`Host filters (${excludedClusters.size + excludedTypes.size})`]}
+          restoreFilters={restoreExplorerFilters}
+          clearFilters={clearExplorerFilters}
+        />
+        {explorerOpen && <nav className="demo-exploration-nav" aria-label="Exploration workspace controls">
+          <ToolButton testId="explorer-close" onClick={() => setExplorerOpen(false)}>Close explorer</ToolButton>
+          <ToolButton onClick={() => setExplorerControlsOpen((open) => !open)}>{explorerControlsOpen ? 'Hide data controls' : 'Data and display controls'}</ToolButton>
+          <GraphToolbar style={S.embeddedOverlay} />
+        </nav>}
+        <div style={{ ...S.overlayRoot, ...(explorerOpen ? explorerControlsOpen ? { paddingTop: 64 } : { display: 'none' } : {}) }}>
           <div style={S.topRow}>
             <div style={S.headerColumn}>
               {/* FIRST in DOM (Tab reaches its toggle first); CSS `order`
@@ -1495,6 +1536,7 @@ export function App() {
               <header style={S.headerPanel}>
                 <span style={S.title}>orbit demo</span>
                 <HeaderCounts />
+                <ToolButton testId="explorer-toggle" onClick={() => setExplorerOpen(true)}>Explore graph</ToolButton>
               </header>
               <DataPanel
                 streaming={streaming}
@@ -1597,14 +1639,14 @@ export function App() {
 
           {/* Search box: top-center, collapsible. AFTER the top row
               in DOM so the navigator toggle stays the first tabbable. */}
-          <SearchSection omnigraph={mode.kind === 'omnigraph'} />
+          {!explorerOpen && <SearchSection omnigraph={mode.kind === 'omnigraph'} />}
 
           {error !== null && <div style={S.errorBanner}>engine error: {error}</div>}
 
           {/* The docked inspector replaces the workbench sidebar while open;
               in M5 mode the semantic dock (table + sim controls) owns the
               right edge instead — all three live below the toolbar rows. */}
-          {inspectorOpen ? (
+          {explorerOpen ? null : inspectorOpen ? (
             <GraphInspector dock="right" style={S.inspectorOverride} />
           ) : mode.kind === 'semantic' ? (
             <SemanticDock

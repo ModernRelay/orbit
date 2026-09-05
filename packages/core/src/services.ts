@@ -18,9 +18,13 @@
 
 import { OrbitOperationError } from './errors';
 import { resolveScope } from './scope';
+import { validateExpansion, matchesRelationship, invalidQuery } from './exploration';
 import type { Adjacency } from './adjacency';
 import type {
   AcceptedGraph,
+  AcceptedEdge,
+  GraphNode,
+  ExpansionQuery,
   ExpansionResponse,
   ExpansionService,
   NodeId,
@@ -231,8 +235,94 @@ function throwAborted(signal: AbortSignal): never {
 export function createLocalExpansionService<N = Record<string, unknown>, E = Record<string, unknown>>(
   getBase: () => LocalExpansionBase<N, E>,
 ): ExpansionService<N, E> {
+  // Continuations retain the original loaded result across their own overlay
+  // commits. Source/query changes reject; unrelated overlays do not reshuffle
+  // page membership. Bounded LRU ownership ends with this service instance.
+  interface PagePlan {
+    key: string;
+    nodes: readonly GraphNode<N>[];
+    edges: readonly AcceptedEdge<E>[];
+    seeds: ReadonlySet<NodeId>;
+  }
+  const pages = new Map<string, PagePlan>();
+
+  async function queryNeighbors(seedIds: readonly NodeId[], rawOptions: ExpansionQuery, ctx: RequestContext): Promise<ExpansionResponse<N, E>> {
+    const options = validateExpansion(rawOptions);
+    if (ctx.signal.aborted) throwAborted(ctx.signal);
+    const { cursor: _cursor, onProgress: _progress, preserveLayout: _preserve, ...params } = options;
+    void _cursor; void _progress; void _preserve;
+    const key = canonicalJson([ctx.datasetKey, ctx.sourceRevision, seedIds, { ...params, hops: options.hops ?? 1, direction: options.direction ?? 'either', relationshipTypeField: options.relationshipTypeField ?? 'type', limit: options.limit ?? 50, edgeLimit: options.edgeLimit ?? 10000 }]);
+    let plan: PagePlan;
+    let token: string;
+    let offset = 0;
+    if (options.cursor !== undefined) {
+      let decoded: unknown;
+      try { decoded = JSON.parse(options.cursor); } catch { invalidQuery('invalid expansion cursor'); }
+      if (!Array.isArray(decoded) || decoded.length !== 2 || typeof decoded[0] !== 'string' || !Number.isSafeInteger(decoded[1]) || decoded[1] < 0) invalidQuery('invalid expansion cursor');
+      token = decoded[0] as string;
+      offset = decoded[1] as number;
+      const cached = pages.get(token);
+      if (cached === undefined || cached.key !== key) invalidQuery('expansion cursor is stale or belongs to a different query');
+      plan = cached;
+      pages.delete(token);
+      pages.set(token, plan);
+    } else {
+      const { accepted } = getBase();
+      const seeds = new Set(seedIds.filter((id) => accepted.nodeIndex.has(id)));
+      const adjacency = new Map<NodeId, NodeId[]>();
+      const edges: AcceptedEdge<E>[] = [];
+      const direction = options.direction ?? 'either';
+      let scanned = 0;
+      for (const edge of accepted.edges) {
+        if (++scanned % 4096 === 0) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          if (ctx.signal.aborted) throwAborted(ctx.signal);
+        }
+        if (!matchesRelationship(edge, options)) continue;
+        edges.push(edge);
+        if (direction !== 'incoming') {
+          const list = adjacency.get(edge.source) ?? [];
+          list.push(edge.target); adjacency.set(edge.source, list);
+        }
+        if (direction !== 'outgoing') {
+          const list = adjacency.get(edge.target) ?? [];
+          list.push(edge.source); adjacency.set(edge.target, list);
+        }
+      }
+      const seen = new Set(seeds);
+      const queue = [...seeds];
+      const depths = queue.map(() => 0);
+      for (let head = 0; head < queue.length; head++) {
+        if (depths[head]! >= (options.hops ?? 1)) continue;
+        for (const neighbor of adjacency.get(queue[head]!) ?? []) {
+          if (++scanned % 4096 === 0) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            if (ctx.signal.aborted) throwAborted(ctx.signal);
+          }
+          if (seen.has(neighbor) || !accepted.nodeIndex.has(neighbor)) continue;
+          seen.add(neighbor); queue.push(neighbor); depths.push(depths[head]! + 1);
+        }
+      }
+      plan = { key, seeds, nodes: queue.filter((id) => !seeds.has(id)).map((id) => accepted.nodes[accepted.nodeIndex.get(id)!]!), edges };
+      token = ctx.requestId;
+      pages.set(token, plan);
+      while (pages.size > 8) pages.delete(pages.keys().next().value!);
+    }
+    if (ctx.signal.aborted) throwAborted(ctx.signal);
+    const limit = options.limit ?? 50;
+    const nodes = plan.nodes.slice(offset, offset + limit);
+    const ids = new Set([...plan.seeds, ...nodes.map((node) => node.id)]);
+    const pageEdges = plan.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+    const edges = pageEdges.slice(0, options.edgeLimit ?? 10000);
+    const nextCursor = offset + limit < plan.nodes.length ? JSON.stringify([token, offset + limit]) : undefined;
+    return {
+      nodes, edges,
+      page: { returnedNodes: nodes.length, returnedEdges: edges.length, totalNeighbors: plan.nodes.length, truncated: nextCursor !== undefined || edges.length < pageEdges.length, ...(nextCursor === undefined ? {} : { nextCursor }) },
+    };
+  }
   return {
     revisionDependencies: ['source'],
+    queryNeighbors,
     async neighbors(
       seedIds: readonly NodeId[],
       hops: number,

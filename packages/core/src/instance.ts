@@ -28,6 +28,13 @@ import type {
   ExpansionBatch,
   ExpansionResponse,
   ExpansionService,
+  ExpansionOptions,
+  ExpansionPage,
+  ExpansionProgress,
+  NeighborhoodOptions,
+  NeighborhoodResult,
+  NodeVisibility,
+  PathOutcome,
   FilterMode,
   FilterSpec,
   GraphDiagnostic,
@@ -137,6 +144,7 @@ import {
 } from './services';
 import type { RequestContextHandle, RevisionSnapshot } from './services';
 import { computePathEmphasis, createLocalPathService } from './pathService';
+import { neighborhoodOf, validateExpansion, validatePath, invalidQuery, validateCursor } from './exploration';
 import { createLocalSearchService } from './search';
 import type { SearchService } from './search';
 import { nextSynthesizedEdgeId } from './edgeIdentity';
@@ -420,7 +428,7 @@ export interface CreateGraphInstanceOptions<
  * SECOND caller the IDENTICAL in-flight promise, so both callers observe
  * the primary call's `{added}`/`{noop}` result instead of this marker.
  */
-export type ExpandNodeResult = { added: number } | { coalesced: true } | { noop: true };
+export type ExpandNodeResult = ({ added: number } | { coalesced: true } | { noop: true }) & { page?: ExpansionPage };
 
 /**
  * expansion bookkeeping: one committed expansion overlay. Data-merging
@@ -449,7 +457,7 @@ export interface ExpansionOverlayRecord {
  * out of it). They DO interleave with the undo stack as 'expansion'
  * steps (serializable value diffs of the effective-set state).
  */
-interface ExpansionRecord {
+export interface ExpansionRecord {
   expandedId: NodeId;
   addedNodeIds: readonly NodeId[];
   /** Owning overlay — removed wholesale when a collapse leaves no survivor
@@ -752,19 +760,22 @@ export interface GraphInstance<N = Record<string, unknown>, E = Record<string, u
    * IngestSession carrying the request id; a discard/rejection leaves the
    * graph untouched ('service-aborted' info / 'service-error' error
    * diagnostic; the promise rejects, the 'error' event never fires). Within
-   * one valid scope revision a second same-id call while one is in flight
-   * returns the IDENTICAL promise (one service call serves both); distinct
-   * ids run concurrently. Under an active hard scope, revealed neighbors
+   * a valid dependency coordinate, an equal seed/query call shares the
+   * IDENTICAL promise. A different query supersedes pending work for that
+   * seed; distinct ids run concurrently. Under an active hard scope, revealed neighbors
    * join the resolved scope (accretion) in the same commit.
    */
-  expandNode(id: NodeId, opts?: { hops?: number }): Promise<ExpandNodeResult>;
+  expandNode(id: NodeId, opts?: ExpansionOptions): Promise<ExpandNodeResult>;
+  /** Abort pending work without retracting a previously committed page. */
+  cancelExpansion(id: NodeId): void;
+  /** Bounded passive loaded-neighborhood read. Does not focus or select. */
+  getNeighborhood(id: NodeId, options?: NeighborhoodOptions): NeighborhoodResult<N, E>;
+  getSource(): { datasetKey: string; sourceRevision: number | string } | null;
   /**
-   * Undoes `id`'s own expansions — the navigation Back button, NOT a
-   * containment operation. Aborts `id`'s pending expansion AND explicitly
-   * removes the overlays its past expansions committed (plus their scope
-   * accretion). Committed overlay DATA otherwise persists until
-   * `removeOverlay()` or a replacing snapshot; this IS that explicit removal for
-   * expansion overlays.
+   * Retracts the newest committed expansion page for `id` and cancels its
+   * pending request. Earlier pages and other seeds retain their ownership.
+   * Removes its overlay wholesale when no introduced node survives; shared
+   * data can remain loaded while its effective visibility is retracted.
    *
    * On a node that was never expanded from, this does nothing — there is no
    * record to pop. To hide a node's neighbourhood behind it on a freshly
@@ -775,6 +786,8 @@ export interface GraphInstance<N = Record<string, unknown>, E = Record<string, u
   /** expansion bookkeeping for `id`: committed overlay records with
    * request id, provenance, and the ids each expansion revealed. */
   getExpansionOverlays(id: NodeId): readonly ExpansionOverlayRecord[];
+  /** Live effective expansion stack; overlayId is stable through undo/redo. */
+  getExpansionRecords(): readonly ExpansionRecord[];
 
   // --- search ---
   /**
@@ -800,6 +813,8 @@ export interface GraphInstance<N = Record<string, unknown>, E = Record<string, u
    * session-local — released by clearPath, any selection mutation, undo/
    * redo, or a scene rebuild; never a history step; never serialized. */
   findPath(sourceId: NodeId, targetId: NodeId, options?: PathOptions): Promise<PathResult | null>;
+  /** Passive detailed query; unlike findPath, never changes emphasis. */
+  findPathDetailed(sourceId: NodeId, targetId: NodeId, options?: PathOptions): Promise<PathOutcome>;
   clearPath(): void;
   getActivePath(): PathResult | null;
   /**
@@ -1223,6 +1238,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   const expansionLedger = new PendingExpansions();
   /** id → the in-flight promise same-id callers coalesce onto. */
   const expansionPromises = new Map<NodeId, Promise<ExpandNodeResult>>();
+  const expansionKeys = new Map<NodeId, string>();
+  const expansionObservers = new Map<string, Set<(progress: ExpansionProgress) => void>>();
   /** requestId → abort handle for the in-flight service call. */
   const expansionHandles = new Map<string, RequestContextHandle>();
   /** requestId → external rejector (collapse/destroy settle the caller
@@ -1243,6 +1260,13 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   /** Pinned accretion: previously-placed ids held still while an
    * expansion settles; released to just user pins on the next simulationEnd. */
   let accretionPinIds: ReadonlySet<NodeId> | null = null;
+  /** Explicit preserve-layout expansions retain landmarks until resume/layout reset. */
+  let explorationPinIds: ReadonlySet<NodeId> = new Set();
+  let explorationPinsNeedPush = false;
+  function clearExplorationPins(): void {
+    if (explorationPinIds.size > 0) explorationPinsNeedPush = true;
+    explorationPinIds = new Set();
+  }
   /** expansion resolver (caller-supplied or the built-in local walk). */
   const expansionService: ExpansionService<N, E> =
     opts.services?.expansion ??
@@ -1319,28 +1343,15 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
    * loaded VISIBLE edge list — scoped-out edges are not traversable). */
   const pathServiceImpl: PathService =
     opts.services?.path ??
-    createLocalPathService<N, E>(() => ({
-      nodes: accepted === null ? [] : accepted.nodes,
-      edges: accepted === null ? [] : accepted.edges,
-      isEdgeVisible: (id) => {
-        if (scene === null) return true; // pre-mount: the loaded set is the base
-        const k = sceneLinkIndexOf(id);
-        if (k === undefined) return false; // out of scope → not traversable
-        return softMask === null || softMask.isEdgeVisible(k);
-      },
-    }));
-  /** Lazy edge-id → SCENE link index (invalidated with the scene; the path
-   * base and emphasis both need link-lane indices, not accepted order). */
-  let sceneLinkIndexCache: { scene: RenderScene; map: ReadonlyMap<EdgeId, number> } | null = null;
-  function sceneLinkIndexOf(id: EdgeId): number | undefined {
-    if (scene === null) return undefined;
-    if (sceneLinkIndexCache === null || sceneLinkIndexCache.scene !== scene) {
-      const map = new Map<EdgeId, number>();
-      for (let k = 0; k < scene.edgeIdByIndex.length; k++) map.set(scene.edgeIdByIndex[k]!, k);
-      sceneLinkIndexCache = { scene, map };
-    }
-    return sceneLinkIndexCache.map.get(id);
-  }
+    createLocalPathService<N, E>(() => {
+      const pin = captureExportPin('visible');
+      return {
+        nodes: accepted === null ? [] : accepted.nodes,
+        edges: accepted === null ? [] : accepted.edges,
+        isNodeVisible: (id) => nodeVisibilityOf(id) === 'visible',
+        isEdgeVisible: (id) => pin?.visibleEdgeIds?.has(id) ?? true,
+      };
+    });
   /** search resolver (caller-supplied or the built-in local index). */
   const searchService: SearchService<N> =
     opts.services?.search ??
@@ -4054,11 +4065,9 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         pushSelectionToEngine(eng, selForPush.nodeIds);
       }
       const pinsForPush = pinsNext ?? prev.pins;
-      const persistentSize = store.getState().pinnedNodeIds.size;
       if (
-        pinsNext !== null ||
-        pinnedNodesNext !== null ||
-        (structuralChange && (pinsForPush.size > 0 || persistentSize > 0))
+        pinsNext !== null || pinnedNodesNext !== null || explorationPinsNeedPush ||
+        (structuralChange && (pinsForPush.size > 0 || store.getState().pinnedNodeIds.size > 0 || explorationPinIds.size > 0))
       ) {
         pushPinsToEngine(eng, pinsForPush);
       }
@@ -5175,9 +5184,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     eng: GraphEngine,
     pins: ReadonlyMap<NodeId, readonly [number, number]>,
   ): void {
+    explorationPinsNeedPush = false;
     if (eng.setPinnedIndices === undefined) return;
     const persistent = store.getState().pinnedNodeIds;
-    if (scene === null || (pins.size === 0 && persistent.size === 0 && accretionPinIds === null)) {
+    if (scene === null || (pins.size === 0 && persistent.size === 0 && accretionPinIds === null && explorationPinIds.size === 0)) {
       eng.setPinnedIndices(null);
       return;
     }
@@ -5187,6 +5197,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       if (idx !== undefined) indexSet.add(idx);
     }
     for (const id of persistent) {
+      const idx = scene.indexById.get(id);
+      if (idx !== undefined) indexSet.add(idx);
+    }
+    for (const id of explorationPinIds) {
       const idx = scene.indexById.get(id);
       if (idx !== undefined) indexSet.add(idx);
     }
@@ -5221,7 +5235,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     }
     // recovery/re-attach replays PERSISTENT pins with the drag
     // slice — freshly mapped indices, same union sink.
-    if (pins.size > 0 || pinnedNodeIds.size > 0) pushPinsToEngine(eng, pins);
+    if (pins.size > 0 || pinnedNodeIds.size > 0 || explorationPinIds.size > 0) pushPinsToEngine(eng, pins);
     if (emphasizedNodeId !== null && scene !== null && !scene.indexById.has(emphasizedNodeId)) {
       emphasizedNodeId = null; // departed while detached/lost — never resurrect
     }
@@ -6244,6 +6258,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     expansionHandles.clear();
     expansionRejectors.clear();
     expansionPromises.clear();
+    expansionKeys.clear();
+    expansionObservers.clear();
     for (const id of expansionLedger.ids()) expansionLedger.abort(id);
   }
 
@@ -6279,6 +6295,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       scopeSpec = null;
       scopeExtraIds.clear();
       expansionOverlays.clear();
+      clearExplorationPins();
       abortExpansionsForDatasetSwap();
       abortSearchFlight('dataset-changed', 'search aborted: the datasetKey changed');
       resetMaskState();
@@ -6528,8 +6545,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
       if (
         pinsChanged ||
-        pinnedChanged ||
-        (structuralChange && (nextPins.size > 0 || nextPinned.size > 0))
+        pinnedChanged || explorationPinsNeedPush ||
+        (structuralChange && (nextPins.size > 0 || nextPinned.size > 0 || explorationPinIds.size > 0))
       ) {
         pushPinsToEngine(eng, nextPins); // union sink reads the published slice
       }
@@ -7089,12 +7106,36 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
    * aborts the session — atomic sessions never published, so ALL batches
    * roll back and the graph is untouched.
    */
+  function notifyExpansion(progress: ExpansionProgress): void {
+    for (const observer of expansionObservers.get(progress.requestId) ?? []) {
+      // Observers cannot turn a committed graph action into a rejected promise.
+      try { observer(progress); } catch { /* consumer owns observer errors */ }
+    }
+  }
+
+  function responsePage(page: ExpansionPage | undefined, required: boolean): void {
+    if (page === undefined) {
+      if (required) invalidQuery('queryNeighbors must return explicit page metadata');
+      return;
+    }
+    for (const field of ['returnedNodes', 'returnedEdges', 'totalNeighbors'] as const) {
+      const value = page[field];
+      if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) invalidQuery(`expansion page ${field} must be a nonnegative integer`);
+    }
+    if (typeof page.returnedNodes !== 'number' || typeof page.returnedEdges !== 'number' || typeof page.truncated !== 'boolean') invalidQuery('expansion page requires counts and truncated');
+    validateCursor(page.nextCursor);
+    if (page.nextCursor !== undefined && !page.truncated) invalidQuery('a continuation requires truncated:true');
+  }
+
   async function mergeExpansionSession(
     id: NodeId,
     ctx: RequestContext,
     at: RevisionSnapshot,
     batches: Iterable<ExpansionBatch<N, E>> | AsyncIterable<ExpansionBatch<N, E>>,
     provenance: unknown,
+    options: ExpansionOptions,
+    bounded: boolean,
+    page: ExpansionPage | undefined,
   ): Promise<ExpandNodeResult> {
     const requestId = ctx.requestId;
     const overlayId = `expand:${id}:${requestId}`;
@@ -7105,12 +7146,23 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       atomic: true,
       overlayId,
     });
+    const abortIngest = (): void => {
+      if (ingest.state === 'open') void ingest.abort(ctx.signal.reason).catch(() => {});
+    };
+    ctx.signal.addEventListener('abort', abortIngest, { once: true });
     const allNodes: GraphNode<N>[] = [];
+    const receivedIds = new Set<NodeId>();
+    let receivedEdges = 0;
     let sequence = 0;
     try {
       for await (const b of batches) {
         if (!ownsExpansion(id, requestId)) {
           throw new OrbitOperationError({ code: 'aborted', cause: 'collapsed' });
+        }
+        for (const node of b.nodes ?? []) if (node.id !== id) receivedIds.add(node.id);
+        receivedEdges += b.edges?.length ?? 0;
+        if (bounded && (receivedIds.size > (options.limit ?? 50) || receivedEdges > (options.edgeLimit ?? 10000))) {
+          invalidQuery('expansion response exceeded the requested node or edge budget');
         }
         const batch: IngestBatch<N, E> = { sequence, batchId: `${requestId}#${sequence}` };
         if (b.nodes !== undefined) {
@@ -7120,6 +7172,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         if (b.edges !== undefined) batch.edges = b.edges;
         sequence++;
         await ingest.append(batch);
+        notifyExpansion({ requestId, seedId: id, batches: sequence, receivedNodes: receivedIds.size, receivedEdges, status: 'loading' });
       }
     } catch (err) {
       // Mid-stream failure: roll back ALL batches; graph untouched.
@@ -7138,6 +7191,13 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         `expansion stream for '${id}' failed mid-stream; all batches rolled back: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw err;
+    } finally {
+      ctx.signal.removeEventListener('abort', abortIngest);
+    }
+
+    if (page !== undefined && (page.returnedNodes !== receivedIds.size || page.returnedEdges !== receivedEdges || (page.totalNeighbors !== undefined && page.totalNeighbors < receivedIds.size))) {
+      await ingest.abort('invalid page metadata').catch(() => {});
+      invalidQuery('expansion page counts do not match its response');
     }
 
     // Final admission decision, serialized at the acceptance queue.
@@ -7196,6 +7256,11 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         }
       }
     }
+    const previousExplorationPins = explorationPinIds;
+    if (options.preserveLayout === true && scene !== null) {
+      cancelSettleFollow();
+      explorationPinIds = new Set([...explorationPinIds, ...scene.idByIndex]);
+    }
     // Pinned accretion: pin all PREVIOUSLY-placed nodes while the new
     // arrivals settle under 'force'; released on the next simulationEnd.
     if (layout === 'force' && scene !== null && revealed.length > 0) {
@@ -7207,6 +7272,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       for (const rid of addedExtras) scopeExtraIds.delete(rid);
       for (const rid of removedRestores) effectiveRemovedIds.add(rid);
       accretionPinIds = null;
+      explorationPinIds = previousExplorationPins;
       pushServiceDiagnostic(
         'service-error',
         'error',
@@ -7237,12 +7303,14 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     if (view !== null) {
       for (const rid of revealed) if (view.nodeIndex.has(rid)) added++;
     }
-    return { added };
+    notifyExpansion({ requestId, seedId: id, batches: sequence, receivedNodes: receivedIds.size, receivedEdges, status: 'committed' });
+    return page === undefined ? { added } : { added, page: { ...page } };
   }
 
   async function runExpansion(
     id: NodeId,
-    hops: number,
+    options: ExpansionOptions,
+    bounded: boolean,
     handle: RequestContextHandle,
     at: RevisionSnapshot,
   ): Promise<ExpandNodeResult> {
@@ -7250,7 +7318,11 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     const requestId = ctx.requestId;
     let response: ExpansionResponse<N, E>;
     try {
-      response = await expansionService.neighbors([id], hops, ctx);
+      if (bounded) {
+        const { onProgress: _progress, preserveLayout: _preserve, ...query } = options;
+        void _progress; void _preserve;
+        response = await expansionService.queryNeighbors!([id], query, ctx);
+      } else response = await expansionService.neighbors([id], options.hops ?? 1, ctx);
     } catch (err) {
       if (!ownsExpansion(id, requestId) || ctx.signal.aborted) {
         // Collapsed/destroyed while in flight — the caller promise was
@@ -7272,12 +7344,14 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       throw new OrbitOperationError({ code: 'aborted', cause: 'collapsed' });
     }
 
+    responsePage(response.page, bounded);
+    const page = response.page === undefined ? undefined : { ...response.page };
     if ('batches' in response) {
       // Streaming: cheap pre-gate, then one batch at a time through ONE
       // atomic session (final admission re-checks before commit).
       const denial = acceptanceQueue.admit(() => expansionAdmissible(id, ctx, at));
       if (denial !== null) discardExpansion(id, denial);
-      return mergeExpansionSession(id, ctx, at, response.batches, response.provenance);
+      return mergeExpansionSession(id, ctx, at, response.batches, response.provenance, options, bounded, page);
     }
 
     const denial = acceptanceQueue.admit(() => expansionAdmissible(id, ctx, at));
@@ -7288,14 +7362,24 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     const nodes = response.nodes ?? [];
     const edges = response.edges ?? [];
     const revealed = revealedIdsOf(nodes);
-    if (revealed.length === 0 && !anyUnknownEdge(edges)) return { noop: true };
+    const nodeCount = new Set(nodes.filter((node) => node.id !== id).map((node) => node.id)).size;
+    if (bounded && (nodeCount > (options.limit ?? 50) || edges.length > (options.edgeLimit ?? 10000))) invalidQuery('expansion response exceeded the requested node or edge budget');
+    if (page !== undefined && (page.returnedNodes !== nodeCount || page.returnedEdges !== edges.length || (page.totalNeighbors !== undefined && page.totalNeighbors < nodeCount))) invalidQuery('expansion page counts do not match its response');
+    if (revealed.length === 0 && !anyUnknownEdge(edges)) {
+      notifyExpansion({ requestId, seedId: id, batches: 1, receivedNodes: nodeCount, receivedEdges: edges.length, status: 'committed' });
+      return page === undefined ? { noop: true } : { noop: true, page: { ...page } };
+    }
     const rows: ExpansionBatch<N, E> = {};
     if (response.nodes !== undefined) rows.nodes = response.nodes;
     if (response.edges !== undefined) rows.edges = response.edges;
-    return mergeExpansionSession(id, ctx, at, [rows], response.provenance);
+    return mergeExpansionSession(id, ctx, at, [rows], response.provenance, options, bounded, page);
   }
 
-  function expandNode(id: NodeId, expandOpts?: { hops?: number }): Promise<ExpandNodeResult> {
+  function expandNode(id: NodeId, expandOpts?: ExpansionOptions): Promise<ExpandNodeResult> {
+    let options: ExpansionOptions;
+    try { options = validateExpansion(expandOpts ?? {}); } catch (error) { return Promise.reject(error); }
+    const bounded = options.direction !== undefined || options.relationshipTypes !== undefined || options.relationshipTypeField !== undefined || options.limit !== undefined || options.edgeLimit !== undefined || options.cursor !== undefined;
+    if (bounded && expansionService.queryNeighbors === undefined) return Promise.reject(new OrbitOperationError({ code: 'unsupported-operation', detail: 'the expansion service does not implement queryNeighbors' }));
     if (destroyed) {
       return Promise.reject(
         new OrbitOperationError(
@@ -7304,15 +7388,18 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         ),
       );
     }
-    // same-id coalescing: a second expandNode(id) while one is in
-    // flight returns the IDENTICAL promise — its result serves both callers
-    // and the service is called ONCE.
+    const { onProgress, ...keyOptions } = options;
+    const key = serviceCacheKey({ serviceId: 'expansion', params: { ...keyOptions, hops: options.hops ?? 1, preserveLayout: options.preserveLayout ?? false, bounded, ...(bounded ? { direction: options.direction ?? 'either', limit: options.limit ?? 50, edgeLimit: options.edgeLimit ?? 10000, relationshipTypeField: options.relationshipTypeField ?? 'type' } : {}) }, datasetKey: accepted?.datasetKey ?? '', declared: expansionService.revisionDependencies, revisions: revisionSnapshot() });
     const inFlight = expansionPromises.get(id);
-    if (inFlight !== undefined) return inFlight;
+    if (inFlight !== undefined && expansionKeys.get(id) === key) {
+      const requestId = expansionLedger.requestIdFor(id)!;
+      if (onProgress !== undefined) expansionObservers.get(requestId)?.add(onProgress);
+      return inFlight;
+    }
     if (accepted === null) return Promise.resolve({ noop: true });
-
-    const rawHops = expandOpts?.hops ?? 1;
-    const hops = Number.isFinite(rawHops) ? Math.max(1, Math.floor(rawHops)) : 1;
+    // A different query for the same seed supersedes the previous request.
+    // Existing committed overlays remain owned until explicit retraction.
+    if (inFlight !== undefined) cancelExpansion(id);
     const at = revisionSnapshot();
     // RequestContext: dataset + the three revision dimensions at issue
     // time, a request id, and an AbortController-owned signal.
@@ -7337,7 +7424,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
     });
     expansionPromises.set(id, promise);
+    expansionKeys.set(id, key);
+    expansionObservers.set(requestId, new Set(onProgress === undefined ? [] : [onProgress]));
     publish({ pendingExpansions: expansionLedger.ids() }); // loading affordance
+    notifyExpansion({ requestId, seedId: id, batches: 0, receivedNodes: 0, receivedEdges: 0, status: 'loading' });
 
     /** Ledger/handle cleanup plus the trailing publication. MUST run
      * BEFORE the caller promise settles: `await expandNode(...)` has to
@@ -7349,7 +7439,11 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
      * request cleans up (no residue either way, idempotent under the
      * abort path that already cleaned up). */
     const finishExpansion = (): void => {
-      if (expansionPromises.get(id) === promise) expansionPromises.delete(id);
+      if (expansionPromises.get(id) === promise) {
+        expansionPromises.delete(id);
+        expansionKeys.delete(id);
+      }
+      expansionObservers.delete(requestId);
       expansionHandles.delete(requestId);
       expansionRejectors.delete(requestId);
       if (expansionLedger.resolve(id, requestId) && !destroyed) {
@@ -7357,7 +7451,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
     };
 
-    void runExpansion(id, hops, handle, at).then(
+    void runExpansion(id, options, bounded, handle, at).then(
       (r) => {
         finishExpansion();
         if (!settled) {
@@ -7376,7 +7470,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     return promise;
   }
 
-  function retractExpansion(id: NodeId): void {
+  function cancelExpansion(id: NodeId): void {
     if (destroyed) return;
     // 1. Abort the pending expansion: reject the caller promise now,
     // cancel the RequestContext signal, drop the ledger slot. Abort is an
@@ -7386,19 +7480,28 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     const requestId = expansionLedger.abort(id);
     if (requestId !== null) {
       expansionPromises.delete(id);
+      expansionKeys.delete(id);
+      expansionObservers.delete(requestId);
       const err = new OrbitOperationError(
         { code: 'aborted', cause: 'collapsed' },
-        `expandNode('${id}') aborted by retractExpansion()`,
+        `expandNode('${id}') aborted by cancelExpansion()`,
       );
       expansionHandles.get(requestId)?.abort(err);
       expansionRejectors.get(requestId)?.(err);
+      expansionHandles.delete(requestId);
+      expansionRejectors.delete(requestId);
       pushServiceDiagnostic(
         'service-aborted',
         'info',
-        `pending expansion of '${id}' aborted by retractExpansion()`,
+        `pending expansion of '${id}' aborted by cancelExpansion()`,
       );
       publish({ pendingExpansions: expansionLedger.ids() });
     }
+  }
+
+  function retractExpansion(id: NodeId): void {
+    if (destroyed) return;
+    cancelExpansion(id);
     // 2. Pop the most recent expansion record for `id` and remove
     // its addedNodeIds from the effective set, EXCEPT survivors — a queue
     // job like every other mutator (same global admission order).
@@ -7617,9 +7720,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         pushSelectionToEngine(eng, sel.nodeIds);
       }
       const pins = store.getState().pins;
-      if (pins.size > 0 || store.getState().pinnedNodeIds.size > 0) {
-        pushPinsToEngine(eng, pins);
-      }
+      pushPinsToEngine(eng, pins);
     }
     if (labelRerank.setChanged) notifyLabelSubs(candidateSubs);
   }
@@ -7927,6 +8028,29 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     return activePath;
   }
 
+  async function findPathDetailed(sourceId: NodeId, targetId: NodeId, rawOptions: PathOptions = {}): Promise<PathOutcome> {
+    const options = validatePath(rawOptions);
+    if (destroyed) throw new OrbitOperationError({ code: 'aborted', cause: 'destroyed' });
+    const rich = options.universe !== undefined || options.maxHops !== undefined || options.relationshipTypes !== undefined || options.relationshipTypeField !== undefined;
+    if (rich && pathServiceImpl.findDetailed === undefined) throw new OrbitOperationError({ code: 'unsupported-operation', detail: 'the path service does not implement findDetailed' });
+    if (accepted === null) return { status: 'not-loaded', nodeIds: [...new Set([sourceId, targetId])] };
+    const at = revisionSnapshot();
+    const handle = createRequestContext({ datasetKey: accepted.datasetKey, revisions: at });
+    let outcome: PathOutcome;
+    if (pathServiceImpl.findDetailed !== undefined) outcome = await pathServiceImpl.findDetailed(sourceId, targetId, options, handle.context);
+    else {
+      const missing = [...new Set([sourceId, targetId])].filter((id) => !accepted!.nodeIndex.has(id));
+      if (missing.length > 0) return { status: 'not-loaded', nodeIds: missing };
+      const filtered = [...new Set([sourceId, targetId])].filter((id) => nodeVisibilityOf(id) !== 'visible');
+      if (filtered.length > 0) return { status: 'filtered', nodeIds: filtered };
+      const path = await pathServiceImpl.find(sourceId, targetId, options, handle.context);
+      outcome = path === null ? { status: 'unreachable' } : { status: 'found', path };
+    }
+    const denial = acceptanceQueue.admit(() => pathAdmissible(handle.context, at));
+    if (denial !== null) throw new OrbitOperationError({ code: 'aborted', cause: 'stale' }, `path query discarded: ${denial}`);
+    return outcome;
+  }
+
   async function findPath(
     sourceId: NodeId,
     targetId: NodeId,
@@ -7938,21 +8062,11 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         'findPath() called on a destroyed GraphInstance',
       );
     }
+    const validated = validatePath(options ?? {});
+    if (pathServiceImpl.findDetailed === undefined && (validated.universe !== undefined || validated.maxHops !== undefined || validated.relationshipTypes !== undefined || validated.relationshipTypeField !== undefined)) throw new OrbitOperationError({ code: 'unsupported-operation', detail: 'the path service does not implement findDetailed' });
     const token = ++pathSeq;
-    if (accepted === null) return null;
-    const at = revisionSnapshot();
-    const issuedDatasetKey = accepted.datasetKey;
-    const handle = createRequestContext({ datasetKey: issuedDatasetKey, revisions: at });
-    const result = await pathServiceImpl.find(sourceId, targetId, options ?? {}, handle.context);
-    // admission is the gate — a result arriving after a dataset
-    // replacement or revision drift is DISCARDED (typed rejection).
-    const denial = acceptanceQueue.admit(() => pathAdmissible(handle.context, at));
-    if (denial !== null) {
-      throw new OrbitOperationError(
-        { code: 'aborted', cause: 'stale' },
-        `findPath('${sourceId}' → '${targetId}') discarded: ${denial}`,
-      );
-    }
+    const outcome = await findPathDetailed(sourceId, targetId, validated);
+    const result = outcome.status === 'found' ? outcome.path : null;
     // Superseded by a newer findPath/clearPath: the RESULT still returns to
     // the caller, but emphasis belongs to the latest action only.
     if (token !== pathSeq || result === null) return result;
@@ -7983,6 +8097,21 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
     }
     return result;
+  }
+
+  function nodeVisibilityOf(id: NodeId): NodeVisibility {
+    if (scene === null) return 'visible';
+    const index = scene.indexById.get(id);
+    if (index === undefined) return 'out-of-scope';
+    return softMask === null || softMask.isNodeVisible(index) ? 'visible' : 'filtered';
+  }
+
+  function getNeighborhood(id: NodeId, options: NeighborhoodOptions = {}): NeighborhoodResult<N, E> {
+    // Snapshot hide predicates because SoftMask mutates in place.
+    const pin = options.visibility === 'visible' ? captureExportPin('visible') : null;
+    return neighborhoodOf(accepted, id, options,
+      JSON.stringify([accepted?.datasetKey, store.getState().revisions.model, store.getState().revisions.scope]),
+      nodeVisibilityOf, (edgeId) => pin?.visibleEdgeIds?.has(edgeId) ?? true);
   }
 
   /** Result contract. Classification only — NEVER mutates scope
@@ -8198,6 +8327,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         overlayIdsCleared = clearOverlayState();
         datasetKeyChanged = baseAccepted !== null && baseAccepted.datasetKey !== data.datasetKey;
         if (datasetKeyChanged) {
+          clearExplorationPins();
           // new dataset — position caches, engine diagnostics, mask
           // state, history, timeline playback, domain freezes, metric
           // columns, and atlas state do not carry over.
@@ -8717,6 +8847,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         any = true;
       }
       if (layoutChanged) {
+        clearExplorationPins();
         layout = nextLayout;
         pauseOnReadyAfterRestore = false;
       }
@@ -9240,8 +9371,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
       if (
         pinsChanged ||
-        pinnedChanged ||
-        (structuralChange && (nextPins.size > 0 || nextPinned.size > 0))
+        pinnedChanged || explorationPinsNeedPush ||
+        (structuralChange && (nextPins.size > 0 || nextPinned.size > 0 || explorationPinIds.size > 0))
       ) {
         // Persistent pins re-push after every structural commit — indices
         // shift; the union sink reads the just-published slice.
@@ -9938,8 +10069,11 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       expansionHandles.clear();
       expansionRejectors.clear();
       expansionPromises.clear();
+    expansionKeys.clear();
+    expansionObservers.clear();
     }
     accretionPinIds = null;
+    clearExplorationPins();
     // the in-flight search (if any) rejects; the cache empties.
     abortSearchFlight('destroyed', 'GraphInstance destroyed with a search in flight');
     // open ingest sessions are aborted (pending work rejects with
@@ -11197,7 +11331,11 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     isolateSelection,
     resetIsolation,
     expandNode,
+    cancelExpansion,
+    getNeighborhood,
+    getSource: () => accepted === null ? null : ({ datasetKey: accepted.datasetKey, sourceRevision: accepted.sourceRevision }),
     retractExpansion,
+    getExpansionRecords: () => expansionRecords.map((record) => ({ ...record, addedNodeIds: [...record.addedNodeIds] })),
     getExpansionOverlays: (id: NodeId) => {
       const records = expansionOverlays.get(id);
       return records === undefined ? EMPTY_EXPANSION_RECORDS : [...records];
@@ -11206,6 +11344,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     clearSearch,
     activateSearchResult,
     findPath,
+    findPathDetailed,
     clearPath,
     getActivePath,
     pauseSimulation: () => {
@@ -11217,9 +11356,11 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     },
     resumeSimulation: () => {
       if (destroyed) return;
+      clearExplorationPins();
       pauseOnReadyAfterRestore = false;
       const eng = engineIfReady();
       if (eng === null) return;
+      if (explorationPinsNeedPush) pushPinsToEngine(eng, store.getState().pins);
       eng.start();
       if (!store.getState().simulationRunning) publish({ simulationRunning: true });
     },
