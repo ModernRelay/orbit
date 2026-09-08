@@ -322,3 +322,63 @@ describe('replayable expansion requests', () => {
     } finally { session.destroy(); instance.destroy(); }
   });
 });
+
+describe('issue-ordered recording under concurrent expansions', () => {
+  /** 'a' pages twice (the continuation is gated once); other seeds resolve at once. */
+  function gatedService() {
+    const requests: string[] = [];
+    let release: () => void = () => {};
+    let gateUsed = false;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let generation = 0;
+    const service: ExpansionService<N, E> = {
+      revisionDependencies: ['source'],
+      neighbors: async () => ({ nodes: [], edges: [] }),
+      queryNeighbors: async (seeds, query, context) => {
+        if (context.signal.aborted) throw new Error('aborted');
+        const seed = seeds[0]!;
+        const page = (id: string, nextCursor?: string) => ({
+          nodes: [{ id, attrs: { label: id } }],
+          edges: [{ id: `${seed}${id}`, source: seed, target: id, attrs: { type: 'SUPPLIES' } }],
+          page: { returnedNodes: 1, returnedEdges: 1, totalNeighbors: seed === 'a' ? 2 : 1, truncated: nextCursor !== undefined, ...(nextCursor === undefined ? {} : { nextCursor }) },
+        });
+        if (seed !== 'a') { requests.push(seed); return page(`${seed}n`); }
+        if (query.cursor === undefined) { requests.push('a'); return page('b', `cur-${++generation}`); }
+        requests.push('a+');
+        if (!gateUsed) { gateUsed = true; await gate; }
+        return page('c');
+      },
+    };
+    return { service, requests, release: () => release() };
+  }
+
+  it('records in issue order, so a checkpoint replays the exact call sequence that succeeded live', async () => {
+    const { service, requests, release } = gatedService();
+    const seeds = ['a', 'p', 'q'].map((id, i) => ({ id, x: i * 10, y: 0, attrs: { label: id } }));
+    const { instance } = await rig(service, { ...data, nodes: seeds, edges: [] });
+    const session = createInvestigationSession(instance);
+    try {
+      const options = { limit: 1, preserveLayout: true };
+      const first = await session.expandNode('a', options);
+      // continuation issued FIRST but resolves LAST (gated)
+      const continuation = session.expandNode('a', { ...options, cursor: first.page!.nextCursor! });
+      await session.expandNode('p', options);
+      await session.expandNode('q', options);
+      release();
+      await continuation;
+      const shape = (list: readonly { seedId: string; continuation: boolean }[]) =>
+        list.map((e) => (e.continuation ? `${e.seedId}+` : e.seedId));
+      expect(shape(session.store.getState().expansions)).toEqual(['a', 'a+', 'p', 'q']);
+
+      const saved = await session.checkpoint('Concurrent');
+      expect(shape(saved.expansions)).toEqual(['a', 'a+', 'p', 'q']);
+      const before = requests.length;
+      await session.restoreCheckpoint(saved);
+      // replay reproduces the ISSUE sequence: the continuation follows its
+      // first page before any unrelated fresh page
+      expect(requests.slice(before)).toEqual(['a', 'a+', 'p', 'q']);
+      expect([...instance.getVisibleNodeIds()].sort()).toEqual(['a', 'b', 'c', 'p', 'pn', 'q', 'qn']);
+      expect(session.store.getState().error).toBeNull();
+    } finally { session.destroy(); instance.destroy(); }
+  });
+});

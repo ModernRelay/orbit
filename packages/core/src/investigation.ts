@@ -313,13 +313,29 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
       store.setState({ expansions: freeze(active), activeCheckpointId: null });
     }
   };
+  // Actions are ordered by ISSUE, not resolution. Concurrent expansions of
+  // different seeds may resolve out of order, but the service saw them (and
+  // touched its pagination plans) in issue order — so a checkpoint that
+  // replays sequentially in issue order reproduces exactly the call sequence
+  // that succeeded live. Recording resolution order let a live-succeeded
+  // continuation land AFTER later-issued first pages and fail on replay.
+  let issueCounter = 0;
+  const issuedAt = new WeakMap<InvestigationExpansion, number>();
+  const issueOf = (action: InvestigationExpansion): number => issuedAt.get(action) ?? Number.MAX_SAFE_INTEGER;
+  const insertByIssue = (list: readonly InvestigationExpansion[], action: InvestigationExpansion): InvestigationExpansion[] => {
+    const seq = issueOf(action);
+    let index = list.length;
+    while (index > 0 && issueOf(list[index - 1]!) > seq) index--;
+    return [...list.slice(0, index), action, ...list.slice(index)];
+  };
   const trackAction = (instance: GraphInstance<N, E>, action: InvestigationExpansion, result: ExpandNodeResult) => {
     if ('added' in result) {
       ownedActions.add(action);
       const record = instance.getExpansionRecords().filter((item) => item.expandedId === action.seedId).at(-1);
       if (record?.overlayId != null) recordIds.set(action, record.overlayId);
     }
-    actionCatalog.push(action);
+    if (!issuedAt.has(action)) issuedAt.set(action, ++issueCounter);
+    actionCatalog = insertByIssue(actionCatalog, action);
   };
   const assertRetractable = (instance: GraphInstance<N, E>, actions: readonly InvestigationExpansion[]) => {
     const records = [...instance.getExpansionRecords()];
@@ -388,13 +404,15 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
       if (expandOptions.cursor !== undefined && cursors.get(key) !== expandOptions.cursor) throw new InvestigationError('untracked-cursor', 'Load the preceding page through this investigation before continuing');
       if (pendingSeeds.has(id)) throw new InvestigationError('restore-pending', 'This entity already has an expansion in progress');
       pendingSeeds.add(id);
+      const issue = ++issueCounter; // the service sees this call NOW
       try {
         const result = await instance.expandNode(id, expandOptions);
         if (disposed || get() !== instance || sourceKey(sourceOf(instance)) !== source) throw new InvestigationError('source-mismatch', 'The graph source changed during expansion');
         recordPage(id, serializable, result);
         const action = freeze({ seedId: id, options: serializable, continuation: expandOptions.cursor !== undefined });
+        issuedAt.set(action, issue);
         trackAction(instance, action, result);
-        store.setState({ expansions: freeze([...store.getState().expansions, action]), activeCheckpointId: null, error: null });
+        store.setState({ expansions: freeze(insertByIssue(store.getState().expansions, action)), activeCheckpointId: null, error: null });
         return result;
       } finally { pendingSeeds.delete(id); }
     },

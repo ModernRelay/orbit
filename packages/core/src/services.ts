@@ -237,7 +237,13 @@ export function createLocalExpansionService<N = Record<string, unknown>, E = Rec
 ): ExpansionService<N, E> {
   // Continuations retain the original loaded result across their own overlay
   // commits. Source/query changes reject; unrelated overlays do not reshuffle
-  // page membership. Bounded LRU ownership ends with this service instance.
+  // page membership. Retention is CHAIN-AWARE: a plan is released the moment
+  // its chain is exhausted (no next cursor), and only abandoned live chains
+  // compete for the backstop cap, evicted least-recently-touched. A small
+  // fixed FIFO here previously made a checkpoint's replay depend on how many
+  // unrelated first pages were interleaved between a chain's pages — a
+  // recorded, validated checkpoint could deterministically fail to restore.
+  // Ownership ends with this service instance.
   interface PagePlan {
     key: string;
     nodes: readonly GraphNode<N>[];
@@ -245,6 +251,8 @@ export function createLocalExpansionService<N = Record<string, unknown>, E = Rec
     seeds: ReadonlySet<NodeId>;
   }
   const pages = new Map<string, PagePlan>();
+  /** backstop for abandoned (never-exhausted) chains, least-recently-touched out */
+  const MAX_LIVE_PLANS = 256;
 
   async function queryNeighbors(seedIds: readonly NodeId[], rawOptions: ExpansionQuery, ctx: RequestContext): Promise<ExpansionResponse<N, E>> {
     const options = validateExpansion(rawOptions);
@@ -306,7 +314,6 @@ export function createLocalExpansionService<N = Record<string, unknown>, E = Rec
       plan = { key, seeds, nodes: queue.filter((id) => !seeds.has(id)).map((id) => accepted.nodes[accepted.nodeIndex.get(id)!]!), edges };
       token = ctx.requestId;
       pages.set(token, plan);
-      while (pages.size > 8) pages.delete(pages.keys().next().value!);
     }
     if (ctx.signal.aborted) throwAborted(ctx.signal);
     const limit = options.limit ?? 50;
@@ -315,6 +322,11 @@ export function createLocalExpansionService<N = Record<string, unknown>, E = Rec
     const pageEdges = plan.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
     const edges = pageEdges.slice(0, options.edgeLimit ?? 10000);
     const nextCursor = offset + limit < plan.nodes.length ? JSON.stringify([token, offset + limit]) : undefined;
+    // exhausted chain: nothing can reference this plan again — release it now.
+    // Otherwise the plan is live and newest; only then may the backstop evict
+    // the least-recently-touched live chain (never this one).
+    if (nextCursor === undefined) pages.delete(token);
+    else while (pages.size > MAX_LIVE_PLANS) pages.delete(pages.keys().next().value!);
     return {
       nodes, edges,
       page: { returnedNodes: nodes.length, returnedEdges: edges.length, totalNeighbors: plan.nodes.length, truncated: nextCursor !== undefined || edges.length < pageEdges.length, ...(nextCursor === undefined ? {} : { nextCursor }) },

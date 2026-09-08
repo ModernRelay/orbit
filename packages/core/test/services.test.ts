@@ -398,3 +398,60 @@ describe('PendingExpansions', () => {
     expect(pending.ids()).toEqual(new Set());
   });
 });
+
+describe('createLocalExpansionService — chain-aware plan retention', () => {
+  // star: 's' with four leaves keeps a limit-1 chain LIVE; 'z' has a single
+  // neighbor so a limit-1 first page exhausts immediately.
+  const star = accepted(
+    ['s', 'l1', 'l2', 'l3', 'l4', 'z', 'zn'],
+    [
+      ['s', 'l1'],
+      ['s', 'l2'],
+      ['s', 'l3'],
+      ['s', 'l4'],
+      ['z', 'zn'],
+    ],
+  );
+  type Service = ReturnType<typeof createLocalExpansionService>;
+  type PageResult = Awaited<ReturnType<NonNullable<Service['queryNeighbors']>>>;
+  // distinct edgeLimit values make distinct query keys — each a fresh chain
+  const freshLive = (service: Service, i: number) =>
+    service.queryNeighbors!(['s'], { limit: 1, edgeLimit: 1000 + i }, ctx({ requestId: `fill-${i}` }));
+  // the paging envelope rides alongside the batch; read it structurally
+  const pageOf = (r: PageResult) => (r as { page?: { nextCursor?: string } }).page;
+  const cursorOf = (r: PageResult): string => {
+    const cursor = pageOf(r)?.nextCursor;
+    if (cursor === undefined) throw new Error('expected a live chain');
+    return cursor;
+  };
+
+  it('a live chain survives many interleaved fresh first pages (the old FIFO of 8 evicted it)', async () => {
+    const service = createLocalExpansionService(() => baseOf(star));
+    const cursor = cursorOf(await service.queryNeighbors!(['s'], { limit: 1, edgeLimit: 9 }, ctx({ requestId: 'chain' })));
+    for (let i = 0; i < 50; i++) await freshLive(service, i);
+    const next = await service.queryNeighbors!(['s'], { limit: 1, edgeLimit: 9, cursor }, ctx({ requestId: 'chain-2' }));
+    if (!isDirectBatch(next)) throw new Error('expected a direct batch');
+    expect(next.nodes?.map((n) => n.id)).toEqual(['l2']);
+  });
+
+  it('an exhausted chain releases its plan, so it never crowds out live chains', async () => {
+    const service = createLocalExpansionService(() => baseOf(star));
+    const cursor = cursorOf(await service.queryNeighbors!(['s'], { limit: 1, edgeLimit: 9 }, ctx({ requestId: 'chain' })));
+    for (let i = 0; i < 255; i++) await freshLive(service, i); // exactly at the 256 backstop
+    // exhausts on its first page → released immediately, no eviction pressure
+    const done = await service.queryNeighbors!(['z'], { limit: 1 }, ctx({ requestId: 'one-shot' }));
+    expect(pageOf(done)?.nextCursor).toBeUndefined();
+    const next = await service.queryNeighbors!(['s'], { limit: 1, edgeLimit: 9, cursor }, ctx({ requestId: 'chain-2' }));
+    if (!isDirectBatch(next)) throw new Error('expected a direct batch');
+    expect(next.nodes?.map((n) => n.id)).toEqual(['l2']);
+  });
+
+  it('the backstop still bounds memory: the least-recently-touched live chain goes first', async () => {
+    const service = createLocalExpansionService(() => baseOf(star));
+    const cursor = cursorOf(await service.queryNeighbors!(['s'], { limit: 1, edgeLimit: 9 }, ctx({ requestId: 'chain' })));
+    for (let i = 0; i < 256; i++) await freshLive(service, i); // 257 live → oldest (the chain) evicted
+    await expect(
+      service.queryNeighbors!(['s'], { limit: 1, edgeLimit: 9, cursor }, ctx({ requestId: 'chain-2' })),
+    ).rejects.toMatchObject({ message: expect.stringContaining('stale') });
+  });
+});
