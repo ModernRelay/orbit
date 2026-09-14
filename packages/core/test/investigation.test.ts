@@ -120,6 +120,76 @@ describe('investigation checkpoints', () => {
     } finally { session.destroy(); instance.destroy(); }
   });
 
+  it('rejects source drift while restoring host state, even when dataRef stays the same', async () => {
+    const { instance } = await rig();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => { started = resolve; });
+    const session = createInvestigationSession(instance, {
+      captureHostState: () => ({ filter: 'suppliers' }),
+      restoreHostState: async () => { started(); await gate; },
+    });
+    try {
+      instance.hideNodes(['b']);
+      session.savePath({ sourceId: 'a', targetId: 'b', path: { nodeIds: ['a', 'b'], edgeIds: ['ab'] } });
+      const saved = await session.checkpoint();
+      instance.showNodes(['b']);
+      const setViewState = vi.spyOn(instance, 'setViewState');
+      const restoring = session.restoreCheckpoint(saved);
+      await waiting;
+      instance.applyHostUpdate({ data: { ...data, sourceRevision: 'v2' } });
+      release();
+      await expect(restoring).rejects.toMatchObject({ code: 'source-mismatch' });
+      expect(setViewState).not.toHaveBeenCalled();
+      expect(instance.getVisibleNodeIds()).toEqual(['a', 'b']);
+      expect(session.store.getState()).toMatchObject({ status: 'idle', paths: [], expansions: [], activeCheckpointId: null });
+    } finally { release(); session.destroy(); instance.destroy(); }
+  });
+
+  it('rejects source drift while the saved view awaits a controlled acknowledgement', async () => {
+    const { instance } = await rig();
+    const session = createInvestigationSession(instance);
+    try {
+      instance.selectNodes(['a']);
+      instance.hideNodes(['b']);
+      session.savePath({ sourceId: 'a', targetId: 'b', path: { nodeIds: ['a', 'b'], edgeIds: ['ab'] } });
+      const saved = await session.checkpoint();
+      instance.showNodes(['b']);
+      instance.applyHostUpdate({ selection: [] });
+      const requested = vi.fn();
+      instance.on('viewStateRestore', requested);
+      const restoring = session.restoreCheckpoint(saved);
+      expect(requested).toHaveBeenCalledOnce();
+      instance.applyHostUpdate({ data: { ...data, sourceRevision: 'v2' } });
+      instance.applyHostUpdate({ selection: ['a'] });
+      await expect(restoring).rejects.toMatchObject({ code: 'source-mismatch' });
+      expect(instance.getVisibleNodeIds()).toEqual(['a', 'b']);
+      expect(session.store.getState()).toMatchObject({ status: 'idle', paths: [], activeCheckpointId: null });
+    } finally { session.destroy(); instance.destroy(); }
+  });
+
+  it('binds a loader-created instance before replay and detaches the previous instance', async () => {
+    const first = await rig();
+    const second = await rig();
+    let current = first.instance;
+    const session = createInvestigationSession(() => current, {
+      loadSource: async () => { current = second.instance; },
+    });
+    try {
+      session.savePath({ sourceId: 'a', targetId: 'b', path: { nodeIds: ['a', 'b'], edgeIds: ['ab'] } });
+      const saved = await session.checkpoint();
+      first.instance.applyHostUpdate({ data: { ...data, sourceRevision: 'v2' } });
+      await session.restoreCheckpoint(saved);
+      expect(session.store.getState()).toMatchObject({ paths: saved.paths, activeCheckpointId: saved.id });
+      const restored = session.store.getState();
+      first.instance.applyHostUpdate({ data: { ...data, sourceRevision: 'v3' } });
+      expect(session.store.getState()).toBe(restored);
+      second.instance.applyHostUpdate({ data: { ...data, sourceRevision: 'v2' } });
+      expect(session.store.getState()).toMatchObject({ paths: [], activeCheckpointId: null });
+    } finally { session.destroy(); first.instance.destroy(); second.instance.destroy(); }
+  });
+
   it('honors pre-cancellation without starting a source load or publishing session changes', async () => {
     const { instance } = await rig();
     const loadSource = vi.fn(async () => {});
@@ -234,6 +304,33 @@ describe('replayable expansion requests', () => {
       session.retractExpansion('a');
       expect(instance.getVisibleNodeIds()).toEqual(['a']);
     } finally { session.destroy(); instance.destroy(); }
+  });
+
+  it('stops replay when the source changes as the final expansion settles', async () => {
+    const { service } = pagedService();
+    const initial = { ...data, nodes: [data.nodes[0]!], edges: [] };
+    const { instance } = await rig(service, initial);
+    const restoreHostState = vi.fn();
+    const session = createInvestigationSession(instance, {
+      captureHostState: () => ({}), restoreHostState,
+    });
+    let unsubscribe = () => {};
+    try {
+      await session.expandNode('a', { limit: 1 });
+      const saved = await session.checkpoint();
+      let swap = true;
+      unsubscribe = instance.store.subscribe((next, previous) => {
+        if (swap && previous.pendingExpansions.size > 0 && next.pendingExpansions.size === 0) {
+          swap = false;
+          instance.applyHostUpdate({ data: { ...initial, sourceRevision: 'v2' } });
+        }
+      });
+      await expect(session.restoreCheckpoint(saved)).rejects.toMatchObject({ code: 'source-mismatch' });
+      expect(restoreHostState).not.toHaveBeenCalled();
+      expect(instance.getSource()?.sourceRevision).toBe('v2');
+      expect(instance.getExpansionRecords()).toEqual([]);
+      expect(session.store.getState()).toMatchObject({ status: 'idle', expansions: [], activeCheckpointId: null });
+    } finally { unsubscribe(); session.destroy(); instance.destroy(); }
   });
 
   it('saves the live expansion recipe after undo and redo', async () => {

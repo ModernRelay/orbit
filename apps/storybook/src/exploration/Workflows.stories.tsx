@@ -58,6 +58,27 @@ if ('page' in result) cursor = result.page?.nextCursor;
 instance.cancelExpansion('atlas'); // pending work only
 investigation.retractExpansion('atlas'); // most recent committed page` },
   } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const loadPage = async (name: string) => {
+      const load = canvas.getByRole('button', { name });
+      await waitFor(() => expect(load).toBeEnabled(), { timeout: 5000 });
+      await userEvent.click(load);
+      await waitFor(() => expect(canvas.getByText('Page complete. More suppliers are available.')).toBeVisible(), { timeout: 5000 });
+    };
+    await loadPage('Load 2 suppliers');
+    await loadPage('Load more suppliers');
+    await userEvent.click(canvas.getByRole('button', { name: 'Undo last graph change' }));
+    await loadPage('Load 2 suppliers');
+    await loadPage('Load more suppliers');
+    await userEvent.click(canvas.getByRole('button', { name: 'Retract last page' }));
+    await loadPage('Load 2 suppliers');
+    await loadPage('Load more suppliers');
+    await userEvent.click(canvas.getByRole('button', { name: 'Load more suppliers' }));
+    await waitFor(() => expect(canvas.getByText('All supplier pages loaded.')).toBeVisible(), { timeout: 5000 });
+    expect(canvas.getByRole('button', { name: 'Load more suppliers' })).toBeDisabled();
+    expect(canvas.queryByText('Load the preceding page through this investigation before continuing')).not.toBeInTheDocument();
+  },
 };
 
 export const StableMap: Story = {

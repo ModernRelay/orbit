@@ -271,6 +271,11 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
   // Only actual admitted contributions may be retracted from the instance.
   const ownedActions = new WeakSet<InvestigationExpansion>();
   const recordIds = new WeakMap<InvestigationExpansion, string>();
+  // A continuation belongs to one particular preceding page, even when a
+  // later first-page request restarts the same query. A duplicate no-op also
+  // depends on the query state it observed; undoing that state must not turn
+  // the no-op into a fresh expansion when a checkpoint is replayed.
+  const actionPredecessors = new WeakMap<InvestigationExpansion, InvestigationExpansion>();
   let actionCatalog: InvestigationExpansion[] = [];
   const pendingSeeds = new Set<string>();
   const now = options.now ?? (() => new Date());
@@ -299,12 +304,12 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
   };
   const reconcileHistory = (instance: GraphInstance<N, E>) => {
     const live = new Set(instance.getExpansionRecords().map((record) => record.overlayId));
-    const queries = new Set<string>();
+    const activeActions = new Set<InvestigationExpansion>();
     const active = actionCatalog.filter((action) => {
       const id = recordIds.get(action);
-      const key = queryKey(action.seedId, action.options);
-      if ((id !== undefined && !live.has(id)) || (action.continuation && !queries.has(key))) return false;
-      queries.add(key);
+      const predecessor = actionPredecessors.get(action);
+      if ((id !== undefined && !live.has(id)) || (predecessor !== undefined && !activeActions.has(predecessor))) return false;
+      activeActions.add(action);
       return true;
     });
     const previous = store.getState().expansions;
@@ -328,7 +333,21 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
     while (index > 0 && issueOf(list[index - 1]!) > seq) index--;
     return [...list.slice(0, index), action, ...list.slice(index)];
   };
-  const trackAction = (instance: GraphInstance<N, E>, action: InvestigationExpansion, result: ExpandNodeResult) => {
+  const precedingQueryAction = (actions: readonly InvestigationExpansion[], key: string) => {
+    for (let index = actions.length - 1; index >= 0; index--) {
+      const action = actions[index]!;
+      if (queryKey(action.seedId, action.options) === key) return action;
+    }
+    return null;
+  };
+  const trackAction = (instance: GraphInstance<N, E>, action: InvestigationExpansion, result: ExpandNodeResult,
+    predecessor = precedingQueryAction(actionCatalog, queryKey(action.seedId, action.options))) => {
+    // Restoring by checkpoint ID may reuse the same recipe object. Its current
+    // replay can be a no-op even if an earlier replay admitted an overlay.
+    ownedActions.delete(action);
+    recordIds.delete(action);
+    actionPredecessors.delete(action);
+    if (predecessor !== null && (action.continuation || 'noop' in result)) actionPredecessors.set(action, predecessor);
     if ('added' in result) {
       ownedActions.add(action);
       const record = instance.getExpansionRecords().filter((item) => item.expandedId === action.seedId).at(-1);
@@ -401,6 +420,7 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
       const source = syncSource(instance);
       const serializable = replayOptions(expandOptions);
       const key = queryKey(id, serializable);
+      const predecessor = precedingQueryAction(store.getState().expansions, key);
       if (expandOptions.cursor !== undefined && cursors.get(key) !== expandOptions.cursor) throw new InvestigationError('untracked-cursor', 'Load the preceding page through this investigation before continuing');
       if (pendingSeeds.has(id)) throw new InvestigationError('restore-pending', 'This entity already has an expansion in progress');
       pendingSeeds.add(id);
@@ -411,7 +431,7 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
         recordPage(id, serializable, result);
         const action = freeze({ seedId: id, options: serializable, continuation: expandOptions.cursor !== undefined });
         issuedAt.set(action, issue);
-        trackAction(instance, action, result);
+        trackAction(instance, action, result, predecessor);
         store.setState({ expansions: freeze(insertByIssue(store.getState().expansions, action)), activeCheckpointId: null, error: null });
         return result;
       } finally { pendingSeeds.delete(id); }
@@ -470,7 +490,10 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
       if (checkpoint.hostState !== undefined && options.restoreHostState === undefined) throw new InvestigationError('restore-failed', 'This checkpoint requires a host-state restore callback');
       const current = graph();
       const currentSource = sourceOf(current);
-      const mismatch = sourceKey(currentSource) !== sourceKey(checkpoint.source);
+      // The restore target is immutable. trackedSource follows live source
+      // publications and cannot serve as the admission stamp for this flight.
+      const expectedSource = sourceKey(checkpoint.source);
+      const mismatch = sourceKey(currentSource) !== expectedSource;
       if (mismatch && options.loadSource === undefined) throw new InvestigationError('source-mismatch', 'Load the checkpoint source before restoring this investigation');
       const flight = new AbortController();
       const upstream = restoreOptions.signal;
@@ -483,13 +506,21 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
       const applied: InvestigationExpansion[] = [];
       let replayStarted = false;
       let instance = current;
+      const checkSource = () => {
+        if (get() !== instance || sourceKey(sourceOf(instance)) !== expectedSource) {
+          throw new InvestigationError('source-mismatch', 'The source changed during investigation restore');
+        }
+      };
       try {
         if (mismatch) {
           await options.loadSource!(checkpoint.source, { signal: flight.signal });
           checkAbort(flight.signal);
           instance = graph();
         }
-        if (sourceKey(sourceOf(instance)) !== sourceKey(checkpoint.source)) throw new InvestigationError('source-mismatch', 'The loaded source does not match this checkpoint');
+        checkSource();
+        // A loader may replace the instance returned by a getter. Observe the
+        // accepted replacement before replay, and detach the previous one.
+        if (bound !== instance) refreshSource();
         if (!mismatch && trackedSource === sourceKey(currentSource)) {
           const retract = [...store.getState().expansions].reverse();
           assertRetractable(instance, retract);
@@ -500,13 +531,13 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
         }
         replayStarted = true;
         cursors.clear();
-        trackedSource = sourceKey(checkpoint.source);
+        trackedSource = expectedSource;
         const replayed: InvestigationExpansion[] = [];
         actionCatalog = [];
         store.setState({ expansions: [], paths: [], activeCheckpointId: null });
         for (const action of checkpoint.expansions) {
           checkAbort(flight.signal);
-          if (get() !== instance || sourceKey(sourceOf(instance)) !== trackedSource) throw new InvestigationError('source-mismatch', 'The source changed during investigation restore');
+          checkSource();
           const cursor = action.continuation ? cursors.get(queryKey(action.seedId, action.options)) : undefined;
           if (action.continuation && cursor === undefined) throw new InvestigationError('restore-failed', 'An expansion no longer has the saved continuation page');
           const cancel = () => instance.cancelExpansion(action.seedId);
@@ -514,6 +545,7 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
           let result: ExpandNodeResult;
           try { result = await instance.expandNode(action.seedId, { ...action.options, ...(cursor === undefined ? {} : { cursor }) }); }
           finally { flight.signal.removeEventListener('abort', cancel); }
+          checkSource();
           if ('added' in result) applied.push(action);
           trackAction(instance, action, result);
           checkAbort(flight.signal);
@@ -522,16 +554,17 @@ export function createInvestigationSession<N = Record<string, unknown>, E = Reco
         }
         if (checkpoint.hostState !== undefined) await options.restoreHostState!(checkpoint.hostState, { signal: flight.signal });
         checkAbort(flight.signal);
-        if (get() !== instance || sourceKey(sourceOf(instance)) !== trackedSource) throw new InvestigationError('source-mismatch', 'The source changed before restoring the saved view');
+        checkSource();
         const result = await instance.setViewState(checkpoint.view);
         checkAbort(flight.signal);
+        checkSource();
         if (result.status !== 'applied') throw new InvestigationError('restore-failed', result.status === 'mismatch' ? 'The view source reference changed' : result.problems.join('; '));
         remember(checkpoint);
         store.setState({ title: checkpoint.title, notes: checkpoint.notes, searchQuery: checkpoint.searchQuery, tableQuery: checkpoint.tableQuery ?? '',
           expansions: freeze(replayed), paths: checkpoint.paths, activeCheckpointId: checkpoint.id });
       } catch (error) {
         // Roll back only expansion contributions admitted by this restore.
-        if (!disposed && get() === instance && instance.getSource() !== null && instance.store.getState().status !== 'destroyed' && sourceKey(sourceOf(instance)) === trackedSource) {
+        if (!disposed && get() === instance && instance.getSource() !== null && instance.store.getState().status !== 'destroyed' && sourceKey(sourceOf(instance)) === expectedSource) {
           for (const action of applied.reverse()) {
             // A concurrent host action must never be removed as our rollback.
             try { assertRetractable(instance, [action]); }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, ReactElement, RefObject } from 'react';
 import { canonicalJson, createInvestigationSession, GRAPH_THEME_DARK } from '@modernrelay/orbit-core';
-import type { ExpansionOptions, GraphInstance, InvestigationSession, SearchResult, SearchUnavailableReason } from '@modernrelay/orbit-core';
+import type { ExpansionOptions, GraphInstance, InvestigationExpansion, InvestigationSession, SearchResult, SearchUnavailableReason } from '@modernrelay/orbit-core';
 import { Graph } from '@modernrelay/orbit-react';
 import type { GraphHandle } from '@modernrelay/orbit-react';
 import { GraphExplorer } from '@modernrelay/orbit-react/components/Explorer';
@@ -89,12 +89,19 @@ function InvestigationWorkspaceContent({ workflow, graph, investigation }: {
   const [canvasKey, setCanvasKey] = useState(0);
   const [events, setEvents] = useState<ServiceEvent[]>([]);
   const [notice, setNotice] = useState('');
-  const [cursor, setCursor] = useState<string | undefined>();
-  const [pagingStarted, setPagingStarted] = useState(false);
+  const [paging, setPaging] = useState<{
+    instance: Instance;
+    recipes: readonly InvestigationExpansion[];
+    cursor: string | undefined;
+  } | null>(null);
   const recoveries = useRef(new Set<AbortController>());
   const log = useCallback((event: ServiceEvent) => setEvents((old) => [...old.slice(-11), event]), []);
   const services = useMemo(() => createSupplyChainServices(log), [log]);
   const session = useSyncExternalStore(investigation.store.subscribe, investigation.store.getState, investigation.store.getState);
+  // Undo, retraction, and replay invalidate session cursors. Only continue the
+  // exact recipe list for which this control received its last page.
+  const pagingStarted = paging !== null && paging.instance === instance && paging.recipes === session.expansions;
+  const cursor = pagingStarted ? paging.cursor : undefined;
   const subscribeGraph = useCallback((listener: () => void) => instance?.store.subscribe(listener) ?? (() => undefined), [instance]);
   const readGraph = useCallback(() => instance?.store.getState() ?? null, [instance]);
   const state = useSyncExternalStore(subscribeGraph, readGraph, readGraph);
@@ -104,8 +111,7 @@ function InvestigationWorkspaceContent({ workflow, graph, investigation }: {
   const priorRestoreStatus = useRef(session.status);
   useEffect(() => {
     if (priorRestoreStatus.current === 'restoring' && session.status === 'idle') {
-      setCursor(undefined);
-      setPagingStarted(false);
+      setPaging(null);
     }
     priorRestoreStatus.current = session.status;
   }, [session.status]);
@@ -164,10 +170,10 @@ function InvestigationWorkspaceContent({ workflow, graph, investigation }: {
   }
 
   async function loadPage(): Promise<void> {
+    if (instance === null) return;
     const result = await investigation.expandNode('atlas', { ...expansion, ...(cursor === undefined ? {} : { cursor }) });
     if ('page' in result) {
-      setCursor(result.page?.nextCursor);
-      setPagingStarted(true);
+      setPaging({ instance, recipes: investigation.store.getState().expansions, cursor: result.page?.nextCursor });
       setNotice(result.page?.nextCursor === undefined ? 'All supplier pages loaded.' : 'Page complete. More suppliers are available.');
     }
   }
@@ -196,7 +202,7 @@ function InvestigationWorkspaceContent({ workflow, graph, investigation }: {
         {showExpansion && <>
           <button style={button} disabled={!usable || pending || (pagingStarted && cursor === undefined)} onClick={() => run(loadPage)}>{pagingStarted ? 'Load more suppliers' : 'Load 2 suppliers'}</button>
           <button style={button} disabled={!pending} onClick={() => instance?.cancelExpansion('atlas')}>Cancel request</button>
-          <button style={button} disabled={!usable || pending} onClick={() => { investigation.retractExpansion('atlas'); setCursor(undefined); setPagingStarted(false); setNotice('Last Atlas page retracted. Base suppliers remain.'); }}>Retract last supplier page</button>
+          <button style={button} disabled={!usable || pending} onClick={() => { investigation.retractExpansion('atlas'); setPaging(null); setNotice('Last Atlas page retracted. Base suppliers remain.'); }}>Retract last supplier page</button>
         </>}
         {workflow === 'stable' && <>
           <button style={button} disabled={!usable} onClick={() => instance?.focusNode('atlas')}>Focus Atlas</button>
@@ -212,7 +218,7 @@ function InvestigationWorkspaceContent({ workflow, graph, investigation }: {
           <button style={button} disabled={!usable} onClick={() => instance?.showNodes(['harbor'])}>Reveal Harbor</button>
         </>}
         {workflow === 'save' && <>
-          <button style={button} disabled={!usable || pending} onClick={() => { for (const controller of recoveries.current) controller.abort(); setInstance(null); setCanvasKey((old) => old + 1); setCursor(undefined); setPagingStarted(false); setNotice('Fresh canvas. Reopen a named checkpoint in the explorer.'); }}>Fresh canvas</button>
+          <button style={button} disabled={!usable || pending} onClick={() => { for (const controller of recoveries.current) controller.abort(); setInstance(null); setCanvasKey((old) => old + 1); setPaging(null); setNotice('Fresh canvas. Reopen a named checkpoint in the explorer.'); }}>Fresh canvas</button>
           <button style={button} disabled={session.checkpoints.length === 0} onClick={() => run(async () => {
             const checkpoint = session.checkpoints[0];
             if (checkpoint !== undefined) await investigation.restoreCheckpoint({ ...checkpoint,

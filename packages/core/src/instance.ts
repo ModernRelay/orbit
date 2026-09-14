@@ -214,7 +214,7 @@ import {
 } from './groups';
 import type { FoldRecord, GroupRewrite } from './groups';
 import { renderSvg, SVG_MAX_ELEMENTS_DEFAULT } from './svgExport';
-import { sameDataRef, validateViewState } from './viewState';
+import { canonicalJson, sameDataRef, validateViewState } from './viewState';
 import type {
   GraphViewState,
   SerializableScale,
@@ -1300,6 +1300,9 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   interface PendingRestore {
     transactionId: string;
     source: 'setViewState' | 'undo' | 'redo';
+    /** Frozen source identity for staged setViewState admission. History
+     * retains its existing per-dataset cursor semantics. */
+    sourceKey?: string | null;
     commands: readonly HistoryCommand[];
     awaiting: {
       selection?: readonly NodeId[];
@@ -6326,6 +6329,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
     }
     accepted = p.merged;
+    rejectStalePendingRestore();
     pauseOnReadyAfterRestore = false;
     // Ingestion publications supersede worker-derived snapshots just like
     // synchronous host data: a late reply must not replace this newer model.
@@ -8361,6 +8365,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
           bankReadyEnginePositions();
         }
         accepted = nextAccepted;
+        rejectStalePendingRestore();
         pauseOnReadyAfterRestore = false;
         // The publication pass invalidates expansion records
         // referencing nodes the new accepted snapshot no longer contains.
@@ -8826,7 +8831,10 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         any = true;
       }
       // dataRef: stash-only (serialization metadata, not rendering).
-      if (update.dataRef !== undefined) dataRef = update.dataRef;
+      if (update.dataRef !== undefined) {
+        dataRef = update.dataRef;
+        rejectStalePendingRestore();
+      }
       if (update.showLinks !== undefined && update.showLinks !== showLinks) {
         showLinks = update.showLinks;
         c.renderLinks = showLinks;
@@ -10343,7 +10351,31 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     });
   }
 
+  /** Source identity is captured before yielding to a controlled host. Model
+   * appends within that source remain admissible; a new revision/reference
+   * cannot receive the old view even if the host later echoes the same IDs. */
+  function restoreSourceKey(): string | null {
+    try {
+      return canonicalJson({
+        datasetKey: accepted?.datasetKey ?? null,
+        sourceRevision: accepted?.sourceRevision ?? null,
+        ...(dataRef === undefined ? {} : { dataRef }),
+      }) ?? null;
+    } catch { return null; }
+  }
+
+  function rejectStalePendingRestore(): boolean {
+    const pending = pendingRestore;
+    if (pending?.sourceKey === undefined) return false;
+    if (pending.sourceKey !== null && pending.sourceKey === restoreSourceKey()) return false;
+    failPendingRestore('restore-diverged', {
+      problem: 'the graph source changed while the restore was awaiting acknowledgement',
+    });
+    return true;
+  }
+
   function commitPendingRestore(): void {
+    if (rejectStalePendingRestore()) return;
     const pending = pendingRestore;
     if (pending === null) return;
     pendingRestore = null;
@@ -10371,6 +10403,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
    * and pass through untouched.
    */
   function checkRestoreAcknowledgement(update: GraphHostUpdate<N, E>): void {
+    if (rejectStalePendingRestore()) return;
     const pending = pendingRestore;
     if (pending === null) return;
     const met = (lane: 'selection' | 'pinnedNodeIds' | 'groups'): void => {
@@ -10662,6 +10695,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
           pendingRestore = {
             transactionId,
             source: 'setViewState',
+            sourceKey: restoreSourceKey(),
             commands: commands as readonly HistoryCommand[],
             awaiting,
             finish: finishTail,
