@@ -1,5 +1,29 @@
 # @modernrelay/orbit-react
 
+## 0.18.0
+
+### Minor Changes
+
+- f986ba5: Add bounded relationship inspection and paginated typed expansion, layout preservation, explicit path outcomes, and source-bound investigation checkpoints with replayable queries. Add GraphExplorer, passive node/edge/selection inspection, and controlled search/table intent. Include seven Storybook workflows and a demo workspace.
+
+### Patch Changes
+
+- 82802dd: Prevent stale worker results and view restores from replacing newer datasets,
+  preserve saved layouts before mounting, and restore scale domains and fold
+  counts during undo. Visible exports now respect edge filters.
+
+  Fix table filtering after empty results and refresh navigator and tooltip
+  content when the scene changes. Keep fit-view zoom limits effective during
+  position transitions.
+
+  Normalize nested Arrow values and Omnigraph temporal lists, honor cancellation
+  through the final ingestion boundary, and avoid collisions between generated
+  node and edge type names.
+
+- Updated dependencies [f986ba5]
+- Updated dependencies [82802dd]
+  - @modernrelay/orbit-core@0.18.0
+
 ## 0.17.0
 
 ### Patch Changes
