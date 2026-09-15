@@ -18,7 +18,7 @@ Handles 100K+ node graphs. UI components included: search, tables, histograms, a
 |---|---|
 | **Declarative end to end** | The graph is a prop — rendering, force layout, transitions, selection, and undo/redo are handled. No imperative canvas code. |
 | **Built for large graphs** | GPU rendering holds 100K+ nodes interactive; incremental filtering keeps the core's per-brush cost near 1 ms at that scale, measured on a disclosed reference machine. |
-| **Analyst UI included** | 13 packaged components — search, minimap, tables, histograms, timelines, legends, inspectors, and more. Headless-styleable, one import each. |
+| **Analyst UI included** | 14 packaged components — search, minimap, tables, histograms, timelines, legends, inspectors, and more. Headless-styleable, one import each. |
 | **Testable without WebGL** | A headless core and an engine seam with a `FakeEngine` double; integration tests run in plain jsdom. |
 | **Typed, honest boundaries** | Malformed data degrades with batched diagnostics — never throws mid-render. |
 
@@ -34,7 +34,7 @@ npm install @modernrelay/orbit-react @modernrelay/orbit-core @modernrelay/orbit-
 | Package | Role |
 |---|---|
 | `@modernrelay/orbit-core` | Headless core: validation, reconciliation, projection, the instance + store. Subpaths: `/engine` (the `GraphEngine` contract), `/testing` (`FakeEngine`, worker double). No React or engine imports. |
-| `@modernrelay/orbit-react` | `<Graph/>`, `GraphProvider`, 13 packaged UI components, hooks, ref API. React 18+ peer. |
+| `@modernrelay/orbit-react` | `<Graph/>`, `GraphProvider`, 14 packaged UI components, hooks, ref API. React 18+ peer. |
 | `@modernrelay/orbit-engine-cosmos` | The default rendering engine: WebGL drawing and GPU force simulation, built on [cosmos.gl](https://github.com/cosmosgl/graph). Loaded lazily when the graph mounts. |
 | `@modernrelay/orbit-data` | Prepared-data adapters: rows/CSV/JSON in the root entry; Arrow and Parquet as isolated subpath entries that never reach the root bundle. |
 | `@modernrelay/orbit-omnigraph` | Omnigraph server adapter: streamed export loader, `.pg` schema tooling, search service. |
@@ -55,11 +55,12 @@ Packaged components — each ships as its own entry point
 
 | Component | Entry | What it does |
 |---|---|---|
+| `GraphExplorer` | `components/Explorer` | Unified search, table, passive inspection, bounded expansion, ordered paths, and saved investigations |
 | `GraphSearch` | `components/Search` | Search box with debounced queries, result list, keyboard activation |
 | `GraphNavigator` | `components/Navigator` | Bounded semantic keyboard navigator (arrow/paging traversal with a11y announcements) |
 | `GraphMinimap` | `components/Minimap` | Whole-graph thumbnail with a draggable viewport rectangle |
 | `GraphTooltip` | `components/Tooltip` | Hover card for nodes and edges |
-| `GraphInspector` | `components/Inspector` | Docked detail panel for the focused/selected entity |
+| `GraphInspector` | `components/Inspector` | Node, relationship, and selection comparison with passive inspection |
 | `GraphTable` | `components/Table` | Virtualized tabular view of nodes or edges, crossfilter-connected text filtering |
 | `GraphHistogram` | `components/Histogram` | Crossfilter histogram — drag-brush a numeric dimension to filter the graph |
 | `GraphTimeline` | `components/Timeline` | Timeline band over a temporal dimension with brush + playback |
@@ -79,6 +80,11 @@ Packaged components — each ships as its own entry point
 - **Appearance**: hot-swappable dark/light themes, node image sprites, edge arrows, animated transitions.
 - **Persistence & export**: deep-linkable view state, undo/redo, SVG / streamed JSON / PNG exports.
 - **Scale**: measured performance gates, telemetry snapshots, degradation ladder, off-main-thread data acceptance.
+
+For runnable examples of search recovery, typed pagination, stable layouts, path explanations,
+and durable checkpoints, see the [exploration workflow guide](docs/core/exploration-workflows.md)
+and **Exploration → Investigation workflows** in Storybook. The demo’s **Explore graph**
+button opens the same workspace for generated, CSV, streamed, and Omnigraph data.
 
 ## Hooks & imperative API
 

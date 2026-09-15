@@ -14,6 +14,7 @@ export default defineConfig({
     'components/Minimap': 'src/components/Minimap/index.tsx',
     'components/Tooltip': 'src/components/Tooltip/index.tsx',
     'components/Inspector': 'src/components/Inspector/index.tsx',
+    'components/Explorer': 'src/components/Explorer/index.tsx',
     'components/Table': 'src/components/Table/index.tsx',
     'components/SimControls': 'src/components/SimControls/index.tsx',
   },

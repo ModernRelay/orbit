@@ -34,6 +34,7 @@ import type {
   CrossfilterSession,
   DimensionSpec,
   ExpandNodeResult,
+  ExpansionOptions,
   FilterExpr,
   FilterSpec,
   GraphDiagnostic,
@@ -52,9 +53,12 @@ import type {
   MetaEdge,
   MetricColumn,
   PathOptions,
+  PathOutcome,
   PathResult,
   MetricName,
   NodeId,
+  NeighborhoodOptions,
+  NeighborhoodResult,
   ResolvedCluster,
   ResolvedGroup,
   Revisions,
@@ -339,6 +343,8 @@ export interface GraphHandle<N = Record<string, unknown>, E = Record<string, unk
    * Emphasis is session-local — released by clearPath, any selection
    * mutation, undo/redo, or a scene rebuild; never in history/view state. */
   findPath(sourceId: NodeId, targetId: NodeId, options?: PathOptions): Promise<PathResult | null>;
+  /** Explain a bounded connection query without changing camera or emphasis. */
+  findPathDetailed(sourceId: NodeId, targetId: NodeId, options?: PathOptions): Promise<PathOutcome>;
   clearPath(): void;
   // --- selection algebra ---
   /** Expand to the 1-hop neighborhood of `id` (or of the current selection). */
@@ -364,7 +370,11 @@ export interface GraphHandle<N = Record<string, unknown>, E = Record<string, unk
   /** Clear the hard scope — the full accepted model returns. */
   resetIsolation(): void;
   /** Ego-expand `id` through the configured ExpansionService. */
-  expandNode(id: NodeId, opts?: { hops?: number }): Promise<ExpandNodeResult>;
+  expandNode(id: NodeId, opts?: ExpansionOptions): Promise<ExpandNodeResult>;
+  /** Stop a pending expansion without retracting admitted relationships. */
+  cancelExpansion(id: NodeId): void;
+  /** Passive, bounded relationship read; never moves the camera. */
+  getNeighborhood(id: NodeId, options?: NeighborhoodOptions): NeighborhoodResult<N, E>;
   /** Abort `id`'s pending expansion and remove its committed expansion
    * overlays. */
   retractExpansion(id: NodeId): void;
@@ -1101,6 +1111,8 @@ function GraphInner<N, E>(
       },
       findPath: (sourceId: NodeId, targetId: NodeId, options?: PathOptions) =>
         instance.findPath(sourceId, targetId, options),
+      findPathDetailed: (sourceId: NodeId, targetId: NodeId, options?: PathOptions) =>
+        instance.findPathDetailed(sourceId, targetId, options),
       clearPath: () => {
         instance.clearPath();
       },
@@ -1141,8 +1153,10 @@ function GraphInner<N, E>(
       resetIsolation: () => {
         instance.resetIsolation();
       },
-      expandNode: (id: NodeId, opts?: { hops?: number }): Promise<ExpandNodeResult> =>
+      expandNode: (id: NodeId, opts?: ExpansionOptions): Promise<ExpandNodeResult> =>
         instance.expandNode(id, opts),
+      cancelExpansion: (id: NodeId) => instance.cancelExpansion(id),
+      getNeighborhood: (id: NodeId, options?: NeighborhoodOptions) => instance.getNeighborhood(id, options),
       retractExpansion: (id: NodeId) => {
         instance.retractExpansion(id);
       },

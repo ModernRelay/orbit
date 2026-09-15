@@ -156,6 +156,8 @@ export interface GraphTableProps {
   overscan?: number;
   /** Replaces default cell content (rendered inside the cell element). */
   renderCell?: (ctx: GraphTableCellContext) => ReactNode;
+  /** Inspect an activated row independently of the selection intent. */
+  onRowActivate?: (row: GraphTableRowRef) => void;
   /** Accessible name of the table. Default 'Graph table'. */
   label?: string;
   /** Class hook for the root; providing it drops the decorative styles. */
@@ -432,6 +434,7 @@ function GraphTableInner(
       : selectedNodes.has(row.key);
 
   const activateRow = (row: GraphTableRowRef, additive: boolean): void => {
+    props.onRowActivate?.(row);
     if (row.edge !== undefined) {
       if (row.id === null) return; // unaddressable (no caller edge id)
       const id = row.id;

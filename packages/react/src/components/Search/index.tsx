@@ -78,6 +78,9 @@ export interface GraphSearchProps {
   /** Explicit instance (multi-instance pages); ambient context otherwise. */
   instance?: AnyGraphInstance;
   placeholder?: string;
+  /** Optional controlled query, e.g. an investigation session's searchQuery. */
+  value?: string;
+  onValueChange?: (value: string) => void;
   /** Debounce window in ms — one `instance.search` per settled window. Default 200. */
   debounceMs?: number;
   /** Result cap forwarded to the service. Default 20. */
@@ -88,6 +91,9 @@ export interface GraphSearchProps {
    * `<Graph onSearchResultUnavailable>` prop when omitted.
    */
   onResultUnavailable?: (result: SearchResult, reason: SearchUnavailableReason) => void;
+  /** Called after a result focuses successfully; compose an inspector without
+   * changing the search component's selection policy. */
+  onResultActivate?: (result: SearchResult) => void;
   /** Custom option content (rendered INSIDE the option row). Default: label
    * text node + score (when present). */
   renderResult?: (r: SearchResult) => ReactNode;
@@ -147,7 +153,12 @@ export function GraphSearch(props: GraphSearchProps): ReactElement {
   const baseId = useId();
   const listboxId = `${baseId}search-listbox`;
 
-  const [query, setQuery] = useState('');
+  const [internalQuery, setInternalQuery] = useState('');
+  const query = props.value ?? internalQuery;
+  const setQuery = (value: string): void => {
+    if (props.value === undefined) setInternalQuery(value);
+    props.onValueChange?.(value);
+  };
   /** Listbox visibility — closed by 'focused' activation / Escape until the
    * next keystroke reopens it. */
   const [open, setOpen] = useState(false);
@@ -155,6 +166,7 @@ export function GraphSearch(props: GraphSearchProps): ReactElement {
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduledQueryRef = useRef('');
 
   const cancelPending = (): void => {
     if (timerRef.current !== null) {
@@ -165,6 +177,27 @@ export function GraphSearch(props: GraphSearchProps): ReactElement {
 
   // Unmount/instance-swap hygiene: never fire a search for a dead widget.
   useEffect(() => cancelPending, [instance]);
+
+  // One input value owns scheduling, whether it came from typing or restoring
+  // an investigation. Controlled reflection cannot issue duplicate searches.
+  useEffect(() => {
+    const previous = scheduledQueryRef.current;
+    scheduledQueryRef.current = query;
+    if (query === '') {
+      if (previous !== '') {
+        setOpen(false);
+        setActiveIndex(-1);
+        instance.clearSearch();
+      }
+      return undefined;
+    }
+    setOpen(true);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      void instance.search(query, { limit }).catch(() => {});
+    }, debounceMs);
+    return cancelPending;
+  }, [query, instance, limit, debounceMs]);
 
   const results: readonly SearchResult[] = search === null ? [] : search.results;
   /** I6 query coherence: the published slice answers the CURRENT input only
@@ -188,23 +221,18 @@ export function GraphSearch(props: GraphSearchProps): ReactElement {
       // Input emptied: clear the shared slice immediately — no
       // trailing search may resurrect stale results.
       setOpen(false);
+      scheduledQueryRef.current = '';
       instance.clearSearch();
       return;
     }
     setOpen(true);
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      // Supersede/staleness rejections are by-design outcomes — the
-      // diagnostics channel carries the why; the box just shows the latest
-      // completed publication via store.search.
-      void instance.search(value, { limit }).catch(() => {});
-    }, debounceMs);
   };
 
   const clearAll = (): void => {
     cancelPending();
     setQuery('');
     setOpen(false);
+    scheduledQueryRef.current = '';
     setActiveIndex(-1);
     instance.clearSearch();
   };
@@ -215,6 +243,7 @@ export function GraphSearch(props: GraphSearchProps): ReactElement {
       // Focused: close the listbox and clear the highlight.
       setOpen(false);
       setActiveIndex(-1);
+      props.onResultActivate?.(result);
       return;
     }
     const cb = props.onResultUnavailable ?? getSearchResultUnavailableCallback(instance);

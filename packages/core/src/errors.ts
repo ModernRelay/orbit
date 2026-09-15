@@ -33,6 +33,8 @@ export type GraphError =
  * the union is the public contract, the wiring arrives with each subsystem.
  */
 export type GraphOperationError =
+  | { code: 'invalid-operation'; detail: string }
+  | { code: 'unsupported-operation'; detail: string }
   | { code: 'export-too-large'; elementCount: number; limit: number }
   | { code: 'export-materialization-too-large'; rowCount: number; limit: number }
   | { code: 'queue-overflow'; queuedBytes: number; limit: number }
