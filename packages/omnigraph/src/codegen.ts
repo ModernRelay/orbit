@@ -2,15 +2,14 @@
  * `.pg` → TypeScript code generation.
  *
  * The `.pg` scalar set is closed, so typed attrs for the `N`/`E` generics
- * generate mechanically: one interface per node/edge type, a `NodeAttrs` /
+ * generate mechanically: one props type per node/edge type, a `NodeAttrs` /
  * `EdgeAttrs` discriminated union on the adapter-injected `'orbit:type'`
  * field (namespaced so a schema's own `type` property emits as an ordinary
  * member), and a `TypeMap` lookup interface.
  *
- * Generated shapes describe attrs **after** the adapter's wire normalization
- * (the v1 loader rewrites export-path wire values to the query-path string
- * forms before populating attrs — see `normalize.ts`), so one encoding holds
- * regardless of read path:
+ * Generated shapes describe export-loaded attrs **after** the adapter's
+ * wire normalization (see `normalize.ts`). Physical ids live on GraphNode
+ * and GraphEdge, outside these attrs; a schema's own id property is ordinary data:
  *
  * `Date` → `string` (`'YYYY-MM-DD'`)
  * `DateTime` → `string` (ISO 8601, `'YYYY-MM-DDTHH:MM:SS.mmmZ'`)
@@ -18,6 +17,7 @@
  * `I64`/`U64` → `number` (beware silent rounding past ±2^53)
  * `F32`/`F64` → `number`
  * `Vector(n)` → `number[]`
+ * `[T]` → `(T | null)[]` (stored list elements can be null)
  * `Blob` → `string` (`data:` URI for inline blobs, stored URI refs verbatim)
  * `T?` → `T | null`
  *
@@ -93,7 +93,7 @@ function tsType(type: PgType): string {
     case 'enum':
       return type.values.length === 0 ? 'string' : type.values.map(tsStringLiteral).join(' | ');
     case 'list':
-      return `${SCALAR_TS[type.element]}[]`;
+      return `(${SCALAR_TS[type.element]} | null)[]`;
     case 'unknown':
       return 'unknown';
   }
@@ -151,27 +151,14 @@ function emitPropsInterface(
   properties: readonly PgProperty[],
 ): void {
   lines.push(`/** Normalized attrs for ${kindLabel} type \`${typeName}\`. */`);
-  lines.push(`export interface ${interfaceName} {`);
-  if (!properties.some((p) => p.name === 'id')) {
-    lines.push(
-      `  /** Physical Omnigraph id — injected into every export line's \`data\`; unique per ${kindLabel} type only. */`,
-    );
-    lines.push('  id: string;');
+  if (properties.length === 0) {
+    lines.push(`export type ${interfaceName} = object;`, '');
+    return;
   }
+  lines.push(`export interface ${interfaceName} {`);
   for (const prop of properties) {
-    if (prop.name === 'id') {
-      // Export normalization requires `data.id` to be a string regardless of
-      // a schema declaration. Emitting the declared wire scalar here (for
-      // example I64 -> number) would make generated attrs unsound.
-      lines.push(
-        `  /** Physical Omnigraph id — normalized as a required string regardless of its schema wire type. */`,
-      );
-      lines.push('  id: string;');
-      continue;
-    }
-    // Every schema property emits normally — including one named `type`: the
-    // adapter's discriminator lives at the namespaced ORBIT_TYPE_KEY, so
-    // there is nothing to shadow.
+    // Physical identity belongs to GraphNode/GraphEdge.id, outside attrs.
+    // Schema properties named `id` and `type` retain their declared types.
     emitProperty(lines, prop);
   }
   lines.push('}');
@@ -214,10 +201,11 @@ function headerBanner(fingerprintLine: string, extra: string | undefined): strin
   }
   lines.push(
     '//',
-    "// Shapes describe attrs AFTER the adapter's wire normalization (both read",
-    '// paths converge on the query-path string encodings):',
-    "//   Date → 'YYYY-MM-DD' · DateTime → ISO 8601 · enum(...) → literal union",
+    "// Shapes describe export-loaded attrs AFTER the adapter's wire normalization:",
+    '//   Physical entity ids live on GraphNode/GraphEdge, outside attrs.',
+    "//   Date → 'YYYY-MM-DD' · DateTime → ISO 8601 UTC · enum(...) → literal union",
     '//   I64/U64/F32/F64 → number · Vector(n) → number[] · T? → T | null',
+    '//   [T] → (T | null)[] (null list elements are retained)',
     "//   Blob → string ('data:' URI for inline blobs, stored URI for external)",
     '',
   );
@@ -230,11 +218,12 @@ function headerBanner(fingerprintLine: string, extra: string | undefined): strin
 
 /**
  * Generate a self-contained TypeScript module of typed attrs from a parsed
- * `.pg` schema: one `<Name>Props` interface per node type, one
+ * `.pg` schema: one `<Name>Props` type per node type, one
  * `<Name>EdgeProps` per edge type (with an additional numeric suffix when
  * either preferred name is already used), `NodeAttrs`/`EdgeAttrs` discriminated unions on the
  * adapter-injected `'orbit:type'` field, and a `TypeMap` lookup interface with
  * `NodeTypeName`/`EdgeTypeName` key unions.
+ * Props with declared properties are interfaces; property-free props use `object`.
  *
  * Deterministic: identical input (schema + options) yields identical output.
  */

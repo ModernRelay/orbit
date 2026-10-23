@@ -1,0 +1,11 @@
+// Stable, bounded search with both a whole-node value and a label projection.
+// The wire columns are s and s.title; s.@id holds system identity, s.id data.
+query search_signals($q: String) {
+    match {
+        $s: Signal
+        $s.title contains $q
+    }
+    return { $s, $s.title }
+    order { $s.slug asc }
+    limit 10
+}

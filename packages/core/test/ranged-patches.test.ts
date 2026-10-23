@@ -8,6 +8,7 @@
  * emulated — cosmos keeps `rangeUpdates: []` and full uploads.
  */
 
+import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 
 import { createGraphInstance } from '../src/instance';

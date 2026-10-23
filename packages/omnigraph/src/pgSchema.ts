@@ -591,16 +591,16 @@ export interface BigIntKeyWarning {
 }
 
 /**
- * Find `I64`/`U64` properties used as identity (`@key` or named `id`). The
+ * Find `I64`/`U64` properties used as schema keys (`@key`). The
  * HTTP path emits native JSON numbers even past ±2^53, where `JSON.parse`
- * silently rounds them, so two distinct big-int ids can collapse. Surface
- * these hazards before loading.
+ * silently rounds them. Physical entity ids are separate strings and stay
+ * exact; warn that key attributes themselves may lose precision.
  */
 export function bigIntKeyWarnings(schema: PgSchema): BigIntKeyWarning[] {
   const out: BigIntKeyWarning[] = [];
   for (const t of [...schema.nodes, ...schema.edges]) {
     for (const p of t.properties) {
-      if ((p.type === 'I64' || p.type === 'U64') && (p.key || p.name === 'id')) {
+      if ((p.type === 'I64' || p.type === 'U64') && p.key) {
         out.push({ type: t.name, property: p.name });
       }
     }

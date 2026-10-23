@@ -1,0 +1,13 @@
+{
+  "requestHeader": {
+    "Omnigraph-Http-Api": "0.14"
+  },
+  "discovery": {
+    "method": "HEAD",
+    "path": "/healthz",
+    "status": 200,
+    "responseHeader": {
+      "Omnigraph-Http-Api": "0.14"
+    }
+  }
+}

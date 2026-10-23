@@ -9,6 +9,9 @@
     "directory": "packages/engine-cosmos"
   },
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "sideEffects": false,
   "files": [
     "dist"
@@ -31,11 +34,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cosmos.gl/graph": "3.4.0",
+    "@cosmos.gl/graph": "3.5.1",
+    "@luma.gl/core": "~9.3.6",
+    "@luma.gl/engine": "~9.3.6",
+    "@luma.gl/shadertools": "~9.3.6",
+    "@luma.gl/webgl": "~9.3.6",
     "@modernrelay/orbit-core": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "vitest": "^3.0.0"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }

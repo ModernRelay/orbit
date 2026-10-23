@@ -118,8 +118,9 @@ export interface OmnigraphLoadResult {
   serverVersion: string;
   /**
    * Non-fatal observations: SDK/server major.minor mismatch, accepted
-   * drift, big-int identity hazards, and skipped unknown lines. Never
-   * hides a retry or accepted-drift decision.
+   * drift, big-int key attribute precision hazards, and skipped unknown
+   * lines. Never hides a retry or accepted-drift decision. HTTP API contract
+   * mismatches are fatal errors, not warnings.
    */
   warnings: string[];
 }

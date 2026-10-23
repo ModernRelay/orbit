@@ -1,66 +1,102 @@
-# Omnigraph real-data fixtures
+# OmniGraph 0.14 integration fixtures
 
-Recorded HTTP responses from a real `omnigraph-server` (0.8.x), used to test
-`@modernrelay/orbit-omnigraph` against genuine wire
-bytes instead of hand-written mocks. Tests inject a replay `fetch` into the
-real `@modernrelay/omnigraph` SDK (`OmnigraphOptions.fetch`) and serve these
-files for the requests the SDK issues.
+These are verbatim HTTP bodies recorded from the official **OmniGraph 0.14.0**
+server. Adapter tests replay them through the real TypeScript SDK. The live
+integration tests also start a fresh local server and exercise both the adapter
+and the demo's same-origin `/og` proxy.
 
-## Layout
+## Contents
 
-| Path | What |
-|---|---|
-| `cluster/cluster.yaml` | Minimal cluster config: one graph `demo`, no policies, no embedding provider |
-| `cluster/demo.pg` | Schema (5 node types, 6 edge types) — adapted from omnigraph's `context.pg` test fixture, extended to cover every wire encoding (`Date`, `DateTime`, `enum`, `F64`, `I64`, optional `String`, edge properties) |
-| `seed.ndjson` | Deterministic seed data in the `omnigraph load` line format: 300 nodes + 500 edges, seeded PRNG, hostile strings (`<script>` payload in `decision-013`, quotes/backslashes in `decision-027`), non-ASCII text, dates spanning 2015–2026, one `I64` pinned at `Number.MAX_SAFE_INTEGER` (`trace-042`), two deliberate parallel `ParticipatedIn` edges (`part-0119`/`part-0120` duplicate `part-0001`'s endpoints) |
+| Path | Purpose |
+| --- | --- |
+| `cluster/cluster.yaml` | One graph, `demo`, with a stored search query and no credentials or policies |
+| `cluster/demo.pg` | Five node types and six edge types; dates, enums, numeric values, nullable properties, and a nullable user property named `Signal.id` |
+| `cluster/queries.gq` | `search_signals`: ordered whole-node and title projections, bounded to ten rows |
+| `seed.ndjson` | Deterministic 300-node, 500-edge seed, including hostile strings, Unicode, `Number.MAX_SAFE_INTEGER`, and parallel edges |
 | `recorded/health.json` | `GET /healthz` |
-| `recorded/schema.json` | `GET /graphs/demo/schema` |
-| `recorded/commits.json` | `GET /graphs/demo/commits?branch=main` |
+| `recorded/http.json` | The required API contract header and actual `HEAD /healthz` discovery response |
+| `recorded/schema.json` | `GET /graphs/demo/schema`, including `schema_source` and `system_columns` |
+| `recorded/commits.json` | `GET /graphs/demo/commits?branch=main&limit=1` |
 | `recorded/snapshot.json` | `GET /graphs/demo/snapshot` |
-| `recorded/export.ndjson` | `POST /graphs/demo/export`, body `{}` — the full 800-line stream |
-| `recorded/export-partial.ndjson` | `POST /graphs/demo/export`, body `{"type_names":["Correlates","Signal"]}` |
-| `recorded/manifest.json` | `recordedAt`, `serverVersion`, `graphId`, `branch`, `headBefore`/`headAfter` (equal for a quiescent branch), per-table `rowCounts`, verified export line ordering |
+| `recorded/export.ndjson` | Full `POST /graphs/demo/export`, body `{}` |
+| `recorded/export-partial.ndjson` | Export with `{"type_names":["Correlates","Signal"]}` |
+| `recorded/search.json` | Stored `search_signals` invocation with `{"branch":"main","params":{"q":"Signal 1:"}}` |
+| `recorded/manifest.json` | Server/HTTP versions, source heads, counts, and verified export ordering |
 
-All `recorded/*` bodies are **verbatim wire bytes** (captured with curl against
-the exact paths/methods/bodies the SDK's transport builds — graph-scoped paths
-are prefixed `/graphs/<graphId>`; envelope keys on the wire are snake_case,
-the SDK camelizes them client-side).
+## Wire contract covered
 
-Ground truth worth knowing (visible in `export.ndjson`):
+- Requests and responses carry `Omnigraph-Http-Api: 0.14`. The SDK performs a
+  public `HEAD /healthz` discovery request before graph operations. Public probes
+  carry no bearer token; authenticated graph requests do.
+- Commit listing returns a page envelope. The loader uses its captured
+  `head_commit_id` to check source stability and requests just one commit.
+- Export places physical identity in the **top-level `id`**. The `data` object
+  contains only schema properties. Keyed node IDs equal their slugs; unkeyed
+  edges use deterministic top-level IDs such as `own-0001`.
+- `Signal.id` is an ordinary nullable numeric property. It must remain separate
+  from the graph node's type-qualified identity. Other node types have no
+  generated `attrs.id` field.
+- Query columns are `s` and `s.title`; the whole-node value uses **`s['@id']`**
+  for physical identity and `s.id` for the ordinary user property.
+- `Date` exports as calendar strings. `DateTime` exports as UTC date-time
+  strings without a `Z` suffix. The adapter normalizes the latter to ISO UTC
+  strings with milliseconds and `Z`.
+- Null-valued properties are omitted on the wire. The adapter fills declared
+  nullable properties with explicit `null`, matching the generated `T | null`
+  attribute types.
+- The 500 edge records precede the 300 node records. The fixture script verifies
+  this order and checks that the branch head is unchanged across export.
 
-- Tables stream in lexicographic table-key order, so all `edge:*` lines
-  (500) precede all `node:*` lines (300).
-- `Date` cells export as **numbers** (days since Unix epoch).
-- `DateTime` cells export as ISO strings without a zone suffix
-  (e.g. `"2026-02-28T03:04:27.939"`) on server 0.8.1 — normalization must be
-  written against these recorded bytes rather than an assumed zone suffix.
-- Node `data.id` equals the `@key` slug; edge `data.id` values are the
-  explicit deterministic ids from `seed.ndjson` (`own-*`, `rec-*`, `part-*`,
-  `sup-*`, `trig-*`, `corr-*`).
+## Regenerate or serve locally
 
-## Regenerating
+Install the official 0.14.0 CLI and server in a separate directory. Release
+archives and their SHA256 files are available in the
+[0.14.0 release](https://github.com/ModernRelay/omnigraph/releases/tag/v0.14.0).
+The script checks the exact CLI and running server versions and fails if they
+are missing or incompatible.
 
 ```sh
+export OMNIGRAPH_BIN=/path/to/omnigraph-0.14.0/omnigraph
+export OMNIGRAPH_SERVER_BIN=/path/to/omnigraph-0.14.0/omnigraph-server
+
+# Regenerate seed + recordings, then stop and remove the temporary cluster.
 node scripts/omnigraph-fixture.mjs
+
+# Serve a fresh seeded fixture for the demo until Ctrl-C; no files regenerated.
+node scripts/omnigraph-fixture.mjs --serve
 ```
 
-The script wipes `cluster/graphs/` + `cluster/__cluster/` (generated, git-
-ignored), re-creates the graph via `omnigraph cluster import` + `cluster
-apply --as fixture-bot`, regenerates `seed.ndjson` (fixed PRNG seed —
-byte-identical every run), loads it with `--mode merge` (idempotent: every
-edge carries an explicit `data.id`), boots `omnigraph-server --cluster
-fixtures/omnigraph/cluster --unauthenticated --bind 127.0.0.1:8199`, records
-the responses above, verifies them (line counts, edge-before-node ordering,
-non-empty bodies), writes the manifest, and kills the server.
+Each invocation copies the declaration into a unique temporary directory and
+creates its own operator configuration with an anonymous loopback server target.
+It validates/lints the source, plans and applies to an explicit local root target, releases the exact
+bootstrap writer lock after that process completes, starts the server, waits
+for `/readyz`, and loads the seed through the served target. No operator defaults
+or credentials from the host are used. It never opens or
+wipes an existing graph. Shutdown waits for the owned server to exit before
+removing that temporary directory. The default bind address is
+`127.0.0.1:8199`; `OMNIGRAPH_FIXTURE_PORT` changes the port. An occupied port fails
+rather than reusing an unrelated server.
 
-Commit ids and `recordedAt` differ per run; the row data does not.
+Seed bytes and row values are deterministic. Commit IDs and `recordedAt` change
+on each recording. After schema/codegen changes, rebuild the adapter and update
+the demo's generated types:
 
-## Binary requirements
+```sh
+pnpm --filter @modernrelay/orbit-omnigraph build
+node packages/omnigraph/dist/codegen-cli.js fixtures/omnigraph/cluster/demo.pg \
+  -o apps/demo/src/omnigraph-types.generated.ts
+```
 
-- `omnigraph` CLI and `omnigraph-server`, 0.8.x, on `PATH`
-  (`brew`-installed at `/opt/homebrew/bin` on the machine that recorded these)
-- `curl`, Node ≥ 20
+## Live verification
 
-Neither binary is available in CI — there the script prints `SKIP` and exits
-0; the committed recordings are authoritative until someone regenerates them
-locally.
+With the binary variables above, run:
+
+```sh
+OMNIGRAPH_LIVE_REQUIRED=1 pnpm --filter orbit-demo exec playwright test e2e/omnigraph.spec.ts
+```
+
+The spec owns fixture startup and teardown. It checks real export/search identity,
+ordinary `id` data, nullable/date normalization, and browser loading through the
+demo proxy. The dedicated CI job downloads the checksum-verified 0.14.0 Linux
+release and requires both live tests; missing binaries fail that job. Other
+local/demo runs may skip this spec when the pinned binaries are unavailable.

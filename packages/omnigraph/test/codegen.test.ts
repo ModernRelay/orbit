@@ -15,17 +15,28 @@
  * has run the tests.
  */
 
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { generateTypes, generateTypesFromPgSource } from '../src/codegen';
-import { parsePgSchema, schemaFingerprint } from '../src/index';
+import { normalizeEdge, normalizeNode, parsePgSchema, schemaFingerprint } from '../src/index';
 
 import committedDemoTypes from '../../../apps/demo/src/omnigraph-types.generated.ts?raw';
 import demoPg from '../../../fixtures/omnigraph/cluster/demo.pg?raw';
+
+const TYPESCRIPT_CLI = fileURLToPath(new URL('./bin/tsc', import.meta.resolve('typescript/package.json')));
+
+/** Exercise the installed compiler: TypeScript 7 no longer exposes createProgram. */
+function expectGeneratedTypesToCompile(path: string): void {
+  const result = spawnSync(process.execPath, [
+    TYPESCRIPT_CLI, '--ignoreConfig', '--strict', '--noEmit', '--skipLibCheck', path,
+  ], { encoding: 'utf8', timeout: 30_000 });
+  expect(result.error).toBeUndefined();
+  expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: '' });
+}
 
 /**
  * Verbatim copy of the real fixture at
@@ -127,6 +138,7 @@ const CONTEXT_EDGES = [
 
 /** The body of `export interface <Name> { … }` in `out`. */
 function interfaceBody(out: string, name: string): string {
+  if (out.includes(`export type ${name} = object;`)) return '';
   const m = new RegExp(`export interface ${name} \\{\\n([\\s\\S]*?)\\n\\}`).exec(out);
   expect(m, `interface ${name} not found`).not.toBeNull();
   return (m as RegExpExecArray)[1] as string;
@@ -145,7 +157,7 @@ describe('generateTypesFromPgSource — real context.pg', () => {
     for (const n of CONTEXT_NODES) expect(out).toContain(`export interface ${n}Props {`);
 
     const actor = interfaceBody(out, 'ActorProps');
-    expect(actor).toContain('id: string;'); // injected physical id
+    expect(actor).not.toContain('id:'); // physical identity lives on GraphNode
     expect(actor).toContain('slug: string;');
     expect(actor).toContain('email: string | null;'); // String?
 
@@ -161,10 +173,10 @@ describe('generateTypesFromPgSource — real context.pg', () => {
     expect(trace).toContain("normalized to 'YYYY-MM-DD'");
   });
 
-  it('emits edge props interfaces — empty ones still carry the physical id', () => {
-    for (const e of CONTEXT_EDGES) expect(out).toContain(`export interface ${e}EdgeProps {`);
+  it('emits property-free edge props as object types without injecting physical identity', () => {
+    for (const e of CONTEXT_EDGES) expect(out).toContain(`export type ${e}EdgeProps = object;`);
     const correlates = interfaceBody(out, 'CorrelatesEdgeProps');
-    expect(correlates).toContain('id: string;');
+    expect(correlates).not.toContain('id:');
     // @unique(src, dst) is a constraint, not a property
     expect(correlates).not.toContain('src');
   });
@@ -238,6 +250,28 @@ describe('demo.pg fixture — committed golden file', () => {
 });
 
 describe('generateTypes — mapping edge cases', () => {
+  it('compiles normalized 0.14 attrs with user ids, nullable list elements, and property-free edges', () => {
+    const source = 'node Datum { id: I64? times: [DateTime]? } edge Link: Datum -> Datum';
+    const schema = parsePgSchema(source);
+    const attrs = normalizeNode({
+      type: 'Datum', id: 'physical', data: { id: 42, times: [null, '2024-01-01T12:00:00'] },
+    }, schema).attrs;
+    const omitted = normalizeNode({ type: 'Datum', id: 'other', data: {} }, schema).attrs;
+    const edge = normalizeEdge({ edge: 'Link', id: 'edge', from: 'physical', to: 'other', data: {} }, schema).attrs;
+    const dir = fileURLToPath(new URL('./__generated__/', import.meta.url));
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, 'normalized.ts');
+    writeFileSync(path, generateTypesFromPgSource(source) + `
+const node: NodeAttrs = ${JSON.stringify(attrs)};
+const omitted: NodeAttrs = ${JSON.stringify(omitted)};
+const edge: EdgeAttrs = ${JSON.stringify(edge)};
+// @ts-expect-error property-free attrs must still be objects
+const invalid: LinkEdgeProps = 7;
+void node; void omitted; void edge; void invalid;
+`);
+    expectGeneratedTypesToCompile(path);
+  });
+
   it('disambiguates node/edge interface collisions in unions and TypeMap and compiles their distinct props', () => {
     const source = `
 node Foo { slug: String @key }
@@ -259,14 +293,13 @@ edge FooEdge: FooEdge -> FooEdgeEdge { value: String }
     mkdirSync(dir, { recursive: true });
     const path = join(dir, 'collisions.ts');
     writeFileSync(path, out + `
-const node: NodeAttrs = { 'orbit:type': 'FooEdge', id: 'n', slug: 'n', value: 's', node_only: true };
-const edge: EdgeAttrs = { 'orbit:type': 'Foo', id: 'e', value: 1, edge_only: 2 };
+const node: NodeAttrs = { 'orbit:type': 'FooEdge', slug: 'n', value: 's', node_only: true };
+const edge: EdgeAttrs = { 'orbit:type': 'Foo', value: 1, edge_only: 2 };
 const nodeProps: TypeMap['nodes']['FooEdge'] = node;
 const edgeProps: TypeMap['edges']['Foo'] = edge;
 void nodeProps; void edgeProps;
 `);
-    const program = ts.createProgram([path], { strict: true, noEmit: true, skipLibCheck: true });
-    expect(ts.getPreEmitDiagnostics(program).map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))).toEqual([]);
+    expectGeneratedTypesToCompile(path);
   });
 
   it('maps Vector(n), [T] lists, Bool, Blob, and unknown types', () => {
@@ -285,7 +318,7 @@ node Embedding {
     expect(body).toContain('vec: number[];');
     expect(body).toContain('/** `Vector(3)`. */');
     expect(body).toContain('maybe_vec: number[] | null;');
-    expect(body).toContain('tags: string[];');
+    expect(body).toContain('tags: (string | null)[];');
     expect(body).toContain('flag: boolean;');
     expect(body).toContain('payload: string;'); // Exported Blob values normalize to strings.
     expect(body).toContain('weird: unknown;');
@@ -308,7 +341,7 @@ node Odd {
     expect(out).toContain("| ({ 'orbit:type': 'Odd' } & OddProps);");
   });
 
-  it('types every physical id as a required string regardless of its schema wire type', () => {
+  it('preserves the declared type and nullability of ordinary user id properties', () => {
     const out = generateTypesFromPgSource(`
 node NumericId {
     id: I64 @key
@@ -319,10 +352,10 @@ edge OptionalNumericId: NumericId -> NumericId {
 `);
     const node = interfaceBody(out, 'NumericIdProps');
     const edge = interfaceBody(out, 'OptionalNumericIdEdgeProps');
-    expect(node.match(/^ {2}id: string;$/gm)).toHaveLength(1);
-    expect(edge.match(/^ {2}id: string;$/gm)).toHaveLength(1);
-    expect(node).not.toContain('id: number');
-    expect(edge).not.toContain('id: number | null');
+    expect(node.match(/^ {2}id: number;$/gm)).toHaveLength(1);
+    expect(edge.match(/^ {2}id: number \| null;$/gm)).toHaveLength(1);
+    expect(node).not.toContain('id: string');
+    expect(edge).not.toContain('id: string');
   });
 
   it('collapses to never-unions and an empty TypeMap for an empty schema', () => {

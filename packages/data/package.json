@@ -57,8 +57,8 @@
   },
   "devDependencies": {
     "apache-arrow": "^21.2.0",
-    "hyparquet": "^1.26.2",
-    "typescript": "^5.6.0",
-    "vitest": "^3.0.0"
+    "hyparquet": "^1.31.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }

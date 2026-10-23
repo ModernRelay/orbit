@@ -5,7 +5,7 @@
  * `treeshake:omnigraph-client` gate in scripts/pack-smoke.mjs.)
  */
 
-import { Omnigraph } from '@modernrelay/omnigraph';
+import { HTTP_API_CONTRACT, HTTP_API_CONTRACT_HEADER, Omnigraph } from '@modernrelay/omnigraph';
 import type { FetchLike } from '@modernrelay/omnigraph';
 import { describe, expect, it } from 'vitest';
 
@@ -14,16 +14,22 @@ import type { OmnigraphSourceOptions } from '../src/index';
 import { createOmnigraphServerClient } from '../src/server';
 
 describe('createOmnigraphServerClient in the server-only entry', () => {
-  it('constructs a real SDK client that authenticates with the bearer token', async () => {
-    const seen: Array<{ url: string; auth: string | null }> = [];
+  it('authenticates graph requests while contract discovery and health remain public', async () => {
+    const seen: Array<{ url: string; method: string; auth: string | null; contract: string | null }> = [];
     const fetch: FetchLike = async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const method = init?.method ?? 'GET';
       seen.push({
-        url: input instanceof Request ? input.url : String(input),
+        url,
+        method,
         auth: new Headers(init?.headers).get('authorization'),
+        contract: new Headers(init?.headers).get(HTTP_API_CONTRACT_HEADER),
       });
       return new Response(
-        JSON.stringify({ status: 'ok', version: '0.8.1', internal_schema_version: 4 }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
+        method === 'HEAD' ? null : JSON.stringify(url.endsWith('/schema')
+          ? { schema_source: 'node Actor { slug: String @key }' }
+          : { status: 'ok', version: '0.14.0', internal_schema_version: 16 }),
+        { status: 200, headers: { 'content-type': 'application/json', [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT } },
       );
     };
 
@@ -35,9 +41,12 @@ describe('createOmnigraphServerClient in the server-only entry', () => {
 
     expect(client).toBeInstanceOf(Omnigraph);
     const health = await client.health();
-    expect(health.version).toBe('0.8.1');
+    expect(health.version).toBe('0.14.0');
+    await client.graph('demo').schema.get();
     expect(seen).toEqual([
-      { url: 'http://og.internal:8080/healthz', auth: 'Bearer secret-token' },
+      { url: 'http://og.internal:8080/healthz', method: 'GET', auth: null, contract: '0.14' },
+      { url: 'http://og.internal:8080/healthz', method: 'HEAD', auth: null, contract: '0.14' },
+      { url: 'http://og.internal:8080/graphs/demo/schema', method: 'GET', auth: 'Bearer secret-token', contract: '0.14' },
     ]);
   });
 });

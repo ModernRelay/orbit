@@ -98,6 +98,7 @@ const h = vi.hoisted(() => {
     getZoomLevel(): number { return this.zoomLevel; }
     pointPositions: number[] = [1, 2, 3, 4];
     getPointPositions(): number[] { return this.pointPositions; }
+    getPointPositionsArray(): Float32Array { return Float32Array.from(this.pointPositions); }
     /** Native fit uses destination positions while a position transition runs. */
     fitViewPositions: number[] | null = null;
     getFitViewPositions(): Float32Array {
@@ -1180,6 +1181,25 @@ describe('CosmosEngine', () => {
 
     expect(engine.getPositions()).toEqual(Float32Array.from([1, 2, 3, 4]));
     expect(engine.getViewport()).toEqual({ x: -5, y: -5, zoom: 5 });
+  });
+
+  it('reads owned flat snapshots without boxing positions and preserves tombstones', async () => {
+    const { engine, graph } = await mounted();
+    graph.pointPositions = [1, 2, NaN, NaN, 5, 6];
+    const legacyRead = vi.spyOn(graph, 'getPointPositions').mockImplementation(() => {
+      throw new Error('number[] readback must not be used');
+    });
+
+    const first = engine.getPositions();
+    expect(first).toEqual(Float32Array.of(1, 2, NaN, NaN, 5, 6));
+    // Core overlays pinned coordinates in its snapshot. That must not alter
+    // the engine's next read or get overwritten by a later source update.
+    first![0] = 99;
+    expect(engine.getPositions()).toEqual(Float32Array.of(1, 2, NaN, NaN, 5, 6));
+    graph.pointPositions = [10, 20];
+    expect(engine.getPositions()).toEqual(Float32Array.of(10, 20));
+    expect(first).toEqual(Float32Array.of(99, 2, NaN, NaN, 5, 6));
+    expect(legacyRead).not.toHaveBeenCalled();
   });
 
   // Real setViewport pan via setZoomTransformByPointPositions. The

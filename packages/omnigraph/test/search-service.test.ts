@@ -6,7 +6,7 @@
  * through a REAL `createGraphInstance` loaded by the REAL export loader.
  */
 
-import { Omnigraph, OmnigraphError } from '@modernrelay/omnigraph';
+import { HTTP_API_CONTRACT, HTTP_API_CONTRACT_HEADER, Omnigraph, OmnigraphError } from '@modernrelay/omnigraph';
 import type { FetchLike } from '@modernrelay/omnigraph';
 import { createGraphInstance, createRequestContext } from '@modernrelay/orbit-core';
 import type { RequestContextHandle, SearchResult } from '@modernrelay/orbit-core';
@@ -29,6 +29,7 @@ import commitsBody from '../../../fixtures/omnigraph/recorded/commits.json?raw';
 import exportPartialBody from '../../../fixtures/omnigraph/recorded/export-partial.ndjson?raw';
 import healthBody from '../../../fixtures/omnigraph/recorded/health.json?raw';
 import schemaBody from '../../../fixtures/omnigraph/recorded/schema.json?raw';
+import searchBody from '../../../fixtures/omnigraph/recorded/search.json?raw';
 
 // ---------------------------------------------------------------------------
 // replayFetch — doctored HTTP through the real SDK (loader.test.ts pattern,
@@ -47,7 +48,7 @@ type Responder = (signal: AbortSignal | undefined) => Response | Promise<Respons
 /** A fresh JSON Response per call (Response bodies are single-use). */
 function json(body: string, status = 200): Responder {
   return () =>
-    new Response(body, { status, headers: { 'content-type': 'application/json' } });
+    new Response(body, { status, headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/json' } });
 }
 
 /** Never resolves; rejects with AbortError when the request signal fires. */
@@ -67,7 +68,7 @@ function hanging(): Responder {
 /** Stream `text` as NDJSON in one chunk (enough realism for the loader leg). */
 function ndjson(text: string): Responder {
   return () =>
-    new Response(text, { status: 200, headers: { 'content-type': 'application/x-ndjson' } });
+    new Response(text, { status: 200, headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/x-ndjson' } });
 }
 
 function replayFetch(routes: Record<string, Responder>): {
@@ -85,10 +86,13 @@ function replayFetch(routes: Record<string, Responder>): {
       hadSignal: init?.signal !== undefined && init.signal !== null,
     });
     const responder = routes[`${method} ${url.pathname}`];
+    if (responder === undefined && method === 'HEAD' && url.pathname === '/healthz') {
+      return new Response(null, { headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT } });
+    }
     if (responder === undefined) {
       return new Response(
         JSON.stringify({ error: `replayFetch: no recording for ${method} ${url.pathname}` }),
-        { status: 404, headers: { 'content-type': 'application/json' } },
+        { status: 404, headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/json' } },
       );
     }
     return responder(init?.signal ?? undefined);
@@ -124,7 +128,7 @@ function harness(
     client,
     graphId: 'demo',
     queryName: QUERY,
-    typeOf: { $s: 'Signal' },
+    typeOf: { s: 'Signal' },
     ...opts,
   });
   return { service, calls: replay.calls };
@@ -197,11 +201,20 @@ describe('createOmnigraphSearchService — invocation', () => {
 // ---------------------------------------------------------------------------
 
 describe('row mapping', () => {
+  it('maps the actual 0.14 stored-query recording through the real SDK', async () => {
+    const { service } = harness({
+      'POST /graphs/demo/queries/search_signals': json(searchBody),
+    }, { queryName: 'search_signals', params: (q) => ({ q }) });
+    await expect(service.search('Signal 1:', { limit: 10 }, context().context)).resolves.toEqual([
+      { id: encodeSourceId('Signal', 'signal-001'), label: 'Signal 1: search admission' },
+    ]);
+  });
+
   it('encodes type-qualified ids that round-trip through decodeSourceId and maps score and label', async () => {
     const rows = [
-      { $s: { id: 'signal-001', slug: 'signal-001' }, score: 7.5, '$s.title': 'Alpha spike' },
-      { $s: { id: 'signal-002', slug: 'signal-002' }, '$s.title': 'Beta drift' }, // no score column
-      { $s: { id: 'signal-003', slug: 'signal-003' }, score: 'high' }, // non-numeric score, no string column
+      { s: { '@id': 'signal-001', slug: 'signal-001' }, score: 7.5, 's.title': 'Alpha spike' },
+      { s: { '@id': 'signal-002', slug: 'signal-002' }, 's.title': 'Beta drift' }, // no score column
+      { s: { '@id': 'signal-003', slug: 'signal-003' }, score: 'high' }, // non-numeric score, no string column
     ];
     const { service } = harness({ [INVOKE_ROUTE]: json(readEnvelope(rows)) });
 
@@ -217,11 +230,11 @@ describe('row mapping', () => {
 
   it('labelColumn overrides the first-string-column default', async () => {
     const rows = [
-      { $s: { id: 'signal-004' }, '$s.title': 'Title wins by order', '$s.slug': 'slug-004' },
+      { s: { '@id': 'signal-004' }, 's.title': 'Title wins by order', 's.slug': 'slug-004' },
     ];
     const { service } = harness(
       { [INVOKE_ROUTE]: json(readEnvelope(rows)) },
-      { labelColumn: '$s.slug' },
+      { labelColumn: 's.slug' },
     );
 
     const results = await service.search('slug', { limit: 5 }, context().context);
@@ -230,12 +243,12 @@ describe('row mapping', () => {
 
   it('a column→type record maps the first listed column carrying a node struct', async () => {
     const rows = [
-      { $s: { id: 'signal-005' }, $a: { id: 'actor-001' } }, // $s listed first → Signal wins
-      { $a: { id: 'actor-002' } }, // only $a present → Actor
+      { s: { '@id': 'signal-005' }, a: { '@id': 'actor-001' } }, // s listed first → Signal wins
+      { a: { '@id': 'actor-002' } }, // only a present → Actor
     ];
     const { service } = harness(
       { [INVOKE_ROUTE]: json(readEnvelope(rows)) },
-      { typeOf: { $s: 'Signal', $a: 'Actor' } },
+      { typeOf: { s: 'Signal', a: 'Actor' } },
     );
 
     const results = await service.search('mixed', { limit: 5 }, context().context);
@@ -246,7 +259,7 @@ describe('row mapping', () => {
   });
 
   it('a typeOf function names the type per row; the first node-struct column supplies the id', async () => {
-    const rows = [{ score: 1.25, $t: { id: 'trace-001' } }];
+    const rows = [{ score: 1.25, t: { '@id': 'trace-001' } }];
     const { service } = harness(
       { [INVOKE_ROUTE]: json(readEnvelope(rows)) },
       { typeOf: () => 'Trace' },
@@ -258,16 +271,16 @@ describe('row mapping', () => {
 
   it('mapRow fully overrides the default mapping; null skips the row', async () => {
     const rows = [
-      { $s: { id: 'signal-006' } },
-      { $s: { id: 'signal-007' } },
+      { s: { '@id': 'signal-006' } },
+      { s: { '@id': 'signal-007' } },
     ];
     const { service } = harness(
       { [INVOKE_ROUTE]: json(readEnvelope(rows)) },
       {
         mapRow: (row) => {
-          const struct = row['$s'] as { id: string };
-          if (struct.id === 'signal-006') return null;
-          return { id: encodeSourceId('Signal', struct.id), label: 'custom', score: 0.5 };
+          const struct = row['s'] as { '@id': string };
+          if (struct['@id'] === 'signal-006') return null;
+          return { id: encodeSourceId('Signal', struct['@id']), label: 'custom', score: 0.5 };
         },
       },
     );
@@ -279,7 +292,7 @@ describe('row mapping', () => {
   });
 
   it('caps results at the requested limit even when the query returns more', async () => {
-    const rows = [1, 2, 3, 4].map((n) => ({ $s: { id: `signal-00${n}` } }));
+    const rows = [1, 2, 3, 4].map((n) => ({ s: { '@id': `signal-00${n}` } }));
     const { service } = harness({ [INVOKE_ROUTE]: json(readEnvelope(rows)) });
 
     const results = await service.search('many', { limit: 2 }, context().context);
@@ -287,12 +300,28 @@ describe('row mapping', () => {
   });
 
   it('a row without a node struct under the mapped columns is a hard error', async () => {
-    const rows = [{ score: 3, '$s.title': 'no struct projected' }];
+    const rows = [{ score: 3, 's.title': 'no struct projected' }];
     const { service } = harness({ [INVOKE_ROUTE]: json(readEnvelope(rows)) });
 
     await expect(service.search('bad', { limit: 5 }, context().context)).rejects.toThrow(
       /^omnigraph: .*no node struct/,
     );
+  });
+
+  it('uses @id even when a query struct contains an ordinary id property', async () => {
+    const { service } = harness({
+      [INVOKE_ROUTE]: json(readEnvelope([{ s: { '@id': 'physical', id: 'user-id' } }])),
+    });
+    await expect(service.search('identity', { limit: 5 }, context().context))
+      .resolves.toEqual([{ id: encodeSourceId('Signal', 'physical') }]);
+  });
+
+  it('does not mistake an ordinary id property for a projected node identity', async () => {
+    const { service } = harness({
+      [INVOKE_ROUTE]: json(readEnvelope([{ s: { id: 'user-id' } }])),
+    });
+    await expect(service.search('identity', { limit: 5 }, context().context))
+      .rejects.toThrow(/no node struct/);
   });
 
   it('a stored MUTATION envelope (no rows) is a hard error', async () => {
@@ -341,6 +370,28 @@ describe('error surface and cancellation', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  it('abort during contract discovery remains AbortError and never invokes the query', async () => {
+    const { service, calls } = harness({ 'HEAD /healthz': hanging() });
+    const handle = context();
+    const pending = service.search('alpha', { limit: 5 }, handle.context);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toHaveLength(1);
+    handle.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(invokeCalls(calls)).toEqual([]);
+  });
+
+  it.each([null, '0.12'])('rejects a missing or incompatible HTTP contract (%s) before invoking', async (contract) => {
+    const { service, calls } = harness({
+      'HEAD /healthz': () => new Response(null, {
+        headers: contract === null ? {} : { [HTTP_API_CONTRACT_HEADER]: contract },
+      }),
+    });
+    await expect(service.search('alpha', { limit: 5 }, context().context))
+      .rejects.toThrow(/^omnigraph: ApiContractError/);
+    expect(invokeCalls(calls)).toEqual([]);
+  });
+
   it('an already-aborted context rejects without a network call', async () => {
     const { service, calls } = harness({ [INVOKE_ROUTE]: json(readEnvelope([])) });
     const handle = context();
@@ -363,8 +414,8 @@ describe('real core integration with partial-load results', () => {
     // Signal table; actor-001 belongs to the UNLOADED Actor table (the stored
     // query searches the whole branch server-side).
     const searchRows = [
-      { $s: { id: 'signal-001', slug: 'signal-001' }, score: 9.1, '$s.title': 'Signal 1' },
-      { $a: { id: 'actor-001', slug: 'actor-001' }, score: 4.2, '$a.name': 'Søren Nguyễn' },
+      { s: { '@id': 'signal-001', slug: 'signal-001' }, score: 9.1, 's.title': 'Signal 1' },
+      { a: { '@id': 'actor-001', slug: 'actor-001' }, score: 4.2, 'a.name': 'Søren Nguyễn' },
     ];
     const replay = replayFetch({
       'GET /healthz': json(healthBody),
@@ -378,7 +429,7 @@ describe('real core integration with partial-load results', () => {
       client,
       graphId: 'demo',
       queryName: QUERY,
-      typeOf: { $s: 'Signal', $a: 'Actor' },
+      typeOf: { s: 'Signal', a: 'Actor' },
     });
     const instance = createGraphInstance({
       engine: () => new FakeEngine(),

@@ -1,7 +1,6 @@
 /**
  * Vite `?raw` imports (used by loader.test.ts to load the recorded HTTP
- * fixtures as verbatim text without node:fs — the workspace deliberately
- * ships no @types/node).
+ * fixtures as verbatim text).
  */
 declare module '*?raw' {
   const content: string;

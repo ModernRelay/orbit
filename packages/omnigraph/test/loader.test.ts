@@ -6,7 +6,7 @@
  * work. The ingest target is a REAL `createGraphInstance` over a FakeEngine.
  */
 
-import { Omnigraph, OmnigraphError } from '@modernrelay/omnigraph';
+import { HTTP_API_CONTRACT, HTTP_API_CONTRACT_HEADER, Omnigraph, OmnigraphError } from '@modernrelay/omnigraph';
 import type { FetchLike } from '@modernrelay/omnigraph';
 import { createGraphInstance, OrbitOperationError } from '@modernrelay/orbit-core';
 import type { GraphInstance } from '@modernrelay/orbit-core';
@@ -52,10 +52,11 @@ const EXPECTED_FINGERPRINT = schemaFingerprint(
 
 /** The recorded commits body with the newest (head) commit id replaced. */
 function commitsWithHead(head: string): string {
-  const parsed = JSON.parse(commitsBody) as { commits: Array<Record<string, unknown>> };
+  const parsed = JSON.parse(commitsBody) as { commits: Array<Record<string, unknown>>; head_commit_id: string };
   const newest = parsed.commits[0];
   if (newest === undefined) throw new Error('recorded commits body is empty');
   parsed.commits = [{ ...newest, graph_commit_id: head }, ...parsed.commits.slice(1)];
+  parsed.head_commit_id = head;
   return JSON.stringify(parsed);
 }
 
@@ -70,12 +71,12 @@ interface RecordedRequest {
   body: string | null;
 }
 
-type Responder = (signal: AbortSignal | undefined) => Response;
+type Responder = (signal: AbortSignal | undefined) => Response | Promise<Response>;
 
 /** A fresh JSON Response per call (Response bodies are single-use). */
 function json(body: string, status = 200): Responder {
   return () =>
-    new Response(body, { status, headers: { 'content-type': 'application/json' } });
+    new Response(body, { status, headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/json' } });
 }
 
 /**
@@ -106,7 +107,7 @@ function ndjson(text: string): Responder {
     });
     return new Response(stream, {
       status: 200,
-      headers: { 'content-type': 'application/x-ndjson' },
+      headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/x-ndjson' },
     });
   };
 }
@@ -133,10 +134,13 @@ function replayFetch(routes: Record<string, Responder | readonly Responder[]>): 
       body: typeof init?.body === 'string' ? init.body : null,
     });
     const route = routes[key];
+    if (route === undefined && key === 'HEAD /healthz') {
+      return new Response(null, { headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT } });
+    }
     if (route === undefined) {
       return new Response(JSON.stringify({ error: `replayFetch: no recording for ${key}` }), {
         status: 404,
-        headers: { 'content-type': 'application/json' },
+        headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/json' },
       });
     }
     const seen = counters.get(key) ?? 0;
@@ -282,6 +286,33 @@ describe('partial-export identity includes typeNames', () => {
 });
 
 describe('createOmnigraphSource().load — full export', () => {
+  it('samples bounded history pages without following their continuation', async () => {
+    const { instance, source, calls } = harness(recordedRoutes());
+
+    const result = await source.load(instance);
+
+    expect(result.dataRef.headBefore).toBe(HEAD);
+    expect(result.dataRef.headAfter).toBe(HEAD);
+    const reads = calls.filter((call) => call.method === 'GET' && call.path === '/graphs/demo/commits');
+    expect(reads).toHaveLength(2); // fresh samples before and after export
+    for (const read of reads) {
+      expect(Object.fromEntries(new URLSearchParams(read.search))).toEqual({ branch: 'main', limit: '1' });
+    }
+    const page = JSON.parse(commitsBody) as { head_commit_id: string; next_page_token?: string };
+    expect(page.head_commit_id).toBe(HEAD);
+    expect(page.next_page_token).toBeTruthy(); // older commits exist, but are unnecessary
+  });
+
+  it('rejects an empty history page before starting an export', async () => {
+    const { instance, source, calls } = harness(recordedRoutes({
+      'GET /graphs/demo/commits': json(JSON.stringify({ commits: [], head_commit_id: null })),
+    }));
+
+    await expect(source.load(instance)).rejects.toThrow(/has no commits/);
+    expect(exportCalls(calls)).toEqual([]);
+    expect(instance.store.getState().revisions.model).toBe(0);
+  });
+
   it('streams the recorded export into a replace session; counts match the manifest', async () => {
     const progress: OmnigraphLoadProgress[] = [];
     const { instance, source, calls } = harness(recordedRoutes(), {
@@ -355,7 +386,7 @@ describe('createOmnigraphSource().load — full export', () => {
   });
 
   it('accounts for serialized UTF-8 bytes rather than UTF-16 string length', async () => {
-    const row = { type: 'Actor', data: { id: 'é', slug: 'é', name: 'Ada 😀' } };
+    const row = { type: 'Actor', id: 'é', data: { slug: 'é', name: 'Ada 😀' } };
     const body = `${JSON.stringify(row)}\n`;
     const utf8Bytes = new TextEncoder().encode(body).byteLength;
     const { instance, source } = harness(
@@ -451,7 +482,7 @@ describe('source-revision drift policy', () => {
     const commitsAtCurrentHead: Responder = () =>
       new Response(commitsWithHead(currentHead), {
         status: 200,
-        headers: { 'content-type': 'application/json' },
+        headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/json' },
       });
     const schemaThenAdvance: Responder = (signal) => {
       const response = json(schemaBody)(signal);
@@ -471,9 +502,13 @@ describe('source-revision drift policy', () => {
     await expect(source.load(instance)).rejects.toBeInstanceOf(OmnigraphDriftError);
     expect(calls.map(({ method, path }) => `${method} ${path}`)).toEqual([
       'GET /healthz',
+      'HEAD /healthz',
       'GET /graphs/demo/commits',
+      'HEAD /healthz',
       'GET /graphs/demo/schema',
+      'HEAD /healthz',
       'POST /graphs/demo/export',
+      'HEAD /healthz',
       'GET /graphs/demo/commits',
     ]);
     expect(instance.store.getState().revisions.model).toBe(0);
@@ -541,7 +576,7 @@ describe('source-revision drift policy', () => {
       if (headReads === 2) currentModel = 3; // overlays raced the export stream
       return new Response(commitsBody, {
         status: 200,
-        headers: { 'content-type': 'application/json' },
+        headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/json' },
       });
     };
     const { source } = harness(
@@ -599,7 +634,7 @@ describe('source-revision drift policy', () => {
       if (headReads === 2) currentSource = 'competing-replace'; // another replace landed
       return new Response(commitsBody, {
         status: 200,
-        headers: { 'content-type': 'application/json' },
+        headers: { [HTTP_API_CONTRACT_HEADER]: HTTP_API_CONTRACT, 'content-type': 'application/json' },
       });
     };
     const { source } = harness(
@@ -742,28 +777,66 @@ describe('cancellation and error surface', () => {
 });
 
 describe('server and SDK version mismatch surfacing', () => {
+  it.each([null, '0.12', '0.13'])('rejects a missing or incompatible discovery contract (%s) before export', async (contract) => {
+    const { instance, source, calls } = harness(recordedRoutes({
+      'HEAD /healthz': () => new Response(null, {
+        headers: contract === null ? {} : { [HTTP_API_CONTRACT_HEADER]: contract },
+      }),
+    }));
+    await expect(source.load(instance)).rejects.toThrow(/^omnigraph: ApiContractError/);
+    expect(exportCalls(calls)).toEqual([]);
+    expect(instance.store.getState().revisions.model).toBe(0);
+  });
+
+  it('rejects a stream without its contract header before any graph is committed', async () => {
+    const { instance, source } = harness(recordedRoutes({
+      'POST /graphs/demo/export': () => new Response(exportBody, {
+        headers: { 'content-type': 'application/x-ndjson' },
+      }),
+    }));
+    await expect(source.load(instance)).rejects.toThrow(/^omnigraph: ApiContractError/);
+    expect(instance.store.getState().revisions.model).toBe(0);
+    expect(instance.store.getState().nodeCount).toBe(0);
+  });
+
+  it('preserves AbortError when contract discovery is cancelled', async () => {
+    const controller = new AbortController();
+    const { instance, source, calls } = harness(recordedRoutes({
+      'HEAD /healthz': (signal) => new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      }),
+    }));
+    const pending = source.load(instance, controller.signal);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls.some((call) => call.method === 'HEAD')).toBe(true);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(exportCalls(calls)).toEqual([]);
+    expect(instance.store.getState().revisions.model).toBe(0);
+  });
+
   it('the recorded fixture server and the SDK pin share major.minor — no warning', async () => {
     // The fixture is regenerated with the same server generation the SDK
-    // pins (currently 0.10.x) — a mismatch here means the pin and the
+    // pins (currently 0.14.x) — a mismatch here means the pin and the
     // fixture drifted apart and one of them needs regenerating/bumping.
     const { instance, source } = harness(recordedRoutes());
     const result = await source.load(instance);
     expect(result.warnings).toEqual([]);
   });
 
-  it('a different major.minor is a warning, never a hard failure', async () => {
+  it('different build metadata warns when the HTTP contract still matches', async () => {
     const { instance, source } = harness(
       recordedRoutes({
         'GET /healthz': json(
-          JSON.stringify({ status: 'ok', version: '0.11.0', internal_schema_version: 6 }),
+          JSON.stringify({ status: 'ok', version: '0.15.0', internal_schema_version: 16 }),
         ),
       }),
     );
 
     const result = await source.load(instance);
 
-    expect(result.serverVersion).toBe('0.11.0');
-    expect(result.warnings.some((w) => w.includes('0.11.0') && w.includes('0.10.0'))).toBe(true);
+    expect(result.serverVersion).toBe('0.15.0');
+    expect(result.warnings.some((w) => w.includes('0.15.0') && w.includes('0.14.0'))).toBe(true);
     expect(instance.store.getState().nodeCount).toBe(NODE_TOTAL); // load still succeeded
   });
 });

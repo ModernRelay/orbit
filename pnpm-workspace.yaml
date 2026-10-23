@@ -1,3 +1,10 @@
 packages:
   - packages/*
   - apps/*
+
+# Explicitly requested SDK release, verified against the matching 0.14 server.
+minimumReleaseAgeExclude:
+  - '@modernrelay/omnigraph@0.14.0'
+
+allowBuilds:
+  esbuild: true

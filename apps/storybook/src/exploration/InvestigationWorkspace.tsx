@@ -82,7 +82,7 @@ export function InvestigationWorkspace({ workflow }: { workflow: Workflow }): Re
 
 function InvestigationWorkspaceContent({ workflow, graph, investigation }: {
   workflow: Workflow;
-  graph: RefObject<GraphHandle<Entity, Relationship>>;
+  graph: RefObject<GraphHandle<Entity, Relationship> | null>;
   investigation: InvestigationSession<Entity, Relationship>;
 }): ReactElement {
   const [instance, setInstance] = useState<Instance | null>(null);

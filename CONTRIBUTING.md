@@ -2,11 +2,22 @@
 
 ## Setup
 
+Use Node.js 22.18+, 24.11+, or 26+ for the current development tools, and
+pnpm 12.15.0 (pinned in `packageManager`). The published Cosmos and OmniGraph
+adapters require Node.js 22 or newer.
+
 ```bash
 pnpm install
 pnpm check        # boundaries + lint + typecheck + all tests + gate evaluator
 pnpm demo:dev     # demo app at http://localhost:5199
 ```
+
+Workspace packages and apps use TypeScript 7 for `pnpm typecheck`, and the
+OmniGraph code-generation tests invoke that compiler directly. The root keeps
+TypeScript 6.0.3 for tsup declaration generation and typescript-eslint: these
+tools still require the JavaScript compiler API removed from TypeScript 7.
+Run typechecks through the workspace scripts, rather than the root `tsc` binary.
+Remove the root compatibility compiler when both tools support TypeScript 7.
 
 ## Ground rules
 

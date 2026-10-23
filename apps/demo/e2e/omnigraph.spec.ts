@@ -1,42 +1,35 @@
 /**
- * v0.6 omnigraph live-integration smoke.
- *
- * Boots the REAL `omnigraph-server` over the committed fixture cluster
- * (fixtures/omnigraph/cluster) and drives the demo's Omnigraph panel end to
- * end through the vite `/og` same-origin proxy: Load from Omnigraph → live
- * meter completes → header counts match the recorded manifest's rowCounts →
- * hovering a node surfaces a type-derived label → screenshot artifact.
- *
- * Skips cleanly (never fails) when the `omnigraph-server` binary or the
- * fixture cluster graph store is absent — CI installs neither and consumes
- * the recorded HTTP fixtures instead; this spec is the local full-stack
- * proof. Regenerate the cluster store with `node scripts/omnigraph-fixture.mjs`.
+ * Live OmniGraph 0.14 integration. The fixture script creates a fresh local
+ * cluster, seeds it through HTTP, and owns its server until teardown.
+ * Optional locally; OMNIGRAPH_LIVE_REQUIRED=1 makes missing binaries fail CI.
  */
-
 import { spawn, spawnSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { once } from 'node:events';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { Omnigraph } from '@modernrelay/omnigraph';
+import { createGraphInstance } from '@modernrelay/orbit-core';
+import { FakeEngine } from '@modernrelay/orbit-core/testing';
+import { createOmnigraphSearchService, createOmnigraphSource, encodeSourceId } from '@modernrelay/orbit-omnigraph';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const CLUSTER_DIR = path.join(ROOT, 'fixtures', 'omnigraph', 'cluster');
-const GRAPH_STORE = path.join(CLUSTER_DIR, 'graphs', 'demo.omni');
-const MANIFEST_PATH = path.join(ROOT, 'fixtures', 'omnigraph', 'recorded', 'manifest.json');
-
-const BIND = '127.0.0.1:8199';
-const HEALTH_URL = `http://${BIND}/healthz`;
-
+const CLI = process.env.OMNIGRAPH_BIN || 'omnigraph';
+const SERVER = process.env.OMNIGRAPH_SERVER_BIN || 'omnigraph-server';
+const BASE = 'http://127.0.0.1:8199';
+const REQUIRED = process.env.OMNIGRAPH_LIVE_REQUIRED === '1';
+const cliVersion = spawnSync(CLI, ['version'], { encoding: 'utf8' });
+const AVAILABLE = cliVersion.status === 0 && cliVersion.stdout.split('\n').includes('omnigraph 0.14.0') &&
+  spawnSync(SERVER, ['--help'], { stdio: 'ignore' }).status === 0;
+const SKIP_REASON = 'Set OMNIGRAPH_BIN and OMNIGRAPH_SERVER_BIN to the pinned 0.14.0 binaries; OMNIGRAPH_LIVE_REQUIRED=1 requires the live test.';
 const READY_DOT = '[data-testid="status-dot"][title="ready"]';
 const NODE_COUNT = '[data-testid="node-count"]';
 const EDGE_COUNT = '[data-testid="edge-count"]';
-
-/** Status-bar hover readout format for omnigraph nodes (App.tsx `labelOf`). */
 const TYPE_LABEL = /^(Actor|Decision|Trace|Signal|Artifact) · .+/;
-
 const fmt = (n: number): string => n.toLocaleString('en-US');
 
 interface RecordedManifest {
@@ -44,60 +37,64 @@ interface RecordedManifest {
   branch: string;
   rowCounts: Record<string, number>;
 }
-
-function hasServerBinary(): boolean {
-  try {
-    return spawnSync('omnigraph-server', ['--help'], { stdio: 'ignore' }).error === undefined;
-  } catch {
-    return false;
-  }
-}
-
-const AVAILABLE = hasServerBinary() && existsSync(GRAPH_STORE) && existsSync(MANIFEST_PATH);
-const SKIP_REASON =
-  'omnigraph-server binary or fixture cluster store missing (CI) — ' +
-  'recorded fixtures cover the adapter; run `node scripts/omnigraph-fixture.mjs` locally';
-
-const manifest: RecordedManifest | null = AVAILABLE
-  ? (JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as RecordedManifest)
-  : null;
-
+const manifest = JSON.parse(readFileSync(path.join(ROOT, 'fixtures/omnigraph/recorded/manifest.json'), 'utf8')) as RecordedManifest;
 function tableTotal(m: RecordedManifest, prefix: 'node:' | 'edge:'): number {
-  return Object.entries(m.rowCounts)
-    .filter(([key]) => key.startsWith(prefix))
-    .reduce((sum, [, count]) => sum + count, 0);
+  return Object.entries(m.rowCounts).filter(([key]) => key.startsWith(prefix)).reduce((sum, [, count]) => sum + count, 0);
 }
 
-async function healthy(): Promise<boolean> {
-  try {
-    return (await fetch(HEALTH_URL)).ok;
-  } catch {
-    return false;
-  }
-}
+let fixture: ChildProcess | null = null;
+let fixtureClosed: Promise<unknown> | null = null;
+let fixtureLog = '';
 
-/** Spawned only when nothing already answers on 8199 (reuse a dev server). */
-let server: ChildProcess | null = null;
-
+test.skip(!AVAILABLE && !REQUIRED, SKIP_REASON);
 test.beforeAll(async () => {
-  if (!AVAILABLE) return;
-  if (await healthy()) return;
-  server = spawn(
-    'omnigraph-server',
-    ['--cluster', CLUSTER_DIR, '--unauthenticated', '--bind', BIND],
-    { stdio: 'ignore' },
-  );
-  const deadline = Date.now() + 20_000;
-  while (Date.now() < deadline) {
-    if (await healthy()) return;
-    await new Promise((resolve) => setTimeout(resolve, 200));
+  test.setTimeout(60_000);
+  if (!AVAILABLE) throw new Error(SKIP_REASON);
+  fixture = spawn(process.execPath, [path.join(ROOT, 'scripts/omnigraph-fixture.mjs'), '--serve'], {
+    cwd: ROOT, env: { ...process.env, OMNIGRAPH_FIXTURE_PORT: '8199' }, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  fixtureClosed = once(fixture, 'close');
+  for (const output of [fixture.stdout, fixture.stderr]) output?.on('data', (chunk) => { fixtureLog = (fixtureLog + chunk).slice(-16000); });
+  const deadline = Date.now() + 45_000;
+  while (!fixtureLog.includes('FIXTURE_READY')) {
+    if (fixture.exitCode !== null || fixture.signalCode !== null || Date.now() > deadline) throw new Error(`Fixture failed to start: ${fixtureLog}`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`omnigraph-server did not become healthy on ${HEALTH_URL} within 20s`);
+  const response = await fetch(`${BASE}/readyz`, { headers: { 'Omnigraph-Http-Api': '0.14' } });
+  expect(response.ok).toBe(true);
+  expect(response.headers.get('Omnigraph-Http-Api')).toBe('0.14');
 });
 
-test.afterAll(() => {
-  server?.kill();
-  server = null;
+test.afterAll(async () => {
+  if (fixture !== null && fixture.exitCode === null && fixture.signalCode === null) {
+    fixture.kill('SIGTERM');
+    await fixtureClosed;
+  }
+  fixture = null;
+});
+
+test('live export and stored search share system identity while retaining user id data', async () => {
+  const client = new Omnigraph({ baseUrl: BASE });
+  const search = createOmnigraphSearchService({
+    client, graphId: 'demo', queryName: 'search_signals', typeOf: { s: 'Signal' },
+    labelColumn: 's.title', params: (q) => ({ q }),
+  });
+  const instance = createGraphInstance({ engine: () => new FakeEngine(), services: { search } });
+  try {
+    const loaded = await createOmnigraphSource({ client, graphId: 'demo' }).load(instance);
+    expect(loaded.serverVersion).toBe('0.14.0');
+    expect(loaded.counts).toMatchObject({ nodes: 300, edges: 500 });
+    expect(loaded.warnings).toEqual([]);
+    const id = encodeSourceId('Signal', 'signal-001');
+    expect(instance.getNode(id)?.attrs?.id).toBe(1);
+    expect(instance.getNode(encodeSourceId('Signal', 'signal-003'))?.attrs?.id).toBeNull();
+    expect(instance.getNode(encodeSourceId('Actor', 'actor-001'))?.attrs).not.toHaveProperty('id');
+    expect(instance.getNode(encodeSourceId('Decision', 'decision-001'))?.attrs?.updated_at).toMatch(/T.*\.\d{3}Z$/);
+    const hits = await instance.search('Signal 1:', { limit: 5 });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ id, label: 'Signal 1: search admission' });
+    expect(instance.getNode(hits[0]!.id)).toBeDefined();
+  } finally { instance.destroy(); }
 });
 
 /** Sweep a grid around the viewport center until the status bar shows an
@@ -123,8 +120,6 @@ async function huntHoverLabel(page: Page): Promise<string | null> {
 test('load from omnigraph → meter completes → counts match manifest → typed hover label', async ({
   page,
 }, testInfo) => {
-  test.skip(!AVAILABLE, SKIP_REASON);
-  if (manifest === null) return; // unreachable past the skip; narrows the type
   const nodeTotal = tableTotal(manifest, 'node:');
   const edgeTotal = tableTotal(manifest, 'edge:');
 

@@ -37,13 +37,13 @@ import type { RequestContext, SearchResult, SearchService } from '@modernrelay/o
 import { encodeSourceId } from './idCodec';
 
 /** One stored-query result row: projection column → value. Bare-variable
- * projections (`return { $s }`) hold whole-node structs including `id`. */
+ * projections (`return { $s }`) hold whole-node structs including `@id`. */
 export type OmnigraphSearchRow = Record<string, unknown>;
 
 /**
  * The required column→node-type mapping:
  *
- * - a record `{ '$s': 'Signal' }` — the FIRST listed column present in a row
+ * - a record `{ s: 'Signal' }` — the FIRST listed column present in a row
  * with a node struct supplies the physical id, encoded under the mapped
  * type name;
  * - or a per-row function returning the node type name — the row's first
@@ -109,13 +109,13 @@ function mapError(err: unknown): unknown {
 }
 
 /** A bare-variable projection value: a whole-node struct carrying its
- * physical id (`return { $s }` yields `{ id,...props }`). */
-function isNodeStruct(value: unknown): value is { id: string } {
+ * physical id (`return { $s }` yields `s: { '@id': ..., ...props }`). */
+function isNodeStruct(value: unknown): value is { '@id': string } {
   return (
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
-    typeof (value as { id?: unknown }).id === 'string'
+    typeof (value as { '@id'?: unknown })['@id'] === 'string'
   );
 }
 
@@ -161,17 +161,17 @@ function resolveIdentity(
     }
     for (const key of Object.keys(row)) {
       const value = row[key];
-      if (isNodeStruct(value)) return { kind, sourceId: value.id };
+      if (isNodeStruct(value)) return { kind, sourceId: value['@id'] };
     }
     throw new Error(
       `omnigraph: '${queryName}' search row has no node-struct column (an object with a ` +
-        `string 'id') — project the matched entity bare (return { $s }) so its physical ` +
+        `string '@id') — project the matched entity bare (return { $s }) so its physical ` +
         `id is available`,
     );
   }
   for (const [column, kind] of Object.entries(typeOf)) {
     const value = row[column];
-    if (isNodeStruct(value)) return { kind, sourceId: value.id };
+    if (isNodeStruct(value)) return { kind, sourceId: value['@id'] };
   }
   throw new Error(
     `omnigraph: '${queryName}' search row has no node struct under the mapped column(s) ` +
@@ -238,6 +238,10 @@ export function createOmnigraphSearchService<N = Record<string, unknown>>(
       try {
         response = await client.queries.invoke(queryName, input, { signal: ctx.signal });
       } catch (err) {
+        // Stored-query POSTs can also mutate, so the SDK reports a dispatched
+        // cancellation conservatively. This service's contract is read-only;
+        // retain Orbit's AbortError surface when its caller cancelled.
+        throwIfAborted(ctx.signal, queryName);
         throw mapError(err);
       }
       throwIfAborted(ctx.signal, queryName);

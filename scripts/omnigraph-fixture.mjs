@@ -1,94 +1,66 @@
 #!/usr/bin/env node
 /**
- * omnigraph-fixture.mjs — regenerates the real-data Omnigraph fixtures under
- * fixtures/omnigraph/ (see fixtures/omnigraph/README.md).
+ * Regenerate genuine OmniGraph 0.14 HTTP recordings from a fresh temporary
+ * cluster. Existing stores are never opened or deleted. Use --serve to keep
+ * the seeded fixture running for the demo/live tests without rewriting files.
  *
- * What it does, end to end:
- * 1. Recreates the local cluster graph from fixtures/omnigraph/cluster/
- * (`omnigraph cluster import` + `cluster apply` — apply CREATES
- * cluster/graphs/demo.omni from demo.pg). Graph state is wiped first so
- * every run starts from the same empty graph.
- * 2. Generates deterministic seed data (seeded PRNG, no wall-clock input):
- * 300 nodes across 5 types + 500 edges across 6 types, including hostile
- * strings (script-tag payload, quotes/backslashes), non-ASCII text, and
- * dates spanning 2015–2026. Written to fixtures/omnigraph/seed.ndjson in
- * the `omnigraph load` line format:
- * node {"type":"<NodeType>","data":{...}}
- * edge {"edge":"<EdgeName>","from":"<src key>","to":"<dst key>","data":{...}}
- * Every edge carries an explicit deterministic data.id so `--mode merge`
- * is a true upsert (idempotent re-runs; no @card violations).
- * 3. Boots `omnigraph-server --cluster... --unauthenticated` on 127.0.0.1:8199,
- * waits for /healthz, and records the raw HTTP responses (verbatim bytes,
- * via curl) for exactly the requests the @modernrelay/omnigraph SDK 0.10.x
- * issues (graph-scoped paths are prefixed /graphs/<graphId>):
- * recorded/health.json GET /healthz
- * recorded/schema.json GET /graphs/demo/schema
- * recorded/commits.json GET /graphs/demo/commits?branch=main
- * recorded/snapshot.json GET /graphs/demo/snapshot
- * recorded/export.ndjson POST /graphs/demo/export body {}
- * recorded/export-partial.ndjson POST /graphs/demo/export body {"type_names":["Correlates","Signal"]}
- * then kills the server.
- * 4. Writes recorded/manifest.json (recordedAt, serverVersion, graphId,
- * branch, headBefore/headAfter around the export, per-table rowCounts,
- * and the verified edge-before-node export line ordering).
- *
- * Requirements: the `omnigraph` CLI and `omnigraph-server` binaries (0.10.x)
- * on PATH, plus curl. When the binaries are absent the script prints a SKIP
- * message and exits 0 — CI never regenerates fixtures; it consumes the
- * committed recordings.
- *
- * Usage: node scripts/omnigraph-fixture.mjs
- * Idempotent: re-running produces the same seed data and equivalent
- * recordings (commit ids/timestamps differ per run; row data does not).
+ * OMNIGRAPH_BIN and OMNIGRAPH_SERVER_BIN select separately installed binaries;
+ * the CLI and server must both be exactly 0.14.0. No global installation or
+ * production service is changed. See fixtures/omnigraph/README.md.
  */
-
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE_DIR = path.join(ROOT, 'fixtures', 'omnigraph');
-const CLUSTER_DIR = path.join(FIXTURE_DIR, 'cluster');
 const RECORDED_DIR = path.join(FIXTURE_DIR, 'recorded');
-const SEED_FILE = path.join(FIXTURE_DIR, 'seed.ndjson');
-const STORE = path.join(CLUSTER_DIR, 'graphs', 'demo.omni');
-
+const CLI = process.env.OMNIGRAPH_BIN || 'omnigraph';
+const SERVER = process.env.OMNIGRAPH_SERVER_BIN || 'omnigraph-server';
+const VERSION = '0.14.0';
+const CONTRACT = '0.14';
+const HEADER = 'Omnigraph-Http-Api';
 const GRAPH_ID = 'demo';
 const BRANCH = 'main';
-const ACTOR = 'fixture-bot';
-const BIND = '127.0.0.1:8199';
+const PORT = Number(process.env.OMNIGRAPH_FIXTURE_PORT || 8199);
+const BIND = `127.0.0.1:${PORT}`;
 const BASE = `http://${BIND}`;
-// Header the SDK's transport sends on every request.
-const ACCEPT = 'Accept: application/json, application/x-ndjson';
+const SERVE = process.argv.includes('--serve');
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-function hasBinary(bin, args) {
-  const r = spawnSync(bin, args, { stdio: 'ignore' });
-  return !r.error;
+function run(cmd, args, env = process.env) {
+  const result = spawnSync(cmd, args, { cwd: ROOT, env, encoding: 'utf8', timeout: 60000, maxBuffer: 16 * 1024 * 1024 });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${cmd} ${args.join(' ')} exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  return result.stdout;
 }
 
-function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', ...opts });
-  if (r.error) throw r.error;
-  if (r.status !== 0) {
-    throw new Error(
-      `${cmd} ${args.join(' ')} exited ${r.status}\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
-    );
-  }
-  return r.stdout;
+async function request(route, init = {}) {
+  const response = await fetch(`${BASE}${route}`, {
+    ...init,
+    headers: { Accept: 'application/json, application/x-ndjson', [HEADER]: CONTRACT, ...init.headers },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (response.headers.get(HEADER) !== CONTRACT) throw new Error(`${route}: missing ${HEADER}: ${CONTRACT}`);
+  const body = await response.text();
+  if (!response.ok) throw new Error(`${route}: HTTP ${response.status} ${body}`);
+  return { body, status: response.status, apiContract: response.headers.get(HEADER) };
 }
 
-/** curl the server and return the raw response body (verbatim bytes). */
-function curl(args) {
-  return run('curl', ['-sS', '--fail-with-body', ...args]);
+async function requireFreePort() {
+  const probe = createServer();
+  probe.listen(PORT, '127.0.0.1');
+  await once(probe, 'listening');
+  await new Promise((resolve, reject) => probe.close((error) => error ? reject(error) : resolve()));
 }
 
-function record(file, body) {
-  if (!body || body.length === 0) throw new Error(`refusing to record empty body for ${file}`);
-  writeFileSync(path.join(RECORDED_DIR, file), body);
-  console.log(`  recorded/${file} (${Buffer.byteLength(body)} bytes)`);
+function newestCommitId(body) {
+  const id = JSON.parse(body).head_commit_id;
+  if (typeof id !== 'string') throw new Error('commits response had no head');
+  return id;
 }
 
 /** mulberry32 — tiny deterministic PRNG; the fixed seed makes seed.ndjson stable. */
@@ -118,8 +90,8 @@ function generateSeed() {
 
   const lines = [];
   const node = (type, data) => lines.push(JSON.stringify({ type, data }));
-  const edge = (name, from, to, data) =>
-    lines.push(JSON.stringify({ edge: name, from, to, ...(data ? { data } : {}) }));
+  const edge = (name, from, to, { id, ...data }) =>
+    lines.push(JSON.stringify({ edge: name, id, from, to, data }));
 
   // -- nodes (300 total) ------------------------------------------------------
   const firstNames = [
@@ -198,6 +170,8 @@ function generateSeed() {
     const strength =
       i === 1 ? 0 : i === 2 ? 1e-9 : Math.round(rand() * 1e6) / 1e6;
     node('Signal', {
+      // Schema-owned id is ordinary nullable data, not the row identity.
+      id: i % 3 === 0 ? null : i,
       slug,
       title: `Signal ${i}: ${pick(topics)}`,
       body: rand() < 0.45 ? null : `Market movement around ${pick(topics)}.`,
@@ -246,7 +220,7 @@ function generateSeed() {
   for (let i = 1; i <= 70; i++) {
     edge('Triggered', pick(signals), pick(decisions), { id: `trig-${pad(i, 4)}` });
   }
-  // Correlates 50 — @unique(src, dst): deduped pairs, no self-loops.
+  // Correlates 50 — @unique(@src, @dst): deduped pairs, no self-loops.
   const seen = new Set();
   let corr = 0;
   while (corr < 50) {
@@ -264,159 +238,129 @@ function generateSeed() {
   return lines.join('\n') + '\n';
 }
 
-// ── pipeline ─────────────────────────────────────────────────────────────────
-
-async function waitForHealth(timeoutMs = 20000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const r = spawnSync('curl', ['-sf', `${BASE}/healthz`], { encoding: 'utf8' });
-    if (r.status === 0 && r.stdout.includes('"ok"')) return;
-    await new Promise((res) => setTimeout(res, 250));
-  }
-  throw new Error(`omnigraph-server did not become healthy on ${BASE} within ${timeoutMs}ms`);
-}
-
-function newestCommitId(commitsJson) {
-  const parsed = JSON.parse(commitsJson);
-  const first = parsed.commits?.[0]; // newest first
-  if (!first?.graph_commit_id) throw new Error('commits response had no commits');
-  return first.graph_commit_id;
-}
+// ── Fresh local cluster, served load, and wire recordings ─────────────────────
 
 async function main() {
-  if (!hasBinary('omnigraph', ['version']) || !hasBinary('omnigraph-server', ['--help'])) {
-    console.log(
-      'SKIP: omnigraph / omnigraph-server binaries not found on PATH — ' +
-        'fixture regeneration needs them (see fixtures/omnigraph/README.md). ' +
-        'The committed recordings remain authoritative.',
-    );
-    return;
+  if (process.argv.slice(2).some((arg) => arg !== '--serve')) throw new Error('Usage: node scripts/omnigraph-fixture.mjs [--serve]');
+  if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Invalid OMNIGRAPH_FIXTURE_PORT');
+  const version = JSON.parse(run(CLI, ['version', '--json']));
+  if (version.version !== VERSION || version.http_contract !== CONTRACT || version.protocols?.target !== 2) {
+    throw new Error(`Fixture regeneration requires OmniGraph ${VERSION}; set OMNIGRAPH_BIN and OMNIGRAPH_SERVER_BIN to the pinned release.`);
   }
-
-  // 1. Recreate the graph from the declarative cluster config.
-  console.log('== cluster: wiping graph state and re-applying config ==');
-  rmSync(path.join(CLUSTER_DIR, 'graphs'), { recursive: true, force: true });
-  rmSync(path.join(CLUSTER_DIR, '__cluster'), { recursive: true, force: true });
-  run('omnigraph', ['cluster', 'validate', '--config', CLUSTER_DIR]);
-  // Cluster control commands stopped accepting --as (omnigraph >= 0.9: the
-  // actor flag applies to direct-engine/actor-bound operations only).
-  run('omnigraph', ['cluster', 'import', '--config', CLUSTER_DIR, '--json']);
-  run('omnigraph', ['cluster', 'apply', '--config', CLUSTER_DIR, '--json']);
-  if (!existsSync(STORE)) throw new Error(`cluster apply did not create ${STORE}`);
-
-  // 2. Seed data.
-  console.log('== seed: generating deterministic data and loading ==');
-  const seed = generateSeed();
-  writeFileSync(SEED_FILE, seed);
-  const loadOut = run('omnigraph', [
-    'load', '--data', SEED_FILE, '--mode', 'merge',
-    '--store', STORE, '--as', ACTOR, '--json',
-  ]);
-  const loaded = JSON.parse(loadOut);
-  // 0.10 CLI reports per-table arrays; pre-0.10 had top-level totals.
-  const sumTables = (tables) =>
-    (tables ?? []).reduce((total, t) => total + (t.entities_loaded ?? 0), 0);
-  const nodesLoaded = loaded.nodes_loaded ?? sumTables(loaded.nodes);
-  const edgesLoaded = loaded.edges_loaded ?? sumTables(loaded.edges);
-  console.log(`  loaded ${nodesLoaded} nodes, ${edgesLoaded} edges`);
-  if (nodesLoaded !== 300 || edgesLoaded !== 500) {
-    throw new Error(`unexpected load counts: ${loadOut}`);
-  }
-
-  // 3. Serve and record.
-  console.log(`== server: booting on ${BIND} ==`);
-  mkdirSync(RECORDED_DIR, { recursive: true });
-  const server = spawn(
-    'omnigraph-server',
-    ['--cluster', CLUSTER_DIR, '--unauthenticated', '--bind', BIND],
-    { cwd: ROOT, stdio: 'ignore' },
-  );
+  run(SERVER, ['--help']);
+  await requireFreePort();
+  const cluster = mkdtempSync(path.join(tmpdir(), 'orbit-omnigraph-014-'));
+  const shutdown = new AbortController();
+  const stop = () => shutdown.abort();
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+  let server;
+  let serverClosed;
+  let serverLog = '';
   try {
-    await waitForHealth();
-    const g = (p) => `${BASE}/graphs/${GRAPH_ID}${p}`; // SDK graph-scoped routing
+    // Isolate the final 0.14 target configuration from any operator defaults or
+    // credentials on the host. Loopback access is explicitly anonymous.
+    const operatorHome = path.join(cluster, 'operator');
+    mkdirSync(operatorHome);
+    writeFileSync(path.join(operatorHome, 'config.yaml'), [
+      'version: 1', 'targets:', '  fixture:', '    kind: server',
+      `    endpoint: ${BASE}`, '    auth: { provider: anonymous }', '',
+    ].join('\n'));
+    const runCli = (args) => run(CLI, args, { ...process.env, OMNIGRAPH_HOME: operatorHome });
+    runCli(['config', 'validate']);
+    for (const file of ['cluster.yaml', 'demo.pg', 'queries.gq']) cpSync(path.join(FIXTURE_DIR, 'cluster', file), path.join(cluster, file));
+    console.log(`Preparing fresh OmniGraph ${VERSION} fixture in ${cluster}`);
+    runCli(['cluster', 'validate', '--config', cluster, '--json']);
+    runCli(['lint', '--schema', path.join(cluster, 'demo.pg'), '--query', path.join(cluster, 'queries.gq'), '--json']);
+    runCli(['cluster', 'plan', '--target', cluster, '--config', cluster, '--json']);
+    const applied = JSON.parse(runCli(['cluster', 'apply', '--target', cluster, '--config', cluster, '--as', 'fixture-bot', '--json']));
+    if (applied.status !== 'complete') throw new Error('Fixture bootstrap did not finish');
+    // This uniquely-owned local root has no other readers/writers. The synchronous
+    // apply process has exited after durable completion, so no native I/O remains.
+    // Release only its observed exact retained lock before starting the server.
+    const observed = JSON.parse(runCli(['cluster', 'observe', '--target', cluster, '--config', cluster, '--json']));
+    const lock = observed.state_observations?.lock_id;
+    if (typeof lock !== 'string') throw new Error('Expected the completed bootstrap writer lock');
+    runCli(['cluster', 'force-unlock', lock, '--target', cluster, '--json']);
 
-    const health = curl(['-H', ACCEPT, `${BASE}/healthz`]);
-    record('health.json', health);
-
-    record('schema.json', curl(['-H', ACCEPT, g('/schema')]));
-
-    // Branch head before the export stream…
-    const commitsBefore = curl(['-H', ACCEPT, g(`/commits?branch=${BRANCH}`)]);
-    record('commits.json', commitsBefore);
-
-    const snapshot = curl(['-H', ACCEPT, g('/snapshot')]);
-    record('snapshot.json', snapshot);
-
-    // Full export — SDK: og.export → POST /export with body {}.
-    const exportFull = curl([
-      '-X', 'POST', g('/export'),
-      '-H', 'Content-Type: application/json', '-H', ACCEPT, '-d', '{}',
-    ]);
-    record('export.ndjson', exportFull);
-
-    // Partial export by type — SDK: og.export({ typeNames: [...] }) → snake_cased body.
-    const exportPartial = curl([
-      '-X', 'POST', g('/export'),
-      '-H', 'Content-Type: application/json', '-H', ACCEPT,
-      '-d', '{"type_names":["Correlates","Signal"]}',
-    ]);
-    record('export-partial.ndjson', exportPartial);
-
-    // …and after it (equal heads produce a stable sourceRevision).
-    const commitsAfter = curl(['-H', ACCEPT, g(`/commits?branch=${BRANCH}`)]);
-
-    // 4. Verify + manifest.
-    console.log('== verify: export ordering and manifest ==');
-    const exportLines = exportFull.trimEnd().split('\n');
-    const lastEdgeIdx = exportLines.reduce((acc, l, i) => (l.startsWith('{"edge"') ? i : acc), -1);
-    const firstNodeIdx = exportLines.findIndex((l) => l.startsWith('{"type"'));
-    if (lastEdgeIdx === -1 || firstNodeIdx === -1 || lastEdgeIdx > firstNodeIdx) {
-      throw new Error(
-        `export ordering violated: expected all edge:* lines before node:* lines ` +
-          `(lastEdge=${lastEdgeIdx}, firstNode=${firstNodeIdx})`,
-      );
+    server = spawn(SERVER, ['--cluster', cluster, '--unauthenticated', '--bind', BIND], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+    serverClosed = once(server, 'close');
+    for (const output of [server.stdout, server.stderr]) output.on('data', (chunk) => { serverLog = (serverLog + chunk).slice(-16000); });
+    const deadline = Date.now() + 20000;
+    while (true) {
+      if (server.exitCode !== null || server.signalCode !== null) throw new Error(`Fixture server exited: ${serverLog}`);
+      try { await request('/readyz'); break; } catch (error) {
+        if (Date.now() > deadline) throw new Error(`Fixture did not become ready: ${error}\n${serverLog}`);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
     }
-    if (exportLines.length !== 800) {
-      throw new Error(`expected 800 export lines (300 nodes + 500 edges), got ${exportLines.length}`);
+    const health = await request('/healthz');
+    if (JSON.parse(health.body).version !== VERSION) throw new Error(`Expected server ${VERSION}, got ${health.body}`);
+    const discovery = await request('/healthz', { method: 'HEAD' });
+    const seed = generateSeed();
+    const seedPath = path.join(cluster, 'seed.ndjson');
+    writeFileSync(seedPath, seed);
+    const loaded = JSON.parse(runCli(['load', '--data', seedPath, '--mode', 'merge', '--target', 'fixture', '--graph', GRAPH_ID, '--json']));
+    const total = (tables) => (tables ?? []).reduce((sum, table) => sum + table.entities_loaded, 0);
+    if (total(loaded.nodes) !== 300 || total(loaded.edges) !== 500) throw new Error(`Unexpected load counts: ${JSON.stringify(loaded)}`);
+    console.log(`FIXTURE_READY ${BASE} · 300 nodes · 500 edges`);
+    if (SERVE) {
+      await Promise.race([
+        new Promise((resolve) => { if (shutdown.signal.aborted) resolve(); else shutdown.signal.addEventListener('abort', resolve, { once: true }); }),
+        serverClosed.then(() => { throw new Error(`Fixture server exited unexpectedly: ${serverLog}`); }),
+      ]);
+      return;
     }
 
-    const snap = JSON.parse(snapshot);
-    // 0.10 renamed snapshot `tables` (table_key/row_count) to `datasets`
-    // (entity_kind + type_name / entity_count); keys keep the old
-    // '<kind>:<Type>' form either way.
-    const snapEntries = snap.datasets ?? snap.tables ?? [];
-    const rowCounts = Object.fromEntries(
-      snapEntries.map((t) => [
-        t.table_key ?? `${t.entity_kind}:${t.type_name}`,
-        t.row_count ?? t.entity_count,
-      ]),
-    );
+    const graph = (route) => `/graphs/${GRAPH_ID}${route}`;
+    const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const schema = await request(graph('/schema'));
+    const commits = await request(graph(`/commits?branch=${BRANCH}&limit=1`));
+    const snapshot = await request(graph('/snapshot'));
+    const full = await request(graph('/export'), json({}));
+    const partial = await request(graph('/export'), json({ type_names: ['Correlates', 'Signal'] }));
+    const search = await request(graph('/queries/search_signals'), json({ branch: BRANCH, params: { q: 'Signal 1:' } }));
+    const after = await request(graph(`/commits?branch=${BRANCH}&limit=1`));
+    const lines = full.body.trimEnd().split('\n').map((line) => JSON.parse(line));
+    const firstNode = lines.findIndex((line) => line.type !== undefined);
+    if (lines.length !== 800 || firstNode !== 500 || lines.slice(firstNode).some((line) => line.edge !== undefined)) throw new Error('Expected 500 edge lines followed by 300 node lines');
+    if (lines.some((line) => typeof line.id !== 'string')) throw new Error('Export is missing top-level entity identity');
+    if (newestCommitId(commits.body) !== newestCommitId(after.body)) throw new Error('Fixture head moved during recording');
+    const hit = JSON.parse(search.body).rows?.[0]?.s;
+    if (hit?.['@id'] !== 'signal-001' || hit?.id !== 1) throw new Error(`Search identity contract changed: ${search.body}`);
     const manifest = {
-      recordedAt: new Date().toISOString(),
-      serverVersion: JSON.parse(health).version,
-      graphId: GRAPH_ID,
-      branch: BRANCH,
-      headBefore: newestCommitId(commitsBefore),
-      headAfter: newestCommitId(commitsAfter),
-      rowCounts,
-      exportLineCount: exportLines.length,
-      edgeLinesBeforeNodeLines: true,
-      notes:
-        'Raw HTTP bodies recorded verbatim from omnigraph-server against the requests ' +
-        'the @modernrelay/omnigraph SDK issues (graph-scoped paths under /graphs/demo). ' +
-        'export.ndjson streams tables in lexicographic table-key order, so all edge:* ' +
-        'lines precede node:* lines (verified). headBefore == headAfter: the branch was ' +
-        'quiescent across the export, the stable case for the source revision stamp.',
+      recordedAt: new Date().toISOString(), serverVersion: VERSION, httpApiContract: CONTRACT,
+      graphId: GRAPH_ID, branch: BRANCH,
+      headBefore: newestCommitId(commits.body), headAfter: newestCommitId(after.body),
+      rowCounts: Object.fromEntries(JSON.parse(snapshot.body).datasets.map((table) => [`${table.entity_kind}:${table.type_name}`, table.entity_count])),
+      exportLineCount: lines.length, edgeLinesBeforeNodeLines: true,
+      notes: 'Verbatim OmniGraph 0.14.0 HTTP bodies from a fresh isolated local cluster. Identity is top-level id in export and @id in query node values; nullable data properties are omitted. The branch was quiescent during recording.',
     };
-    record('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
-
-    console.log('OK: fixtures regenerated');
+    mkdirSync(RECORDED_DIR, { recursive: true });
+    const recordings = {
+      'health.json': health.body, 'schema.json': schema.body, 'commits.json': commits.body,
+      'snapshot.json': snapshot.body, 'export.ndjson': full.body, 'export-partial.ndjson': partial.body,
+      'search.json': search.body,
+      'http.json': JSON.stringify({ requestHeader: { [HEADER]: CONTRACT }, discovery: { method: 'HEAD', path: '/healthz', status: discovery.status, responseHeader: { [HEADER]: discovery.apiContract } } }, null, 2) + '\n',
+      'manifest.json': JSON.stringify(manifest, null, 2) + '\n',
+    };
+    for (const [file, body] of Object.entries(recordings)) {
+      if (!body) throw new Error(`Refusing empty recording ${file}`);
+      writeFileSync(path.join(RECORDED_DIR, file), body);
+      console.log(`Recorded ${file} (${Buffer.byteLength(body)} bytes)`);
+    }
+    writeFileSync(path.join(FIXTURE_DIR, 'seed.ndjson'), seed);
+    console.log('OK: OmniGraph 0.14 fixtures regenerated');
   } finally {
-    server.kill('SIGTERM');
+    process.removeListener('SIGINT', stop);
+    process.removeListener('SIGTERM', stop);
+    if (server !== undefined && server.exitCode === null && server.signalCode === null) {
+      server.kill('SIGTERM');
+      const timeout = setTimeout(() => server.kill('SIGKILL'), 10000);
+      try { await serverClosed; } finally { clearTimeout(timeout); }
+    }
+    rmSync(cluster, { recursive: true, force: true });
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+main().catch((error) => { console.error(error); process.exitCode = 1; });

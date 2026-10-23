@@ -553,11 +553,11 @@ export class LinkPickIndex {
     let bestIdx = -1;
     let bestD2 = Number.POSITIVE_INFINITY;
     for (let r = r0; r <= r1; r++) {
-      const rowBase = r * g.cols;
+      const rowBase: number = r * g.cols;
       for (let c = c0; c <= c1; c++) {
-        const cell = rowBase + c;
+        const cell: number = rowBase + c;
         const end = cellOffsets[cell + 1]!;
-        for (let i = cellOffsets[cell]!; i < end; i++) {
+        for (let i: number = cellOffsets[cell]!; i < end; i++) {
           const l = cellLinkIds[i]!;
           if (stamps[l] === stamp) continue; // already tested via another cell
           stamps[l] = stamp;

@@ -9,6 +9,9 @@
     "directory": "packages/omnigraph"
   },
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "sideEffects": false,
   "files": [
     "dist"
@@ -39,11 +42,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modernrelay/omnigraph": "0.10.0",
+    "@modernrelay/omnigraph": "0.14.0",
     "@modernrelay/orbit-core": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "vitest": "^3.0.0"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "@types/node": "^26.6.5"
   }
 }

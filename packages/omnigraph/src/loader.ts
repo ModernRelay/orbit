@@ -161,7 +161,8 @@ function isAbortError(err: unknown): boolean {
  * public surface; they rethrow as plain `Error`s with a stable prefix.
  * Abort rejections and this package's own errors pass through unchanged.
  */
-function mapError(err: unknown): unknown {
+function mapError(err: unknown, signal?: AbortSignal): unknown {
+  throwIfAborted(signal);
   if (err instanceof OmnigraphError && !isAbortError(err)) {
     return new Error(`omnigraph: ${err.name} (status ${err.status}): ${err.message}`);
   }
@@ -224,14 +225,15 @@ export function createOmnigraphSource(options: OmnigraphSourceOptions): Omnigrap
       : `og:${graphId}:${branch}:types=${typeNames.join(',')}`;
 
   async function newestHead(signal: AbortSignal | undefined): Promise<string> {
-    const commits = await client.commits.list({ branch }, callOpts(signal));
-    const newest = commits[0]; // SDK: most recent first
-    if (newest === undefined) {
+    // A fresh first page captures the current branch head. We only need that
+    // coordinate, not the full history or a continuation pinned to an old head.
+    const { headCommitId } = await client.commits.list({ branch, limit: 1 }, callOpts(signal));
+    if (headCommitId == null) {
       throw new Error(
         `omnigraph: branch '${branch}' of graph '${graphId}' has no commits — nothing to export`,
       );
     }
-    return newest.graphCommitId;
+    return headCommitId;
   }
 
   async function runAttempt(
@@ -262,8 +264,8 @@ export function createOmnigraphSource(options: OmnigraphSourceOptions): Omnigrap
     for (const hazard of bigIntKeyWarnings(schema)) {
       pushUnique(
         warnings,
-        `omnigraph: ${hazard.type}.${hazard.property} is a 64-bit integer used as identity — ` +
-          `JSON parsing silently rounds values past ±2^53, which can collapse distinct ids`,
+        `omnigraph: ${hazard.type}.${hazard.property} is a 64-bit integer schema key — ` +
+          `JSON parsing silently rounds attribute values past ±2^53; physical ids remain exact strings`,
       );
     }
     // NOTE: a schema-declared `type` property needs no warning — the
@@ -493,7 +495,7 @@ export function createOmnigraphSource(options: OmnigraphSourceOptions): Omnigrap
           // the original failure wins
         }
       }
-      throw mapError(err);
+      throw mapError(err, signal);
     } finally {
       // Cancel the underlying NDJSON stream on any non-exhausted exit.
       try {
@@ -507,13 +509,13 @@ export function createOmnigraphSource(options: OmnigraphSourceOptions): Omnigrap
   async function load(target: IngestTarget, signal?: AbortSignal): Promise<OmnigraphLoadResult> {
     const warnings: string[] = [];
 
-    // Surface an SDK/server major.minor mismatch as a warning, never a hard
-    // failure.
+    // Surface build-version skew as a warning after the SDK verifies the
+    // HTTP API contract. Contract mismatches are hard failures.
     let serverVersion: string;
     try {
       serverVersion = (await client.health(callOpts(signal))).version;
     } catch (err) {
-      throw mapError(err);
+      throw mapError(err, signal);
     }
     const server = majorMinor(serverVersion);
     const sdk = majorMinor(SERVER_VERSION);
@@ -533,7 +535,7 @@ export function createOmnigraphSource(options: OmnigraphSourceOptions): Omnigrap
         // Covers SDK errors thrown before the session/stream phase
         // (schema.get, commits.list); mapError is a no-op on already-mapped
         // or package-owned errors.
-        throw mapError(err);
+        throw mapError(err, signal);
       }
       if (outcome.kind === 'retry') continue;
       return {
