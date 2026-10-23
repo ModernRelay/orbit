@@ -15,10 +15,10 @@
  * has run the tests.
  */
 
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { generateTypes, generateTypesFromPgSource } from '../src/codegen';
@@ -26,6 +26,17 @@ import { normalizeEdge, normalizeNode, parsePgSchema, schemaFingerprint } from '
 
 import committedDemoTypes from '../../../apps/demo/src/omnigraph-types.generated.ts?raw';
 import demoPg from '../../../fixtures/omnigraph/cluster/demo.pg?raw';
+
+const TYPESCRIPT_CLI = fileURLToPath(new URL('./bin/tsc', import.meta.resolve('typescript/package.json')));
+
+/** Exercise the installed compiler: TypeScript 7 no longer exposes createProgram. */
+function expectGeneratedTypesToCompile(path: string): void {
+  const result = spawnSync(process.execPath, [
+    TYPESCRIPT_CLI, '--ignoreConfig', '--strict', '--noEmit', '--skipLibCheck', path,
+  ], { encoding: 'utf8', timeout: 30_000 });
+  expect(result.error).toBeUndefined();
+  expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: '' });
+}
 
 /**
  * Verbatim copy of the real fixture at
@@ -258,8 +269,7 @@ const edge: EdgeAttrs = ${JSON.stringify(edge)};
 const invalid: LinkEdgeProps = 7;
 void node; void omitted; void edge; void invalid;
 `);
-    const program = ts.createProgram([path], { strict: true, noEmit: true, skipLibCheck: true });
-    expect(ts.getPreEmitDiagnostics(program).map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))).toEqual([]);
+    expectGeneratedTypesToCompile(path);
   });
 
   it('disambiguates node/edge interface collisions in unions and TypeMap and compiles their distinct props', () => {
@@ -289,8 +299,7 @@ const nodeProps: TypeMap['nodes']['FooEdge'] = node;
 const edgeProps: TypeMap['edges']['Foo'] = edge;
 void nodeProps; void edgeProps;
 `);
-    const program = ts.createProgram([path], { strict: true, noEmit: true, skipLibCheck: true });
-    expect(ts.getPreEmitDiagnostics(program).map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))).toEqual([]);
+    expectGeneratedTypesToCompile(path);
   });
 
   it('maps Vector(n), [T] lists, Bool, Blob, and unknown types', () => {

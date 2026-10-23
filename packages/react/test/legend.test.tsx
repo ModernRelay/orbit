@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
+import type { ReactElement } from 'react';
 import type { GraphSnapshot, MetricColumn, Scale } from '@modernrelay/orbit-core';
 import { FakeEngine } from '@modernrelay/orbit-core/testing';
 import { Graph, useGraphTheme } from '../src/index';
@@ -309,7 +310,7 @@ describe('<GraphLegend>', () => {
 });
 
 describe('useGraphTheme', () => {
-  function ThemeProbe(): JSX.Element {
+  function ThemeProbe(): ReactElement {
     const theme = useGraphTheme();
     return <div data-testid="theme">{`${theme.background}|${theme.nodeDefault}`}</div>;
   }

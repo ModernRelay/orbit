@@ -26,6 +26,7 @@ export type {
   AcceptedGraph,
   RenderScene,
   SceneGroups,
+  SceneFold,
   ScenePointRef,
   SceneLinkRef,
   Accessor,

@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { StrictMode, createRef } from 'react';
+import type { ReactElement } from 'react';
 import type {
   AcceptedEdge,
   DimensionSpec,
@@ -450,7 +451,7 @@ describe('<Graph>', () => {
   });
 
   it('click injection delivers the caller node object and updates useGraphSelection', async () => {
-    function SelectionProbe(): JSX.Element {
+    function SelectionProbe(): ReactElement {
       // v0.3: useGraphSelection returns the full namespaced SelectionState.
       const selection = useGraphSelection();
       return <div data-testid="selection">{selection.nodeIds.join(',')}</div>;
@@ -504,7 +505,7 @@ describe('<Graph>', () => {
   });
 
   it('edge callbacks receive typed AcceptedEdge payloads and drive useGraphEdgeHover', async () => {
-    function EdgeHoverProbe(): JSX.Element {
+    function EdgeHoverProbe(): ReactElement {
       const edgeId = useGraphEdgeHover();
       return <div data-testid="edge-hover">{edgeId ?? 'none'}</div>;
     }
@@ -545,7 +546,7 @@ describe('<Graph>', () => {
   });
 
   it('drag callbacks receive typed payloads; drag end pins the node and updates useGraphPins', async () => {
-    function PinsProbe(): JSX.Element {
+    function PinsProbe(): ReactElement {
       const pins = useGraphPins();
       return (
         <div data-testid="pins">
@@ -639,7 +640,7 @@ describe('<Graph>', () => {
   });
 
   it('subgraph prop hard-scopes the scene, diffs structurally, and null clears', async () => {
-    function ScopeProbe(): JSX.Element {
+    function ScopeProbe(): ReactElement {
       const scope = useGraphScope();
       return <div data-testid="scope">{scope === null ? 'full' : scope.seedIds.join(',')}</div>;
     }
@@ -712,7 +713,7 @@ describe('<Graph>', () => {
   });
 
   it('handle expandNode/retractExpansion round-trip through the local service and pendingExpansions', async () => {
-    function PendingProbe(): JSX.Element {
+    function PendingProbe(): ReactElement {
       const pending = useGraphPendingExpansions();
       return <div data-testid="pending">{[...pending].join(',')}</div>;
     }
@@ -753,7 +754,7 @@ describe('<Graph>', () => {
   });
 
   it('handle beginIngest/removeOverlay drive a overlay session; useGraphOverlays tracks it', async () => {
-    function OverlaysProbe(): JSX.Element {
+    function OverlaysProbe(): ReactElement {
       const overlays = useGraphOverlays();
       return <div data-testid="overlays">{overlays.join(',')}</div>;
     }
@@ -971,7 +972,7 @@ describe('<Graph> filter/crossfilter props + history handle', () => {
   });
 
   it('handle undo/redo delegate: a recorded selection mutation round-trips; useGraphHistory is live', async () => {
-    function HistoryProbe(): JSX.Element {
+    function HistoryProbe(): ReactElement {
       const history = useGraphHistory();
       return <span data-testid="history">{`${history.undoDepth}/${history.redoDepth}`}</span>;
     }

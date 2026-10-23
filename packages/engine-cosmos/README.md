@@ -4,7 +4,7 @@ Cosmos engine adapter for Orbit.
 
 ## Tested engine range
 
-This adapter is developed and probed against exactly **`@cosmos.gl/graph@3.5.0`**
+This adapter is developed and probed against exactly **`@cosmos.gl/graph@3.5.1`**
 (exact pin, no range). In the repository, `pnpm cosmos:pin-check` verifies that
 the adapter and `apps/spike` declare the same exact version. Any pin bump must
 update both manifests, pass that check and `pnpm probe:node`, then be exercised
@@ -49,7 +49,7 @@ readback timings are diagnostic, not a qualified performance comparison:
 
 The `fitView({ maxZoom })` clamp uses the same position snapshot as native
 Cosmos fitting: destination positions during a position transition, live GPU
-positions otherwise. This uses the exact-pin 3.5.0 runtime helper
+positions otherwise. This uses the exact-pin 3.5.1 runtime helper
 `getFitViewPositions` (private in its TypeScript declaration), with shrinking
 and expanding transitions covered by the demo's real-engine regression suite.
 
@@ -94,8 +94,8 @@ Facts verified against the exact-pin 3.5.0 dist typings (`config.d.ts` / `index.
 | Capability | Value | Mechanism / basis |
 | --- | --- | --- |
 | `edgeArrows` | `true` | Commit `config.linkArrows` maps to cosmos' `linkDefaultArrows` config key (config.d.ts, default `false`) via `setConfigPartial` — instanced arrowheads toggle atomically within the commit's single `render()`. No per-link `setLinkArrows(boolean[])` buffer is used (Orbit's toggle is scene-wide). |
-| `pointImages` | `true` | cosmos 3.5.0 exposes `setImageData(ImageData[])` + `setPointImageIndices(Float32Array)` (index.d.ts). The adapter maintains a slot→`ImageData` mirror of the atlas: commit upserts transcode each `ImageBitmap` through an offscreen 2D canvas (`drawImage` + `getImageData`), `removeSlots` blanks entries with a 1×1 transparent `ImageData` (slot indices stay stable), and any atlas change re-uploads the FULL array (cosmos has no partial image update — consistent with `rangeUpdates: []`). The mirror is CPU-side, so it survives context loss; post-restore atlas commits re-upload everything to the fresh graph. **Degradation:** where no 2D context exists (jsdom without the canvas package), the image channel no-ops — never throws — and reports the `engine:image-channel-unavailable` warning diagnostic exactly once. |
-| `renderLinks` toggle | config-only | cosmos 3.5.0 has a first-class `renderLinks: boolean` config key (config.d.ts, default `true`), so commit `config.renderLinks` is a pure `setConfigPartial` toggle — **zero buffer setters**, no `linkOpacity` workaround, no link-buffer rebuild. |
+| `pointImages` | `true` | cosmos 3.5.1 exposes `setImageData(ImageData[])` + `setPointImageIndices(Float32Array)` (index.d.ts). The adapter maintains a slot→`ImageData` mirror of the atlas: commit upserts transcode each `ImageBitmap` through an offscreen 2D canvas (`drawImage` + `getImageData`), `removeSlots` blanks entries with a 1×1 transparent `ImageData` (slot indices stay stable), and any atlas change re-uploads the FULL array (cosmos has no partial image update — consistent with `rangeUpdates: []`). The mirror is CPU-side, so it survives context loss; post-restore atlas commits re-upload everything to the fresh graph. **Degradation:** where no 2D context exists (jsdom without the canvas package), the image channel no-ops — never throws — and reports the `engine:image-channel-unavailable` warning diagnostic exactly once. |
+| `renderLinks` toggle | config-only | cosmos 3.5.1 has a first-class `renderLinks: boolean` config key (config.d.ts, default `true`), so commit `config.renderLinks` is a pure `setConfigPartial` toggle — **zero buffer setters**, no `linkOpacity` workaround, no link-buffer rebuild. |
 | Theme default colors | config-only | Commit `config.defaultPointColor`/`config.defaultLinkColor` map to cosmos' `pointDefaultColor`/`linkDefaultColor` config keys (CSS color strings accepted natively). |
 
 While pre-mount, context-lost, or terminally failed, resources fold into the
@@ -107,7 +107,7 @@ the same slot), and the latest `pointImageIndex` replaces wholesale.
 
 | Capability | Value | Mechanism / basis |
 | --- | --- | --- |
-| `clusterForce` | `true` | **Dist investigation (3.5.0, the exact pin):** `dist/index.d.ts` exposes `setPointClusters((number \| undefined)[])`, `setClusterPositions((number \| undefined)[])`, `setPointClusterStrength(Float32Array)` and `getClusterPositions()`; `dist/config.d.ts` exposes the `simulationCluster` coefficient (default `0.1`); `dist/modules/Clusters/index.d.ts` is the GPU module implementing it (centermass FBO + force application pass). The capability is therefore declared honestly, not faked. **Evidence class: Node-verifiable (dist typing scan), like `rangeUpdates`/`postDrawFrames` — the API surface is present and wired, but the visible force behavior still requires a headful probe (see the GPU evidence policy below).** |
+| `clusterForce` | `true` | **Dist investigation (3.5.1, the exact pin):** `dist/index.d.ts` exposes `setPointClusters((number \| undefined)[])`, `setClusterPositions((number \| undefined)[])`, `setPointClusterStrength(Float32Array)` and `getClusterPositions()`; `dist/config.d.ts` exposes the `simulationCluster` coefficient (default `0.1`); `dist/modules/Clusters/index.d.ts` is the GPU module implementing it (centermass FBO + force application pass). The capability is therefore declared honestly, not faked. **Evidence class: Node-verifiable (dist typing scan), like `rangeUpdates`/`postDrawFrames` — the API surface is present and wired, but the visible force behavior still requires a headful probe (see the GPU evidence policy below).** |
 
 Contract mapping applied inside the single atomic commit (staged after the
 roster, before the one `render()`):

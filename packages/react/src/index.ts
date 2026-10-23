@@ -8,7 +8,7 @@ export { Graph } from './Graph';
 export type { GraphProps, GraphHandle } from './Graph';
 
 export { GraphProvider } from './GraphProvider';
-export type { GraphProviderProps } from './GraphProvider';
+export type { AnyGraphInstance, GraphProviderProps } from './GraphProvider';
 
 // Overlays: rendered by <Graph> internally; exported so hosts composing
 // <GraphProvider> directly can reuse them.

@@ -14,6 +14,7 @@
  * (h) tree-shake/lazy-load fixtures bundled against the temp install
  * (i) `.smoke/report.json` summarizing every gate
  * (j) the packed inline worker asset is self-contained
+ * (k) inferred consumer declarations use publicly accessible package types
  */
 import { execFileSync } from 'node:child_process';
 import {
@@ -173,6 +174,7 @@ try {
       ...pkgs.map((p) => p.tarball),
       'react',
       'react-dom',
+      `@types/react@${pkgs.find((p) => p.name === '@modernrelay/orbit-react').manifest.devDependencies['@types/react']}`,
     ],
     { cwd: consumerDir },
   );
@@ -196,6 +198,29 @@ for (const pkg of pkgs) {
       fail(gateName, errText(err));
     }
   }
+}
+
+// ---------------------------------------------------- (k) declaration consumer
+try {
+  const fixture = 'public-types.ts';
+  copyFileSync(path.join(ROOT, 'fixtures', 'declarations', fixture), path.join(consumerDir, fixture));
+  // Workspaces use the native compiler; the root TypeScript package exists
+  // only for build tools that still require its legacy JavaScript API.
+  const compiler = path.join(ROOT, 'packages', 'core', 'node_modules', 'typescript', 'bin', 'tsc');
+  run(process.execPath, [
+    compiler,
+    '--ignoreConfig',
+    '--strict',
+    '--target', 'ES2022',
+    '--module', 'NodeNext',
+    '--declaration',
+    '--emitDeclarationOnly',
+    '--outDir', 'declarations',
+    fixture,
+  ], { cwd: consumerDir });
+  pass('declarations:public-inferred-types');
+} catch (err) {
+  fail('declarations:public-inferred-types', errText(err));
 }
 
 // ---------------------------------------------------------------- (f) publint

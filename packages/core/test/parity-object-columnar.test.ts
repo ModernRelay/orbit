@@ -7,6 +7,7 @@
  * Byte-exact is the bar — Buffer-level equality, not approximate.
  */
 
+import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 
 import type { ColumnarGraphSnapshot, GraphSnapshot } from '../src/types';
