@@ -360,7 +360,7 @@ describe('schemaFingerprint revision stamp', () => {
 });
 
 describe('bigIntKeyWarnings for the ≥2^53 hazard', () => {
-  it('flags I64/U64 properties that are @key or named id', () => {
+  it('flags I64/U64 schema keys, not ordinary properties named id', () => {
     const schema = parsePgSchema(`
       node Account {
         acct_num: I64 @key
@@ -378,7 +378,6 @@ describe('bigIntKeyWarnings for the ≥2^53 hazard', () => {
     `);
     expect(bigIntKeyWarnings(schema)).toEqual([
       { type: 'Account', property: 'acct_num' },
-      { type: 'Device', property: 'id' },
     ]);
   });
 

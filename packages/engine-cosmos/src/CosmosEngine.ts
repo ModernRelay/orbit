@@ -102,7 +102,7 @@ import { RestoreDeadline } from './restoreDeadline';
 type ViewportState = NonNullable<ReturnType<GraphEngine['getViewport']>>;
 
 /**
- * Structural view of cosmos' `graph.store` — private in the 3.3.0 d.ts but a
+ * Structural view of cosmos' `graph.store` — private in the 3.5.0 d.ts but a
  * stable runtime field. `draggingPointIndex` is assigned right before cosmos
  * invokes `onDragStart` (verified in the dist), making it the authoritative
  * dragged-point source; `hoveredPoint` mirrors the public onPointMouseOver
@@ -114,7 +114,7 @@ interface CosmosStoreLike {
 }
 
 /**
- * Exact-pin 3.4.0 camera seam: private in the d.ts, but the runtime helper
+ * Exact-pin 3.5.0 camera seam: private in the d.ts, but the runtime helper
  * used by native fitView. It reads transition destinations while positions
  * animate and live GPU positions otherwise. Using the same helper keeps
  * the clamp decision and native fallback on the same coordinate snapshot.
@@ -591,7 +591,9 @@ export class CosmosEngine implements GraphEngine {
 
   getPositions(): Float32Array | null {
     const graph = this.activeGraph;
-    return graph ? Float32Array.from(graph.getPointPositions()) : null;
+    // Without an `out` argument Cosmos allocates an owned snapshot. Core may
+    // overlay pinned coordinates, so never share/reuse a readback destination.
+    return graph ? graph.getPointPositionsArray() : null;
   }
 
   /**

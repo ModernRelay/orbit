@@ -10,7 +10,11 @@
     "test": "echo \"spike has no unit tests; use pnpm probe\" && exit 0"
   },
   "dependencies": {
-    "@cosmos.gl/graph": "3.4.0"
+    "@cosmos.gl/graph": "3.5.0",
+    "@luma.gl/core": "~9.3.0",
+    "@luma.gl/engine": "~9.3.0",
+    "@luma.gl/shadertools": "~9.3.0",
+    "@luma.gl/webgl": "~9.3.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

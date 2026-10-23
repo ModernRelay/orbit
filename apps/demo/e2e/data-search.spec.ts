@@ -119,6 +119,9 @@ test('search: results list, Enter focuses, a filtered result surfaces its reason
 test('minimap: canvas rasterizes and a corner click pans the real viewport', async ({
   page,
 }) => {
+  // Pausing physics does not stop the initial camera fit. Make that fit
+  // instant so the before/after zoom comparison measures only the minimap pan.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await gotoReady(page);
   await pauseSimulation(page);
 

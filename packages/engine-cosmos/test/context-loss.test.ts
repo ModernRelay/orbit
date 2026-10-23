@@ -73,7 +73,7 @@ const h = vi.hoisted(() => {
       this.zoomLevel = value;
     }
     getZoomLevel(): number { return this.zoomLevel; }
-    getPointPositions(): number[] { return [1, 2, 3, 4]; }
+    getPointPositionsArray(): Float32Array { return Float32Array.of(1, 2, 3, 4); }
     screenToSpacePosition(p: [number, number]): [number, number] {
       return [p[0] * 2 - 5, p[1] * 2 - 5];
     }

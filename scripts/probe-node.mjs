@@ -5,8 +5,8 @@
  * Writes probe records in the same shape as the Playwright GPU probes
  * (meta.browser: 'node') into apps/spike/results/records/:
  * - node-import-safety: `await import('@cosmos.gl/graph')` succeeds in Node
- * - range-updates: static scan of dist/index.d.ts — all buffer setters are
- * full-array, no ranged variants (offset/count) exist
+ * - range-updates: inventory of full-buffer setters used by the adapter and
+ * sparse live-position/pin setters, which are not EngineCommit range channels
  * - post-draw-frames: static scan of config.d.ts — no draw/render-phase
  * callback exists (only simulation/transition/interaction hooks)
  */
@@ -86,33 +86,48 @@ const records = [];
   const dtsHash = sha256(dtsPath);
 
   // Public setter signatures on the Graph class (4-space indented members).
-  const setterRe = /^ {4}(set[A-Za-z0-9]+)\(([^)]*)\)/gm;
+  // End at the return type so union-array parentheses and multiline object
+  // parameters (e.g. setViewTransform) remain intact in the inventory.
+  const setterRe = /^ {4}(set[A-Za-z0-9]+)\(([\s\S]*?)\): [^\n]+;/gm;
   const setters = [];
-  const rangedVariants = [];
   for (const match of dts.matchAll(setterRe)) {
     const [, name, params] = match;
     setters.push({ name, params: params.replace(/\s+/g, ' ').trim() });
-    if (/\b(offset|startIndex|count|range|fromIndex|toIndex)\b/i.test(params)) {
-      rangedVariants.push(name);
-    }
   }
-  const pass = setters.length > 0 && rangedVariants.length === 0;
+  const bufferSetterNames = [
+    'setPointPositions', 'setPointColors', 'setPointSizes', 'setLinks',
+    'setLinkColors', 'setLinkWidths', 'setImageData', 'setPointImageIndices',
+    'setPointClusters', 'setClusterPositions',
+  ];
+  const bufferSetters = setters.filter(({ name }) => bufferSetterNames.includes(name));
+  const rangedVariants = bufferSetters.filter(({ params }) =>
+    /\b(offset|startIndex|count|range|fromIndex|toIndex)\b/i.test(params),
+  );
+  const sparsePositionSetters = setters.filter(({ name }) =>
+    ['setPointPosition', 'setPointPositionsByIndices'].includes(name),
+  );
+  const sparsePinSetters = setters.filter(({ name }) => name === 'setPinnedPoint');
+  const pass = bufferSetters.length === bufferSetterNames.length && rangedVariants.length === 0
+    && sparsePositionSetters.length === 2 && sparsePinSetters.length === 1;
   records.push(
     makeRecord({
       capability: 'range-updates',
       expected:
-        'Every buffer setter (setPointPositions, setPointColors, setLinks, ...) takes a full ' +
-        'array; no ranged/partial-update variants (offset/count parameters) exist, so orbit ' +
-        'must re-upload whole buffers on every change.',
+        'The buffer setters used for Orbit EngineCommit take full arrays without offset/count ' +
+        'parameters. Cosmos 3.5 also provides sparse live-position and pin setters; the adapter ' +
+        'does not translate EngineCommit range channels to those APIs (rangeUpdates remains []).',
       observed: {
         rangeUpdates: [],
         setterCount: setters.length,
         setters,
+        bufferSettersUsedByAdapter: bufferSetters,
+        sparsePositionSetters,
+        sparsePinSetters,
         rangedVariantsFound: rangedVariants,
         dtsSha256: dtsHash,
       },
       pass,
-      notes: `Static scan of the resolved dist/index.d.ts (sha256 ${dtsHash}). All ${setters.length} set* signatures on the Graph class take full arrays; none declare offset/count/range parameters.`,
+      notes: `Static scan of the resolved dist/index.d.ts (sha256 ${dtsHash}). The ${bufferSetters.length} buffer setters used by the adapter have no offset/count/range parameters. Sparse position writes change live GPU state, not the input roster; wiring them into atomic commits requires a separate adapter change. setPinnedPoint is a per-index pin toggle, not a buffer range upload.`,
     }),
   );
 }

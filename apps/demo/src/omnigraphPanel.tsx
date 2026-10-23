@@ -338,13 +338,12 @@ export function OmnigraphPanel({ form, onFormChange, meter, result, error, onLoa
           {error}
           {CONNECTION_ERROR.test(error) && (
             <div style={S.ogHint}>
-              graph server unreachable — start the fixture server:{' '}
+              graph server unreachable — start a fresh local 0.14 fixture:{' '}
               <code style={S.ogCode}>
-                omnigraph-server --cluster fixtures/omnigraph/cluster --unauthenticated --bind
-                127.0.0.1:8199
+                node scripts/omnigraph-fixture.mjs --serve
               </code>{' '}
-              (run <code style={S.ogCode}>node scripts/omnigraph-fixture.mjs</code> first if
-              fixtures/omnigraph/cluster/graphs/ is missing)
+              (set <code style={S.ogCode}>OMNIGRAPH_BIN</code> and{' '}
+              <code style={S.ogCode}>OMNIGRAPH_SERVER_BIN</code> to the 0.14.0 binaries)
             </div>
           )}
         </div>

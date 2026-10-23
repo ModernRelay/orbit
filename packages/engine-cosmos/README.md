@@ -4,13 +4,19 @@ Cosmos engine adapter for Orbit.
 
 ## Tested engine range
 
-This adapter is developed and probed against exactly **`@cosmos.gl/graph@3.4.0`**
+This adapter is developed and probed against exactly **`@cosmos.gl/graph@3.5.0`**
 (exact pin, no range). In the repository, `pnpm cosmos:pin-check` verifies that
 the adapter and `apps/spike` declare the same exact version. Any pin bump must
 update both manifests, pass that check and `pnpm probe:node`, then be exercised
 locally with the headful `pnpm probe` suite on a real GPU before the new version
-is considered supported. The 3.3.0 → 3.4.0 bump was re-probed on 2026-08-10;
-upstream on-demand rendering made the quiescence probe pass.
+is considered supported. The 3.4.0 → 3.5.0 bump passed all three Node probes
+and all ten headful GPU probe tests on 2026-10-07. The earlier 3.3.0 → 3.4.0
+bump introduced upstream on-demand rendering and made the quiescence probe pass.
+
+Node.js **22 or newer** is required. Cosmos 3.5 declares its four Luma 9.3
+packages as peers; the adapter supplies `@luma.gl/core`, `@luma.gl/engine`,
+`@luma.gl/shadertools` and `@luma.gl/webgl` as dependencies in that compatible
+minor line.
 
 ## Capability profile
 
@@ -18,13 +24,14 @@ Node-verifiable facts (measured by `pnpm probe:node`, re-checked in CI):
 
 | Capability | Value | Basis |
 | --- | --- | --- |
-| `rangeUpdates` | `[]` | Every buffer setter in `dist/index.d.ts` (`setPointPositions`, `setPointColors`, `setLinks`, …) takes a full array; no offset/count variants exist. Whole-buffer re-upload is the only update path. |
+| `rangeUpdates` | `[]` | The adapter uses full-array setters for its atomic `EngineCommit` buffer channels. Cosmos 3.5 also exposes sparse live-position writes (`setPointPosition`, `setPointPositionsByIndices`) and a per-index pin toggle (`setPinnedPoint`); these are not wired as Orbit range channels. The Node probe inventories both surfaces. |
 | `postDrawFrames` | `false` | The `config.d.ts` callback inventory has no draw/render-phase hook — only simulation (`onSimulationTick/Start/End/Pause/Unpause`), transition, zoom, drag and pointer callbacks. Post-draw work must be scheduled externally. Since v0.13 this is a REAL `EngineCapabilities` field, not just prose. |
 | `idleFrames` | `'stops'` | cosmos ≥3.4 on-demand rendering idle-stops the engine loop, and the adapter's gated activity clock stops with it — measured 0 idle frames and 0 rAF registrations per 750 ms at rest by the quiescence probe below. |
 | `node-import-safe` | `true` | `await import('@cosmos.gl/graph')` succeeds in plain Node (module scope guards `typeof window`), so SSR and test imports never crash. |
 
-GPU-probed capabilities (re-measured 2026-08-10 on Apple M5 Pro, ANGLE Metal, headful
-Chromium):
+GPU-probed capabilities (re-measured 2026-10-07 on Cosmos 3.5.0, Apple M5 Pro,
+ANGLE Metal, headful Chromium 149). These are semantic checks; the single-run
+readback timings are diagnostic, not a qualified performance comparison:
 
 | Capability | Result | Finding |
 | --- | --- | --- |
@@ -33,19 +40,20 @@ Chromium):
 | `link-picking` | ✅ pass | Native `onLinkClick`/`onLinkMouseOver` deliver correct link indices; ~4 px perpendicular tolerance on a 2 px link. **Flipped:** the adapter now reports `capabilities.linkPicking: true` and wires `onLinkClick`/`onLinkMouseOver`/`onLinkMouseOut` to the host events, backed by the headful probe. |
 | `nan-tombstones` | ✅ pass | NaN'd points escape hit-testing, incident links vanish, `fitView` ignores tombstoned slots. |
 | `native-pinning` | ✅ pass | `setPinnedPoints` excludes points from force integration; `[]`/repeat calls are idempotent. |
-| `tracked-positions` | ⚠️ fail (budget) | Semantics correct (packing order, last-call-replaces), but each `getTrackedPointPositionsArray` read stalls ~8.7 ms p50 on 3.4.0 (was ~18 ms on 3.3) **regardless of k** — a sync pipeline flush, not payload cost. Per-frame tracked readback stays non-viable; DOM-label positioning reads at settle/idle cadence. |
-| `quiescence` | ✅ pass (3.4.0) | On-demand rendering: 0 idle frames AND 0 rAF registrations per 750 ms at rest (was 91 on 3.3.0). Settle lands ~5 s after `onSimulationEnd` (trailing transitions). Picking stays index-truthful at rest, drag release renders its final frame, and a `render()` + same-tick capture reads valid pixels (the stale-wake micro-cases). |
+| `tracked-positions` | ✅ semantics; ⚠️ timing diagnostic | Packing order and last-call-replaces semantics pass. The diagnostic run exceeded the probe's synchronous readback budget; no new performance claim is made without repeated, variance-qualified runs. Orbit keeps its existing label cadence and does not opt into the new nonblocking tracked-map API. |
+| `position-snapshots` | ✅ pass | Flat `Float32Array` reads preserve NaN tombstones and remain independent across caller mutations, subsequent reads and roster replacement. |
+| `quiescence` | ✅ pass | On-demand rendering: 0 idle frames AND 0 rAF registrations per 750 ms at rest. Picking remains live at rest, drag release renders its final frame, and a `render()` + same-tick capture reads valid pixels (the stale-wake micro-cases). |
 | `context-loss` | ⚠️ fail (by design) | `lost`/`restored` events surface, but no combination of buffer/config replay revives rendering after `restoreContext()` — only a full `Graph` destroy + re-create recovers. This validates the adapter's recreate-on-restore protocol: `CosmosEngine` rebuilds the Graph in the same container and the core replays the scene. |
 
 ## Interaction surface
 
 The `fitView({ maxZoom })` clamp uses the same position snapshot as native
 Cosmos fitting: destination positions during a position transition, live GPU
-positions otherwise. This uses the exact-pin 3.4.0 runtime helper
+positions otherwise. This uses the exact-pin 3.5.0 runtime helper
 `getFitViewPositions` (private in its TypeScript declaration), with shrinking
 and expanding transitions covered by the demo's real-engine regression suite.
 
-Coordinate-space facts verified against the exact-pin 3.4.0 dist (see the
+Coordinate-space facts verified against the exact-pin dist (see the
 `CosmosEngine.ts` module header for the exact evidence):
 
 - `pointsInPolygon(screenPolygon)` — cosmos' `findPointsInPolygon` takes
@@ -61,6 +69,15 @@ Coordinate-space facts verified against the exact-pin 3.4.0 dist (see the
 - `setPinnedIndices` maps to `setPinnedPoints` (full-set replace; `null`/`[]`
   unpin all). Re-applying pins after context-loss recovery is core-owned.
 
+`getPositions()` uses Cosmos 3.5's `getPointPositionsArray()` without an
+output buffer, which returns a fresh `Float32Array` snapshot. This removes
+the intermediate boxed `number[]` and conversion back to `Float32Array`.
+Callers may overlay pinned coordinates without changing subsequent reads;
+later reads and roster updates leave earlier snapshots intact, and NaN
+tombstones remain NaN. The `position-snapshots` GPU probe checks that ownership
+contract against the real engine. The GPU read remains synchronous; this
+change does not introduce asynchronous readback or a new overlay scheduler.
+
 ## Overlay & toolbar surface
 
 | Capability | Behavior | Basis / degradation |
@@ -72,13 +89,13 @@ Coordinate-space facts verified against the exact-pin 3.4.0 dist (see the
 
 ## Styling channels
 
-Facts verified against the exact-pin 3.4.0 dist typings (`config.d.ts` / `index.d.ts`):
+Facts verified against the exact-pin 3.5.0 dist typings (`config.d.ts` / `index.d.ts`):
 
 | Capability | Value | Mechanism / basis |
 | --- | --- | --- |
 | `edgeArrows` | `true` | Commit `config.linkArrows` maps to cosmos' `linkDefaultArrows` config key (config.d.ts, default `false`) via `setConfigPartial` — instanced arrowheads toggle atomically within the commit's single `render()`. No per-link `setLinkArrows(boolean[])` buffer is used (Orbit's toggle is scene-wide). |
-| `pointImages` | `true` | cosmos 3.4.0 exposes `setImageData(ImageData[])` + `setPointImageIndices(Float32Array)` (index.d.ts). The adapter maintains a slot→`ImageData` mirror of the atlas: commit upserts transcode each `ImageBitmap` through an offscreen 2D canvas (`drawImage` + `getImageData`), `removeSlots` blanks entries with a 1×1 transparent `ImageData` (slot indices stay stable), and any atlas change re-uploads the FULL array (cosmos has no partial image update — consistent with `rangeUpdates: []`). The mirror is CPU-side, so it survives context loss; post-restore atlas commits re-upload everything to the fresh graph. **Degradation:** where no 2D context exists (jsdom without the canvas package), the image channel no-ops — never throws — and reports the `engine:image-channel-unavailable` warning diagnostic exactly once. |
-| `renderLinks` toggle | config-only | cosmos 3.4.0 has a first-class `renderLinks: boolean` config key (config.d.ts, default `true`), so commit `config.renderLinks` is a pure `setConfigPartial` toggle — **zero buffer setters**, no `linkOpacity` workaround, no link-buffer rebuild. |
+| `pointImages` | `true` | cosmos 3.5.0 exposes `setImageData(ImageData[])` + `setPointImageIndices(Float32Array)` (index.d.ts). The adapter maintains a slot→`ImageData` mirror of the atlas: commit upserts transcode each `ImageBitmap` through an offscreen 2D canvas (`drawImage` + `getImageData`), `removeSlots` blanks entries with a 1×1 transparent `ImageData` (slot indices stay stable), and any atlas change re-uploads the FULL array (cosmos has no partial image update — consistent with `rangeUpdates: []`). The mirror is CPU-side, so it survives context loss; post-restore atlas commits re-upload everything to the fresh graph. **Degradation:** where no 2D context exists (jsdom without the canvas package), the image channel no-ops — never throws — and reports the `engine:image-channel-unavailable` warning diagnostic exactly once. |
+| `renderLinks` toggle | config-only | cosmos 3.5.0 has a first-class `renderLinks: boolean` config key (config.d.ts, default `true`), so commit `config.renderLinks` is a pure `setConfigPartial` toggle — **zero buffer setters**, no `linkOpacity` workaround, no link-buffer rebuild. |
 | Theme default colors | config-only | Commit `config.defaultPointColor`/`config.defaultLinkColor` map to cosmos' `pointDefaultColor`/`linkDefaultColor` config keys (CSS color strings accepted natively). |
 
 While pre-mount, context-lost, or terminally failed, resources fold into the
@@ -90,7 +107,7 @@ the same slot), and the latest `pointImageIndex` replaces wholesale.
 
 | Capability | Value | Mechanism / basis |
 | --- | --- | --- |
-| `clusterForce` | `true` | **Dist investigation (3.4.0, the exact pin):** `dist/index.d.ts` exposes `setPointClusters((number \| undefined)[])`, `setClusterPositions((number \| undefined)[])`, `setPointClusterStrength(Float32Array)` and `getClusterPositions()`; `dist/config.d.ts` exposes the `simulationCluster` coefficient (default `0.1`); `dist/modules/Clusters/index.d.ts` is the GPU module implementing it (centermass FBO + force application pass). The capability is therefore declared honestly, not faked. **Evidence class: Node-verifiable (dist typing scan), like `rangeUpdates`/`postDrawFrames` — the API surface is present and wired, but the visible force behavior still requires a headful probe (see the GPU evidence policy below).** |
+| `clusterForce` | `true` | **Dist investigation (3.5.0, the exact pin):** `dist/index.d.ts` exposes `setPointClusters((number \| undefined)[])`, `setClusterPositions((number \| undefined)[])`, `setPointClusterStrength(Float32Array)` and `getClusterPositions()`; `dist/config.d.ts` exposes the `simulationCluster` coefficient (default `0.1`); `dist/modules/Clusters/index.d.ts` is the GPU module implementing it (centermass FBO + force application pass). The capability is therefore declared honestly, not faked. **Evidence class: Node-verifiable (dist typing scan), like `rangeUpdates`/`postDrawFrames` — the API surface is present and wired, but the visible force behavior still requires a headful probe (see the GPU evidence policy below).** |
 
 Contract mapping applied inside the single atomic commit (staged after the
 roster, before the one `render()`):
@@ -114,7 +131,7 @@ roster, before the one `render()`):
 
 | Capability | Behavior | Basis / formula |
 | --- | --- | --- |
-| `setViewport({x, y, zoom})` — **real pan** | Centers space point `(x, y)` at exactly the requested (or current) zoom in one call; a follow-up `getViewport()` returns the same `{x, y, zoom}` (modulo cosmos' d3 `scaleExtent` clamp). A missing `x` or `y` is filled from the current viewport; zoom-only calls keep the `setZoomLevel` path (d3 `scaleTo` preserves the center). Instant unless `durationMs` is given. | **The former zoom-only limitation is LIFTED.** The exact-pin API has no pan-to method, but `setZoomTransformByPointPositions(positions, duration, scale, padding)` is an exact center+zoom when `scale` is explicit — verified in the 3.4.0 dist (`zoomInstance.getTransform`): `store.scaleX/scaleY` are linear slope-±1 space→screen maps, a single-point bbox is widened ±0.5 *symmetrically* (center preserved), and an explicit `scale` bypasses the fit math and `padding` entirely, yielding `translate(w/2 − scaleX(x)·k, h/2 − scaleY(y)·k).scale(k)` with `k = scale`. The adapter calls `setZoomTransformByPointPositions(Float32Array.of(x, y), durationMs ?? 0, zoom ?? getZoomLevel())`. |
+| `setViewport({x, y, zoom})` — **real pan** | Centers space point `(x, y)` at exactly the requested (or current) zoom in one call; a follow-up `getViewport()` returns the same `{x, y, zoom}` (modulo cosmos' d3 `scaleExtent` clamp). A missing `x` or `y` is filled from the current viewport; zoom-only calls keep the `setZoomLevel` path (d3 `scaleTo` preserves the center). Instant unless `durationMs` is given. | The adapter retains `setZoomTransformByPointPositions(positions, duration, scale, padding)`, which gives an exact center+zoom when `scale` is explicit — verified originally in the 3.4.0 dist (`zoomInstance.getTransform`): `store.scaleX/scaleY` are linear slope-±1 space→screen maps, a single-point bbox is widened ±0.5 *symmetrically* (center preserved), and an explicit `scale` bypasses the fit math and `padding` entirely, yielding `translate(w/2 − scaleX(x)·k, h/2 − scaleY(y)·k).scale(k)` with `k = scale`. The adapter calls `setZoomTransformByPointPositions(Float32Array.of(x, y), durationMs ?? 0, zoom ?? getZoomLevel())`. |
 | viewport restore | Context-loss recovery now restores the full camera: the core replays the last stored `{x, y, zoom}` through `setViewport` after the scene commit, and the pan lands (previously only `zoom` was honored). | Supersedes the earlier zoom-only restore behavior. |
 
 ## GPU evidence policy

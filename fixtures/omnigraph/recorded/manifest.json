@@ -1,10 +1,11 @@
 {
-  "recordedAt": "2026-09-03T19:44:16.952Z",
-  "serverVersion": "0.10.0",
+  "recordedAt": "2026-10-23T15:29:58.465Z",
+  "serverVersion": "0.14.0",
+  "httpApiContract": "0.14",
   "graphId": "demo",
   "branch": "main",
-  "headBefore": "01M1MCSW52VSBY71WP1S08WRN0",
-  "headAfter": "01M1MCSW52VSBY71WP1S08WRN0",
+  "headBefore": "hb1.01M5MP45JC4C435R73CJ95BR6H.1.01M5MP45JC4C435R73CJ95BR6H",
+  "headAfter": "hb1.01M5MP45JC4C435R73CJ95BR6H.1.01M5MP45JC4C435R73CJ95BR6H",
   "rowCounts": {
     "edge:Correlates": 50,
     "edge:OwnedBy": 60,
@@ -20,5 +21,5 @@
   },
   "exportLineCount": 800,
   "edgeLinesBeforeNodeLines": true,
-  "notes": "Raw HTTP bodies recorded verbatim from omnigraph-server against the requests the @modernrelay/omnigraph SDK issues (graph-scoped paths under /graphs/demo). export.ndjson streams tables in lexicographic table-key order, so all edge:* lines precede node:* lines (verified). headBefore == headAfter: the branch was quiescent across the export, the stable case for the source revision stamp."
+  "notes": "Verbatim OmniGraph 0.14.0 HTTP bodies from a fresh isolated local cluster. Identity is top-level id in export and @id in query node values; nullable data properties are omitted. The branch was quiescent during recording."
 }

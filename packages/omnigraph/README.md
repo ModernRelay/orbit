@@ -2,8 +2,11 @@
 
 Optional Omnigraph data-source adapter for Orbit. Framework-agnostic:
 depends only on the framework-free ingestion/error surface of `@modernrelay/orbit-core`
-and the official TypeScript SDK `@modernrelay/omnigraph` (0.9.x) — never on React, and
+and the official TypeScript SDK `@modernrelay/omnigraph` (0.14.0) — never on React, and
 core never depends on it.
+
+Requires Node.js 22+ for server/CLI use and the OmniGraph HTTP API contract `0.14`.
+Upgrade the server and SDK together: 0.13 servers are rejected before graph reads.
 
 ## The v1 rule
 
@@ -52,9 +55,31 @@ const result = await source.load(instance /*, abortSignal */);
 (`datasetKey` = `og:<graphId>:<branch>`): edge lines arrive first (lexicographic table-key
 order) and pass straight through — core's pending-endpoint index links them as nodes land. Every append is awaited, and the atomic load has a finite whole-export byte budget
 (`maxPendingBytes`, 512 MiB by default); exceeding it aborts without publishing a partial
-graph. Ids are namespaced through the codec, and wire encodings are normalized to
-the query-path string forms. Byte progress and budgets use re-serialized UTF-8 NDJSON size,
+graph. Ids are namespaced through the codec, and export values are normalized as
+described below. Byte progress and budgets use re-serialized UTF-8 NDJSON size,
 including one line break per export row.
+
+OmniGraph 0.14 exports physical identity at the top level:
+
+```json
+{"type":"Signal","id":"signal-001","data":{"id":42,"title":"Latency spike"}}
+{"edge":"Correlates","id":"edge-001","from":"signal-001","to":"signal-002","data":{"confidence":0.9}}
+```
+
+The node becomes `id: encodeSourceId('Signal', 'signal-001')` with
+`attrs: { id: 42, title: 'Latency spike', 'orbit:type': 'Signal' }`.
+Physical IDs never come from `data.id`; that field is an ordinary schema property.
+Generated props contain only schema properties, retaining a declared `id` type and
+nullability. Use `GraphNode.id` / `GraphEdge.id` for physical identity.
+
+`Date` calendar strings are retained, with signed years padded to ISO's six digits.
+UTC `DateTime` strings from the server omit
+their zone, so the adapter adds explicit UTC and canonical milliseconds
+(`2024-01-01T12:00:00` → `2024-01-01T12:00:00.000Z`), including list elements.
+Omitted nullable schema properties become explicit `null`, matching generated
+`T | null` fields. Inline `base64:` blobs become data URIs; external URIs pass through.
+Null list elements are retained, so generated `[T]` attributes use `(T | null)[]`.
+Vectors retain `number[]`: the server rejects null vector elements.
 
 The `target` is structural (`IngestTarget`: `beginIngest` + `getRevisions` +
 optional `getDiagnostics`) — deliberately decoupled from `GraphInstance`, which satisfies
@@ -63,9 +88,12 @@ it structurally; so does any recorder or headless pipeline.
 ## `sourceRevision` and drift
 
 The canonical `sourceRevision` is a hash of
-`{ graphId, branch, headBefore, headAfter, schemaFingerprint }` — but `/export` is
-branch-only (no snapshot isolation), so `headAfter` is only knowable after the stream,
+`{ graphId, branch, headBefore, headAfter, schemaFingerprint }` (plus `typeNames`
+for partial exports). `/export` accepts a branch and pins an internal snapshot, but
+does not accept the caller's sampled head, so `headAfter` is only knowable after the stream,
 while core's `beginIngest` requires `sourceRevision` up front for a replace session.
+Each head check requests a fresh commit-history page with `limit: 1` and reads its
+captured `headCommitId`; it does not fetch the full history or follow continuation tokens.
 
 Resolution: under `'reject'` and `'retry-once'`, a session begins under the **provisional**
 revision (the canonical hash with `headAfter := headBefore`), the stream appends into it,
@@ -105,21 +133,26 @@ const search = createOmnigraphSearchService({
   branch: 'main', // default
   queryName: 'search-intel', // registry name; invoked as POST /queries/search-intel
   // params: (q, limit) => ({ q, limit }), // default — reshape for your query's params
-  typeOf: { $s: 'Signal' }, // REQUIRED: column → node type for the id encoding
-  // labelColumn: '$s.title', // default: the first string-valued column per row
+  typeOf: { s: 'Signal' }, // REQUIRED: result column → node type for the id encoding
+  // labelColumn: 's.title', // default: the first string-valued column per row
 });
 
 const instance = createGraphInstance({ engine, services: { search } });
 ```
+
+For the repository's `search_signals` fixture query, use `queryName: 'search_signals'`
+and `params: (q) => ({ q })`: that query declares only `q` and has a fixed server
+limit of 10. The adapter still caps returned results at the caller's requested limit.
 
 Row mapping (override wholesale with `mapRow: (row) => SearchResult | null`, `null` skips):
 
 - **id** — Omnigraph ids are unique per type only and query rows carry no type
   discriminator, so the adapter **requires** a caller-supplied column→node-type mapping
   (`typeOf`): a record keyed by the bare-variable projection columns holding node structs
-  (`return { $s }` → `{ $s: 'Signal' }`; the first listed column present wins), or a
+  (`return { $s }` → `{ s: 'Signal' }`; the first listed column present wins), or a
   per-row function returning the type name (the row's first node-struct column supplies the
-  physical id). Every id is qualified via `encodeSourceId(nodeType, physicalId)` — it
+  physical `@id`). For example, `{ s: { '@id': 'signal-001', id: 42 } }` identifies
+  `signal-001`; its ordinary `id` property is not used. Every physical id is qualified via `encodeSourceId(nodeType, physicalId)` — it
   round-trips `decodeSourceId` and matches export-loaded node ids exactly.
 - **score** — a finite number in the row's `score` column (the score lane never doubles as
   a label).
@@ -135,26 +168,35 @@ rethrow as plain `omnigraph:`-prefixed `Error`s; aborts surface as `AbortError`.
 > `activateSearchResult` classifies those as `'not-loaded'` — the host may remedy
 > that only by re-running export for the relevant types (query-path single-node fetch is
 > not implemented in v1). Constrain the stored query to the loaded types, or load the
-> full graph, to avoid the mismatch. Discovery via `og.queries.list()` returns only the
-> `mcp.expose == true` registry subset — invoking a known `queryName` works regardless.
+> full graph, to avoid the mismatch. Discovery via `og.queries.list()` returns the
+> full stored-query registry; MCP exposure does not restrict SDK discovery or invocation.
 
 ## Server-only entry — do not import from the browser
 
 `@modernrelay/orbit-omnigraph/server` (`createOmnigraphServerClient`) is the only
-authenticated SDK construction and must stay server-side: `omnigraph-server` ships no CORS
-configuration and uses static bearer tokens (secret material). Browser deployments
+authenticated SDK construction supplied by this adapter and must stay server-side:
+the helper accepts a static bearer token (secret material). Browser deployments
 pass a preconfigured safe same-origin/public client to `createOmnigraphSource` — the
 browser entry deliberately has no `baseUrl`/`token` option — and typically route reads
 through a proxy/BFF. A client-bundle exclusion gate (`scripts/pack-smoke.mjs`,
 `treeshake:omnigraph-client`) asserts the server entry never reaches a client bundle.
+
+The SDK sends `Omnigraph-Http-Api: 0.14` and checks the matching response header,
+including on streams and errors. It performs an unauthenticated `HEAD /healthz`
+contract check before each graph request; `GET /healthz` is also public. A proxy
+must preserve these methods and headers. Configure the server access policy to
+permit the adapter's schema, commit, export, and stored-query reads; supplying a
+static token alone does not grant every operation under the server's access policy.
 
 ## Error surface
 
 SDK typed errors (`NetworkError`, `ConflictError`, …) never cross this package's public
 surface — failures rethrow as plain `Error`s with a stable `omnigraph:` message prefix.
 Cancellation (`AbortSignal`) surfaces as an `AbortError`; the session is aborted and the
-graph left untouched. SDK/server `major.minor` version mismatches (`og.health()` vs the
-SDK's pinned `SERVER_VERSION`) surface as a result warning, never a hard failure.
+graph left untouched. This includes cancellation during contract discovery and
+stored read-query invocation. Missing or mismatched HTTP contract headers fail closed
+before ingestion can commit. A build-version `major.minor` mismatch (`og.health()`
+vs the SDK's pinned `SERVER_VERSION`) warns only when the HTTP contract checks pass.
 
 ## Also in the box
 

@@ -85,6 +85,56 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  omnigraph:
+    # Exercise the current protocol against an actual pinned server. The
+    # recordings stay useful for fast unit tests, but cannot replace this gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OMNIGRAPH_BIN: ${{ runner.temp }}/omnigraph-0.14.0/omnigraph
+      OMNIGRAPH_SERVER_BIN: ${{ runner.temp }}/omnigraph-0.14.0/omnigraph-server
+      OMNIGRAPH_LIVE_REQUIRED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install OmniGraph 0.14.0
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/omnigraph-0.14.0"
+          cd "$RUNNER_TEMP/omnigraph-0.14.0"
+          release_url=https://github.com/ModernRelay/omnigraph/releases/download/v0.14.0
+          curl --fail --location --retry 3 "$release_url/omnigraph-linux-x86_64.tar.gz" -o omnigraph-linux-x86_64.tar.gz
+          curl --fail --location --retry 3 "$release_url/omnigraph-linux-x86_64.sha256" -o omnigraph-linux-x86_64.sha256
+          sha256sum --check omnigraph-linux-x86_64.sha256
+          tar -xzf omnigraph-linux-x86_64.tar.gz
+          "$OMNIGRAPH_BIN" version
+      - name: Install Playwright Chromium
+        timeout-minutes: 15
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 240 pnpm --filter orbit-demo exec playwright install --with-deps chromium; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Live export and stored-query integration
+        run: pnpm --filter orbit-demo exec playwright test e2e/omnigraph.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omnigraph-playwright
+          path: |
+            apps/demo/playwright-report/
+            apps/demo/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   package:
     runs-on: ubuntu-latest
     strategy:

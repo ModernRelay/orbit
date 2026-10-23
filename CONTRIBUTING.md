@@ -2,6 +2,8 @@
 
 ## Setup
 
+Use Node.js 22 or newer (required by the Cosmos engine and OmniGraph SDK).
+
 ```bash
 pnpm install
 pnpm check        # boundaries + lint + typecheck + all tests + gate evaluator

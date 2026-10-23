@@ -23,8 +23,8 @@ export interface DecodedSourceId {
 /**
  * Encode a `(kind, sourceId)` pair as a collision-proof orbit id.
  *
- * - Nodes: `encodeSourceId(NodeType, data.id)`
- * - Edges: `encodeSourceId(EdgeName, data.id)`; endpoints use
+ * - Nodes: `encodeSourceId(NodeType, id)` using the top-level export id
+ * - Edges: `encodeSourceId(EdgeName, id)` using the top-level export id; endpoints use
  * `encodeSourceId(endpointType, from|to)`.
  */
 export function encodeSourceId(kind: string, sourceId: string): string {

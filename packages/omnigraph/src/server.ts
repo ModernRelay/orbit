@@ -3,8 +3,7 @@
  *
  * This module is the ONLY place in the adapter where an authenticated
  * Omnigraph client is constructed. It must never be imported from browser
- * code: `omnigraph-server` ships no CORS configuration and uses static
- * bearer tokens (secret material), so browser deployments pass a
+ * code: this helper uses a static bearer token (secret material), so browser deployments pass a
  * preconfigured safe same-origin/public client to `createOmnigraphSource`
  * instead — typically routing reads through a proxy/BFF. The client-bundle
  * exclusion gate in `scripts/pack-smoke.mjs` checks the

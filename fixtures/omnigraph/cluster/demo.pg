@@ -42,6 +42,8 @@ node Trace {
 }
 
 node Signal {
+    // Ordinary user property, distinct from system identity (@id).
+    id: I32?
     slug: String @key
     title: String @index
     body: String?
@@ -76,5 +78,5 @@ edge Triggered: Signal -> Decision
 
 edge Correlates: Signal -> Signal {
     confidence: F64
-    @unique(src, dst)
+    @unique(@src, @dst)
 }
