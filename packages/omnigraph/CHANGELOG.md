@@ -1,5 +1,12 @@
 # @modernrelay/orbit-omnigraph
 
+## 0.20.0
+
+### Patch Changes
+
+- Updated dependencies [11c4b4e]
+  - @modernrelay/orbit-core@0.20.0
+
 ## 0.19.0
 
 ### Minor Changes
