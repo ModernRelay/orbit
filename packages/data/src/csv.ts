@@ -34,6 +34,7 @@ import { coerceNumeric } from '@modernrelay/orbit-core';
 import { EMPTY_ROW_TABLE, type RowTable } from './rowTable';
 import { byteChunks, throwIfAborted } from './sources';
 import type { GraphByteSource } from './types';
+import type { PreparationControl } from './control';
 
 export const SAMPLE_ROWS = 1000;
 
@@ -129,8 +130,9 @@ export async function csvTable(
   signal: AbortSignal | undefined,
   /** Columns exempt from numeric coercion (identity columns). */
   identityColumns: ReadonlySet<string>,
+  control?: PreparationControl,
 ): Promise<RowTable> {
-  const records = csvRecords(byteChunks(source, signal));
+  const records = csvRecords(byteChunks(source, signal, control));
   const iterator = records[Symbol.asyncIterator]();
   const head = await iterator.next();
   if (head.done) return EMPTY_ROW_TABLE;
@@ -142,6 +144,8 @@ export async function csvTable(
       const sample: (readonly string[])[] = [];
       let sampleDone = false;
       while (sample.length < SAMPLE_ROWS) {
+        await control?.checkpoint();
+        throwIfAborted(signal);
         const next = await iterator.next();
         if (next.done) {
           sampleDone = true;
@@ -183,6 +187,7 @@ export async function csvTable(
 
       // Pass 2: replay the sample, then keep streaming.
       for (const record of sample) {
+        throwIfAborted(signal);
         yield toRow(record);
       }
       if (!sampleDone) {

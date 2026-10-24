@@ -8,11 +8,13 @@
 import { EMPTY_ROW_TABLE, isPlainRowObject, type RowTable } from './rowTable';
 import { collectBytes } from './sources';
 import type { GraphByteSource, GraphColumnMapping } from './types';
+import type { PreparationControl } from './control';
 
 export async function documentTables(
   source: GraphByteSource,
   mapping: GraphColumnMapping,
   signal: AbortSignal | undefined,
+  control?: PreparationControl,
 ): Promise<{ nodes: RowTable; edges: RowTable }> {
   const paths = mapping.documentPaths;
   if (paths === undefined) {
@@ -21,7 +23,7 @@ export async function documentTables(
         '({ nodes, edges } dot-paths into the parsed object)',
     );
   }
-  const bytes = await collectBytes(source, signal);
+  const bytes = await collectBytes(source, signal, control);
   let parsed: unknown;
   try {
     parsed = JSON.parse(new TextDecoder().decode(bytes));
@@ -30,6 +32,7 @@ export async function documentTables(
       `prepareGraphData: document input is not valid JSON (${(cause as Error).message})`,
     );
   }
+  control?.check();
   if (!isPlainRowObject(parsed)) {
     throw new TypeError(
       'prepareGraphData: document input must parse to a single JSON object',

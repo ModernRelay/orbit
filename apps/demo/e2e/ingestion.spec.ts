@@ -54,18 +54,34 @@ async function openNodeContextMenu(page: Page): Promise<void> {
     }
   }
   const candidates: readonly [number, number][] = [[cx, cy], ...dense, ...grid];
-  for (const [x, y] of candidates) {
-    await page.mouse.click(x, y, { button: 'right' });
-    try {
-      await expect(page.locator(CONTEXT_MENU)).toBeVisible({ timeout: 1_000 });
-    } catch {
-      continue; // click landed before pointer wiring settled — try the next
+  // Candidate misses can open Chromium's native macOS menu, whose tracking
+  // loop blocks context teardown and ignores CDP Escape. Prevent only that
+  // browser default during probing; Orbit's context-menu handlers still run.
+  const nativeMenuGuard = await page.evaluateHandle(() => {
+    const controller = new AbortController();
+    document.addEventListener('contextmenu', (event) => event.preventDefault(), {
+      signal: controller.signal,
+    });
+    return controller;
+  });
+  try {
+    for (const [x, y] of candidates) {
+      await page.mouse.click(x, y, { button: 'right' });
+      try {
+        await expect(page.locator(CONTEXT_MENU)).toBeVisible({ timeout: 1_000 });
+      } catch {
+        await page.keyboard.press('Escape');
+        continue;
+      }
+      if ((await page.locator(ISOLATE_ITEM).count()) > 0) return; // node menu
+      await page.keyboard.press('Escape'); // background menu — dismiss, retry
+      await expect(page.locator(CONTEXT_MENU)).toHaveCount(0);
     }
-    if ((await page.locator(ISOLATE_ITEM).count()) > 0) return; // node menu
-    await page.keyboard.press('Escape'); // background menu — dismiss, retry
-    await expect(page.locator(CONTEXT_MENU)).toHaveCount(0);
+    throw new Error('no right-click candidate landed on a node');
+  } finally {
+    await nativeMenuGuard.evaluate((controller) => controller.abort());
+    await nativeMenuGuard.dispose();
   }
-  throw new Error('no right-click candidate landed on a node');
 }
 
 test('stream feed → live meter → commit → isolate via context menu → reset scope', async ({

@@ -14,7 +14,7 @@ export async function rowsTable(
   role: string,
 ): Promise<RowTable> {
   const stream = rowStream(source, signal);
-  const { first, done, rest, close } = await peekAsyncIterable(stream);
+  const { first, done, rest, close } = await peekAsyncIterable(stream, signal);
   if (done) return EMPTY_ROW_TABLE;
   if (!isPlainRowObject(first)) {
     // Close the underlying source before reporting: the replay

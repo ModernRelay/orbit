@@ -17,13 +17,17 @@
 
 import { normalizeJsonSafeValue } from './jsonSafe';
 
+import { PreparationControl } from './control';
 import { buildPrepared } from './builder';
 import { EMPTY_ROW_TABLE, isPlainRowObject, type RowTable } from './rowTable';
-import { collectBytes } from './sources';
+import { abortable, collectBytes, throwIfAborted } from './sources';
 import type {
   GraphByteSource,
   GraphColumnMapping,
   GraphPrepareOptions,
+  GraphPrepareAnyOptions,
+  GraphPrepareColumnarOptions,
+  PreparedColumnarGraph,
   PreparedGraph,
 } from './types';
 
@@ -61,39 +65,53 @@ async function loadHyparquetModule(): Promise<{ parquetReadObjects: ParquetReadO
   return { parquetReadObjects: parquetReadObjects as ParquetReadObjects };
 }
 
+export function prepareParquetGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: ParquetGraphPrepareInput, mapping: GraphColumnMapping, options: Omit<GraphPrepareColumnarOptions, 'format'>,
+): Promise<PreparedColumnarGraph<N, E>>;
+export function prepareParquetGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: ParquetGraphPrepareInput, mapping: GraphColumnMapping, options: Omit<GraphPrepareOptions, 'format'>,
+): Promise<PreparedGraph<N, E>>;
+export function prepareParquetGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: ParquetGraphPrepareInput, mapping: GraphColumnMapping, options: Omit<GraphPrepareAnyOptions, 'format'>,
+): Promise<PreparedGraph<N, E> | PreparedColumnarGraph<N, E>>;
 export async function prepareParquetGraphData<
   N = Record<string, unknown>,
   E = Record<string, unknown>,
 >(
   input: ParquetGraphPrepareInput,
   mapping: GraphColumnMapping,
-  options: Omit<GraphPrepareOptions, 'format'>,
-): Promise<PreparedGraph<N, E>> {
+  options: Omit<GraphPrepareAnyOptions, 'format'>,
+): Promise<PreparedGraph<N, E> | PreparedColumnarGraph<N, E>> {
+  const control = new PreparationControl(options as GraphPrepareAnyOptions);
   const hyparquet = await loadHyparquetModule();
   const signal = options.signal;
+  throwIfAborted(signal);
   const deriveNodes = 'deriveNodes' in input && input.deriveNodes === true;
-  const edgeTable = await parquetRowTable(input.edges, hyparquet, signal);
+  const edgeTable = await parquetRowTable(input.edges, hyparquet, signal, control);
   const nodeTable = deriveNodes
     ? null
-    : await parquetRowTable((input as { nodes: GraphByteSource }).nodes, hyparquet, signal);
+    : await parquetRowTable((input as { nodes: GraphByteSource }).nodes, hyparquet, signal, control);
   return (await buildPrepared({
     nodeTable,
     edgeTable,
     mapping,
     format: 'parquet',
-    options: { ...options, format: 'parquet' },
-  })) as PreparedGraph<N, E>;
+    options: { ...options, format: 'parquet' } as GraphPrepareAnyOptions,
+    control,
+  })) as PreparedGraph<N, E> | PreparedColumnarGraph<N, E>;
 }
 
 async function parquetRowTable(
   source: GraphByteSource,
   hyparquet: { parquetReadObjects: ParquetReadObjects },
   signal: AbortSignal | undefined,
+  control: PreparationControl,
 ): Promise<RowTable> {
-  const bytes = await collectBytes(source, signal);
+  const bytes = await collectBytes(source, signal, control);
   // collectBytes allocates an exact-size buffer, so `bytes.buffer` is the
   // whole file — the AsyncBuffer shape hyparquet expects.
-  const rows = await hyparquet.parquetReadObjects({ file: bytes.buffer as ArrayBuffer });
+  const rows = await abortable(hyparquet.parquetReadObjects({ file: bytes.buffer as ArrayBuffer }), signal);
+  throwIfAborted(signal);
   const first = rows[0];
   if (first === undefined) return EMPTY_ROW_TABLE;
   if (!isPlainRowObject(first)) {
@@ -106,6 +124,7 @@ async function parquetRowTable(
     columns,
     rows: (async function* () {
       for (const raw of rows) {
+        throwIfAborted(signal);
         const row: Record<string, unknown> = {};
         for (const key of Object.keys(raw)) {
           const value = raw[key];
@@ -118,6 +137,7 @@ async function parquetRowTable(
             configurable: true,
           });
         }
+        throwIfAborted(signal);
         yield row;
       }
     })(),

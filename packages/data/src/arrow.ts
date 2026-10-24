@@ -19,6 +19,7 @@
 
 import { normalizeJsonSafeValue } from './jsonSafe';
 
+import { PreparationControl } from './control';
 import { buildPrepared } from './builder';
 import { EMPTY_ROW_TABLE, type RowTable } from './rowTable';
 import { collectBytes, throwIfAborted } from './sources';
@@ -26,6 +27,9 @@ import type {
   GraphByteSource,
   GraphColumnMapping,
   GraphPrepareOptions,
+  GraphPrepareAnyOptions,
+  GraphPrepareColumnarOptions,
+  PreparedColumnarGraph,
   PreparedGraph,
 } from './types';
 
@@ -84,30 +88,41 @@ async function loadArrowModule(): Promise<ArrowModule> {
   };
 }
 
+export function prepareArrowGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: ArrowGraphPrepareInput, mapping: GraphColumnMapping, options: Omit<GraphPrepareColumnarOptions, 'format'>,
+): Promise<PreparedColumnarGraph<N, E>>;
+export function prepareArrowGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: ArrowGraphPrepareInput, mapping: GraphColumnMapping, options: Omit<GraphPrepareOptions, 'format'>,
+): Promise<PreparedGraph<N, E>>;
+export function prepareArrowGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: ArrowGraphPrepareInput, mapping: GraphColumnMapping, options: Omit<GraphPrepareAnyOptions, 'format'>,
+): Promise<PreparedGraph<N, E> | PreparedColumnarGraph<N, E>>;
 export async function prepareArrowGraphData<
   N = Record<string, unknown>,
   E = Record<string, unknown>,
 >(
   input: ArrowGraphPrepareInput,
   mapping: GraphColumnMapping,
-  options: Omit<GraphPrepareOptions, 'format'>,
-): Promise<PreparedGraph<N, E>> {
+  options: Omit<GraphPrepareAnyOptions, 'format'>,
+): Promise<PreparedGraph<N, E> | PreparedColumnarGraph<N, E>> {
+  const control = new PreparationControl(options as GraphPrepareAnyOptions);
   const signal = options.signal;
   throwIfAborted(signal);
   const arrow = await loadArrowModule();
   throwIfAborted(signal);
   const deriveNodes = 'deriveNodes' in input && input.deriveNodes === true;
-  const edgeTable = await arrowRowTable(input.edges, arrow, signal);
+  const edgeTable = await arrowRowTable(input.edges, arrow, signal, control);
   const nodeTable = deriveNodes
     ? null
-    : await arrowRowTable((input as { nodes: ArrowGraphSource }).nodes, arrow, signal);
+    : await arrowRowTable((input as { nodes: ArrowGraphSource }).nodes, arrow, signal, control);
   return (await buildPrepared({
     nodeTable,
     edgeTable,
     mapping,
     format: 'arrow',
-    options: { ...options, format: 'arrow' },
-  })) as PreparedGraph<N, E>;
+    options: { ...options, format: 'arrow' } as GraphPrepareAnyOptions,
+    control,
+  })) as PreparedGraph<N, E> | PreparedColumnarGraph<N, E>;
 }
 
 function isArrowTable(source: ArrowGraphSource): source is ArrowTableLike {
@@ -124,11 +139,12 @@ async function arrowRowTable(
   source: ArrowGraphSource,
   arrow: ArrowModule,
   signal: AbortSignal | undefined,
+  control: PreparationControl,
 ): Promise<RowTable> {
   throwIfAborted(signal);
   const table = isArrowTable(source)
     ? source
-    : arrow.tableFromIPC(await collectBytes(source as GraphByteSource, signal));
+    : arrow.tableFromIPC(await collectBytes(source as GraphByteSource, signal, control));
   throwIfAborted(signal);
   const columns = table.schema.fields.map((f) => f.name);
   if (columns.length === 0 && table.numRows === 0) return EMPTY_ROW_TABLE;

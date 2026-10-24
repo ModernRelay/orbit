@@ -26,13 +26,16 @@
  */
 
 import type { GraphEdge, GraphNode, GraphSnapshot } from '@modernrelay/orbit-core';
+import { ColumnarBuilder } from './columnar';
+import type { PreparationControl } from './control';
 import { computeMappingFingerprint } from './fingerprint';
 import type { RowTable } from './rowTable';
 import { TableSummarizer } from './summaries';
 import type {
   GraphColumnMapping,
   GraphPrepareFormat,
-  GraphPrepareOptions,
+  GraphPrepareAnyOptions,
+  PreparedColumnarGraph,
   PreparedGraph,
 } from './types';
 import { validateMapping } from './validate';
@@ -47,14 +50,16 @@ export interface BuildArgs {
   mapping: GraphColumnMapping;
   /** Resolved lane label; part of the fingerprint. */
   format: GraphPrepareFormat;
-  options: GraphPrepareOptions;
+  options: GraphPrepareAnyOptions;
+  control: PreparationControl;
 }
 
-export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
-  const { nodeTable, edgeTable, mapping, format, options } = args;
+export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph | PreparedColumnarGraph> {
+  const { nodeTable, edgeTable, mapping, format, options, control } = args;
   let failed = false;
   try {
-    validateOptions(options);
+    control.check();
+    const columnar = options.output === 'columnar' ? new ColumnarBuilder() : undefined;
     validateMapping({
       mapping,
       nodeColumns: nodeTable === null ? null : nodeTable.columns,
@@ -75,10 +80,13 @@ export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
       edgeSummarizer.seed(edgeAttrPick.seedColumns);
       for (const column of edgeAttrPick.seedColumns) edgeAttrPick.admitted.add(column);
     }
+    columnar?.edgeAttributes.seed(edgeAttrPick.seedColumns);
     const edges: GraphEdge[] = [];
     const endpointOrder = new Set<string>();
     let edgeOrdinal = 0;
     for await (const row of edgeTable.rows) {
+      await control.checkpoint();
+      control.admit('edges');
       const source = identityString(
         row[mapping.edges.source],
         'edge source',
@@ -93,20 +101,24 @@ export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
         mapping.edges.target,
         true,
       );
-      const edge: GraphEdge = { source, target };
+      let edgeId: string | undefined;
       if (mapping.edges.id !== undefined) {
         const raw = row[mapping.edges.id];
         if (raw !== undefined && raw !== null) {
-          edge.id = identityString(raw, 'edge id', edgeOrdinal, mapping.edges.id, true);
+          edgeId = identityString(raw, 'edge id', edgeOrdinal, mapping.edges.id, true);
         }
       }
       const attrs = edgeAttrPick.pick(row);
-      if (attrs !== undefined) edge.attrs = attrs;
       edgeSummarizer.addRow(attrs);
-      edges.push(edge);
+      if (columnar !== undefined) columnar.edge(source, target, edgeId, attrs);
+      else edges.push({ source, target, ...(edgeId === undefined ? {} : { id: edgeId }), ...(attrs === undefined ? {} : { attrs }) });
       if (nodeTable === null) {
-        endpointOrder.add(source);
-        endpointOrder.add(target);
+        for (const endpoint of [source, target]) {
+          if (!endpointOrder.has(endpoint)) {
+            control.admit('nodes');
+            endpointOrder.add(endpoint);
+          }
+        }
       }
       edgeOrdinal++;
     }
@@ -116,7 +128,11 @@ export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
     let nodeAdmitted: ReadonlySet<string> = new Set<string>();
     if (nodeTable === null) {
       // deriveNodes: ids only, first-occurrence order over edge endpoints.
-      for (const id of endpointOrder) nodes.push({ id });
+      for (const id of endpointOrder) {
+        await control.checkpoint();
+        if (columnar !== undefined) columnar.node(id);
+        else nodes.push({ id });
+      }
     } else {
       const nodeMapping = mapping.nodes!; // validated above
       const nodeIdentity = new Set<string>([nodeMapping.id]);
@@ -126,14 +142,16 @@ export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
         nodeSummarizer.seed(nodeAttrPick.seedColumns);
         for (const column of nodeAttrPick.seedColumns) nodeAttrPick.admitted.add(column);
       }
+      columnar?.nodeAttributes.seed(nodeAttrPick.seedColumns);
       let nodeOrdinal = 0;
       for await (const row of nodeTable.rows) {
+        await control.checkpoint();
+        control.admit('nodes');
         const id = identityString(row[nodeMapping.id], 'node id', nodeOrdinal, nodeMapping.id, true);
-        const node: GraphNode = { id };
         const attrs = nodeAttrPick.pick(row);
-        if (attrs !== undefined) node.attrs = attrs;
         nodeSummarizer.addRow(attrs);
-        nodes.push(node);
+        if (columnar !== undefined) columnar.node(id, attrs);
+        else nodes.push({ id, ...(attrs === undefined ? {} : { attrs }) });
         nodeOrdinal++;
       }
     }
@@ -146,17 +164,18 @@ export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
       edges: [...edgeAttrPick.admitted],
     });
 
-    const snapshot: GraphSnapshot = {
+    const snapshot = columnar !== undefined ? await columnar.finish(control) : {
       datasetKey: options.datasetKey,
       sourceRevision: options.sourceRevision,
       nodes,
       edges,
-    };
+    } satisfies GraphSnapshot;
+    control.report('complete');
     return {
       snapshot,
       summaries: { nodes: nodeSummarizer.finalize(), edges: edgeSummarizer.finalize() },
       mappingFingerprint,
-    };
+    } as PreparedGraph | PreparedColumnarGraph;
   } catch (cause) {
     failed = true;
     throw cause;
@@ -177,21 +196,6 @@ export async function buildPrepared(args: BuildArgs): Promise<PreparedGraph> {
       );
       if (rejected !== undefined) throw rejected.reason;
     }
-  }
-}
-
-function validateOptions(options: GraphPrepareOptions): void {
-  if (typeof options.datasetKey !== 'string' || options.datasetKey === '') {
-    throw new TypeError('prepareGraphData: options.datasetKey must be a non-empty string');
-  }
-  const rev = options.sourceRevision;
-  if (
-    (typeof rev !== 'string' && typeof rev !== 'number') ||
-    (typeof rev === 'number' && !Number.isFinite(rev))
-  ) {
-    throw new TypeError(
-      'prepareGraphData: options.sourceRevision must be a string or finite number',
-    );
   }
 }
 

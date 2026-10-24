@@ -11,11 +11,38 @@
  * pushed back, so adapters observe the full stream.
  */
 
+import type { PreparationControl } from './control';
+
 export function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
-    if (typeof signal.throwIfAborted === 'function') signal.throwIfAborted();
-    throw new Error('prepareGraphData: aborted');
+    if (signal.reason instanceof Error && signal.reason.name === 'AbortError') throw signal.reason;
+    throw new DOMException('prepareGraphData: aborted', 'AbortError');
   }
+}
+
+/** Stop waiting on caller I/O when cancelled; late settlement is still observed. */
+export async function abortable<T>(pending: PromiseLike<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) return pending;
+  return new Promise<T>((resolve, reject) => {
+    const cancel = (): void => {
+      signal.removeEventListener('abort', cancel);
+      try { throwIfAborted(signal); } catch (error) { reject(error); }
+    };
+    signal.addEventListener('abort', cancel, { once: true });
+    Promise.resolve(pending).then(
+      (value) => { signal.removeEventListener('abort', cancel); resolve(value); },
+      (error) => { signal.removeEventListener('abort', cancel); reject(error); },
+    );
+    if (signal.aborted) cancel();
+  });
+}
+
+async function closeAfterFailure(close: () => Promise<void>, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    // An async generator can queue return() behind an uncooperative next().
+    // Request teardown but do not make cancellation wait for that foreign I/O.
+    void close().catch(() => {});
+  } else await close();
 }
 
 export function isBlob(value: unknown): value is Blob {
@@ -50,14 +77,15 @@ function iteratorCloseOnce<T>(iterator: AsyncIterator<T>): () => Promise<void> {
  * guarantees `return()` on early exit *and* when `next()` rejects. Native
  * `for await` does not close an iterator whose own `next()` rejects.
  */
-async function* closingIterable<T>(source: AsyncIterable<T>): AsyncGenerator<T> {
+async function* closingIterable<T>(source: AsyncIterable<T>, signal?: AbortSignal): AsyncGenerator<T> {
   const iterator = source[Symbol.asyncIterator]();
   const close = iteratorCloseOnce(iterator);
   let exhausted = false;
   let failed = false;
   try {
     while (true) {
-      const next = await iterator.next();
+      throwIfAborted(signal);
+      const next = await abortable(iterator.next(), signal);
       if (next.done) {
         exhausted = true;
         return;
@@ -70,7 +98,7 @@ async function* closingIterable<T>(source: AsyncIterable<T>): AsyncGenerator<T> 
   } finally {
     if (!exhausted) {
       try {
-        await close();
+        await closeAfterFailure(close, signal);
       } catch (closeCause) {
         // A failed read/consumer operation is the useful outcome. Teardown
         // failure is surfaced only when there is no earlier failure to mask.
@@ -86,6 +114,7 @@ async function* closingIterable<T>(source: AsyncIterable<T>): AsyncGenerator<T> 
  * of reporting malformed row zero. */
 export async function peekAsyncIterable(
   source: AsyncIterable<unknown>,
+  signal?: AbortSignal,
 ): Promise<{
   first: unknown | undefined;
   done: boolean;
@@ -99,10 +128,11 @@ export async function peekAsyncIterable(
   const close = iteratorCloseOnce(iterator);
   let head: IteratorResult<unknown>;
   try {
-    head = await iterator.next();
+    throwIfAborted(signal);
+    head = await abortable(iterator.next(), signal);
   } catch (cause) {
     try {
-      await close();
+      await closeAfterFailure(close, signal);
     } catch {
       // Preserve the iterator's read failure; teardown is best-effort here.
     }
@@ -116,7 +146,8 @@ export async function peekAsyncIterable(
       if (!head.done) yield head.value;
       // Delegate to the original iterator (not the iterable) so nothing is lost.
       while (true) {
-        const next = await iterator.next();
+        throwIfAborted(signal);
+        const next = await abortable(iterator.next(), signal);
         if (next.done) {
           exhausted = true;
           return;
@@ -132,7 +163,7 @@ export async function peekAsyncIterable(
       // return. A rejected next() also needs explicit teardown.
       if (!exhausted) {
         try {
-          await close();
+          await closeAfterFailure(close, signal);
         } catch (closeCause) {
           if (!failed) throw closeCause;
         }
@@ -151,34 +182,30 @@ export async function peekAsyncIterable(
 export function byteChunks(
   source: Blob | ArrayBuffer | AsyncIterable<Uint8Array>,
   signal: AbortSignal | undefined,
+  control?: PreparationControl,
 ): AsyncIterable<Uint8Array> {
-  if (source instanceof ArrayBuffer) {
-    const chunk = new Uint8Array(source);
-    return (async function* () {
-      throwIfAborted(signal);
-      yield chunk;
-    })();
-  }
-  if (isBlob(source)) {
-    return (async function* () {
-      // Blob.stream is a web ReadableStream; async-iterable in Node ≥18.
-      const stream = source.stream() as unknown as AsyncIterable<Uint8Array>;
-      for await (const chunk of closingIterable(stream)) {
-        throwIfAborted(signal);
-        yield chunk;
-      }
-    })();
+  async function* rawChunks(): AsyncGenerator<Uint8Array> {
+    throwIfAborted(signal);
+    if (source instanceof ArrayBuffer) { yield new Uint8Array(source); return; }
+    const stream = isBlob(source)
+      ? source.stream() as unknown as AsyncIterable<Uint8Array>
+      : source;
+    yield* closingIterable(stream, signal);
   }
   return (async function* () {
-    for await (const chunk of closingIterable(source)) {
+    for await (const chunk of rawChunks()) {
       throwIfAborted(signal);
-      if (!(chunk instanceof Uint8Array)) {
-        throw new TypeError(
-          'prepareGraphData: byte sources must yield Uint8Array chunks',
-        );
+      if (!(chunk instanceof Uint8Array)) throw new TypeError('prepareGraphData: byte sources must yield Uint8Array chunks');
+      // Cap parser work per chunk even for an already-resident ArrayBuffer.
+      for (let offset = 0; offset < chunk.byteLength; offset += 64 * 1024) {
+        throwIfAborted(signal);
+        const slice = chunk.subarray(offset, Math.min(chunk.byteLength, offset + 64 * 1024));
+        control?.read(slice.byteLength);
+        yield slice;
+        await control?.checkpoint();
       }
-      yield chunk;
     }
+    throwIfAborted(signal);
   })();
 }
 
@@ -186,13 +213,15 @@ export function byteChunks(
 export async function collectBytes(
   source: Blob | ArrayBuffer | AsyncIterable<Uint8Array>,
   signal: AbortSignal | undefined,
+  control?: PreparationControl,
 ): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for await (const chunk of byteChunks(source, signal)) {
+  for await (const chunk of byteChunks(source, signal, control)) {
     chunks.push(chunk);
     total += chunk.byteLength;
   }
+  throwIfAborted(signal);
   const out = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
@@ -218,7 +247,7 @@ export function rowStream(
   }
   if (isAsyncIterable(source)) {
     return (async function* () {
-      for await (const row of closingIterable(source)) {
+      for await (const row of closingIterable(source, signal)) {
         throwIfAborted(signal);
         yield row;
       }

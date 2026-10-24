@@ -9,6 +9,7 @@
  * Vanilla zustand only — no React, no DOM access at module scope.
  */
 
+import type { OverviewSnapshot } from './overview';
 import { createStore } from 'zustand/vanilla';
 import type { StoreApi } from 'zustand/vanilla';
 
@@ -969,6 +970,12 @@ export interface GraphInstance<N = Record<string, unknown>, E = Record<string, u
   getMetricValue(metric: MetricName, id: NodeId): number | null;
 
   // --- reads ---
+  /** Latest live position cache, falling back to reconciled positions before
+   * the first sample. Pure read; buffers are borrowed and must not be mutated. */
+  getOverviewScene(): OverviewSnapshot | null;
+  /** Observe position/roster changes and request bounded live sampling while
+   * mounted. Replays once; unsubscribe removes this consumer's demand. */
+  subscribeOverview(listener: () => void): () => void;
   getRevisions(): Revisions;
   getDiagnostics(): readonly GraphDiagnostic[];
   getNode(id: NodeId): GraphNode<N> | undefined;
@@ -1043,6 +1050,11 @@ const FRAME_PRESSURE_CLEAR_MS = 28;
 const LABEL_RERANK_THROTTLE_MS = 100;
 /** sim-hot degradation: minimum spacing between cache readbacks (ms). */
 const SIM_HOT_REFRESH_MS = 500;
+/** Nonblocking copies may refresh small-scene label/overview caches at 10 Hz.
+ * Full async transfers cost more at L scale, so larger scenes retain the
+ * existing 2 Hz synchronous lane. No additional rAF or recurring timer. */
+const ASYNC_POSITION_REFRESH_MS = 100;
+const ASYNC_POSITION_MAX_NODES = 10_000;
 
 /** Per-attach engine session; `alive` gates stale mount continuations and
  * stale engine events after detach/destroy. */
@@ -1669,6 +1681,17 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
   /** Latest per-event readback aligned to the current scene (null → the
    * reconciled scene.positions, which already merged the live cache). */
   let labelPositionCache: Float32Array | null = null;
+  const overviewSubs = new Set<() => void>();
+  let overviewSnapshot: OverviewSnapshot | null = null;
+  let overviewScene: RenderScene | null = null;
+  let overviewRevision = 0;
+  let notifiedOverviewSnapshot: OverviewSnapshot | null | undefined;
+  let overviewNotificationQueued = false;
+  // Event-time reads supersede pending samples even when the render revision
+  // and roster did not change (e.g. a drag, settle or context restoration).
+  let positionGeneration = 0;
+  let positionFlight: object | null = null;
+  let positionClockMs = 0;
   /** Shared hit-test cadence: ONE counter, advanced once per engine
    * onFrame tick, read by every sampling route (native hover events and the
    * CPU fallback edge samplers throttle against the SAME clock — never a
@@ -1957,6 +1980,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     }
     pendingHistoryDepths = null;
     store.setState((prev) => ({ ...prev, ...patch }));
+    scheduleOverviewNotification();
     // the ladder's count triggers are edge-evaluated wherever
     // the visible counts move — publish is the single store funnel.
     if (patch.visible !== undefined || patch.nodeCount !== undefined) {
@@ -3933,7 +3957,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       }
       scopedAccepted = computeScopedAccepted();
       const result = reconcileScene(scopedAccepted ?? accepted);
-      labelPositionCache = null;
+      invalidatePositionCache();
       adjacency = null;
       sceneIncidence = null;
       structuralChange = result.structuralChange;
@@ -4507,7 +4531,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
    */
   function ensureMetricModel(): boolean {
     if (accepted === null) return false;
-    const key = `${accepted.datasetKey} ${String(accepted.sourceRevision)} ${String(acceptedModelSeq)}`;
+    const key = `${accepted.datasetKey}\0${String(accepted.sourceRevision)}\0${String(acceptedModelSeq)}`;
     if (metricModelKey === key) return true;
     const { edges, nodeIndex, nodes } = accepted;
     const links = new Uint32Array(edges.length * 2);
@@ -4520,7 +4544,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       nodes,
       adjacency: buildAdjacency(links, nodes.length),
       links,
-      datasetRevision: `${accepted.datasetKey} ${String(accepted.sourceRevision)}`,
+      datasetRevision: `${accepted.datasetKey}\0${String(accepted.sourceRevision)}`,
       modelRevision: acceptedModelSeq,
     });
     metricModelKey = key;
@@ -4768,7 +4792,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       } catch {
         sample = 'err';
       }
-      fp += sample + ' ';
+      fp += sample + '\0';
     }
     if (state.fp === fp) {
       state.streak += 1;
@@ -5123,6 +5147,99 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     };
   }
 
+  function invalidatePositionCache(): void {
+    positionGeneration += 1;
+    labelPositionCache = null;
+  }
+
+  function getOverviewScene(): OverviewSnapshot | null {
+    if (destroyed || scene === null || scene.count === 0) {
+      overviewSnapshot = null;
+      overviewScene = scene;
+      return null;
+    }
+    const positions = labelPositionCache ?? scene.positions;
+    if (overviewScene !== scene || overviewSnapshot?.positions !== positions) {
+      overviewScene = scene;
+      overviewSnapshot = { positions, count: scene.count, revision: ++overviewRevision };
+    }
+    return overviewSnapshot;
+  }
+
+  /** Coalesce notifications after the current atomic host transaction. */
+  function scheduleOverviewNotification(): void {
+    if (destroyed || overviewSubs.size === 0 || overviewNotificationQueued) return;
+    overviewNotificationQueued = true;
+    queueMicrotask(() => {
+      overviewNotificationQueued = false;
+      if (destroyed) return;
+      const next = getOverviewScene();
+      if (notifiedOverviewSnapshot === next) return;
+      notifiedOverviewSnapshot = next;
+      for (const cb of Array.from(overviewSubs)) {
+        try { cb(); } catch { /* isolate host observers */ }
+      }
+    });
+  }
+
+  function subscribeOverview(cb: () => void): () => void {
+    if (destroyed) return () => {};
+    overviewSubs.add(cb);
+    try { cb(); } catch { /* isolate host observers */ }
+    sampleOverlayPositions(positionClockMs);
+    return () => { overviewSubs.delete(cb); };
+  }
+
+  /** One shared, bounded readback lane. No scheduler of its own: activity
+   * ticks drive it, and settle/drag already bank authoritative event reads. */
+  function sampleOverlayPositions(timeMs: number): void {
+    const s = session;
+    const labelsActive = labelsEnabled();
+    if (destroyed || s === null || !s.alive || scene === null || scene.count === 0 || layout !== 'force' ||
+        store.getState().status !== 'ready' || (overviewSubs.size === 0 && !labelsActive)) return;
+    const issuedRender = store.getState().revisions.render;
+    // A deferred adapter may still expose the preceding roster/positions.
+    // Desired coordinates alone cannot make that old GPU state admissible.
+    if (s.engine.appliedRevision() !== issuedRender) return;
+    const asyncRead = scene.count <= ASYNC_POSITION_MAX_NODES ? s.engine.getPositionsAsync : undefined;
+    const interval = asyncRead === undefined || !labelsActive ? SIM_HOT_REFRESH_MS : ASYNC_POSITION_REFRESH_MS;
+    if (positionFlight !== null || (lastHotRefreshMs !== null && timeMs >= lastHotRefreshMs &&
+        timeMs - lastHotRefreshMs < interval)) return;
+    lastHotRefreshMs = timeMs;
+    if (asyncRead === undefined) {
+      const pos = s.engine.getPositions();
+      if (pos !== null && pos.length === scene.count * 2) bankEnginePositions(pos);
+      return;
+    }
+    const flight = {};
+    positionFlight = flight;
+    const issuedScene = scene;
+    const issuedPins = store.getState().pins;
+    const issuedGeneration = positionGeneration;
+    let read: Promise<Float32Array | null>;
+    try {
+      read = asyncRead.call(s.engine);
+    } catch {
+      positionFlight = null;
+      return;
+    }
+    void read.then((pos) => {
+      if (destroyed || session !== s || !s.alive || store.getState().status !== 'ready' ||
+          scene !== issuedScene || store.getState().revisions.render !== issuedRender ||
+          s.engine.appliedRevision() !== issuedRender || store.getState().pins !== issuedPins ||
+          positionGeneration !== issuedGeneration || (overviewSubs.size === 0 && !labelsEnabled()) ||
+          pos === null || pos.length !== issuedScene.count * 2) return;
+      bankEnginePositions(pos);
+      projectPlacements(s.engine);
+      notifyLabelSubs(positionSubs);
+    }).catch(() => {
+      // A failed sample keeps the last cache. Event reads remain available;
+      // the next active tick retries within the same bounded cadence.
+    }).finally(() => {
+      if (positionFlight === flight) positionFlight = null;
+    });
+  }
+
   /**
    * per-event readback bank with the pin overlay: the pin slice is
    * authoritative for pinned coordinates, so an engine that does not mirror
@@ -5131,6 +5248,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
    * per-event readback they own).
    */
   function bankEnginePositions(pos: Float32Array): void {
+    positionGeneration += 1;
     const pins = store.getState().pins;
     if (pins.size > 0 && scene !== null) {
       for (const [id, xy] of pins) {
@@ -5145,6 +5263,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     // the freshest per-event readback also feeds the label lane's
     // projection cache (pin overlay already applied above).
     labelPositionCache = pos;
+    scheduleOverviewNotification();
   }
 
   /** Mirror the selection highlight into the engine. Reads the PUBLISHED
@@ -6354,7 +6473,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     const groupsResolutionChanged = refreshGroupsResolution();
     const result = reconcileScene(scopedAccepted ?? p.merged);
     const ingestScene = scene!;
-    labelPositionCache = null;
+    invalidatePositionCache();
     const structuralChange = result.structuralChange;
     const positionChange = result.positionChange;
     dataDiags = p.merged.diagnostics;
@@ -7663,7 +7782,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     }
     scopedAccepted = computeScopedAccepted();
     const result = reconcileScene(scopedAccepted ?? accepted);
-    labelPositionCache = null;
+    invalidatePositionCache();
     adjacency = null;
     sceneIncidence = null;
     hardScopeGen += 1;
@@ -8597,7 +8716,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       const result = reconcileScene(scopedAccepted ?? accepted);
       // the reconciled scene already merged the banked live cache; the
       // old readback buffer is misaligned with the new slot order.
-      labelPositionCache = null;
+      invalidatePositionCache();
       adjacency = null;
       sceneIncidence = null;
       structuralChange = result.structuralChange;
@@ -8618,7 +8737,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       if (!dataChanged && !scopeChanged && !groupsSceneDirty && !parallelSceneDirty && accepted !== null) {
         bankReadyEnginePositions();
         const result = reconcileScene(scopedAccepted ?? accepted);
-        labelPositionCache = null;
+        invalidatePositionCache();
         adjacency = null;
         sceneIncidence = null;
         structuralChange = structuralChange || result.structuralChange;
@@ -9548,6 +9667,15 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         // are always instance-owned, even under controlled selection.
         const prevented = emit('nodeDragEnd', { node, x, y });
         if (!prevented) writePin(node.id, [x, y]);
+        else if (overviewSubs.size > 0 || labelsEnabled()) {
+          // Cancelling automatic pinning does not undo the drag itself.
+          const pos = s.engine.getPositions();
+          if (pos !== null) {
+            pos[2 * index] = x;
+            pos[2 * index + 1] = y;
+            bankEnginePositions(pos);
+          }
+        }
       },
       // Right-click or long-press → typed 'contextMenu' event. The
       // core adds NO built-in follow-up — components own the menu.
@@ -9564,10 +9692,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       },
       /**
        * Overlay scheduler tick (adapter activity clock). Per tick:
-       * (1) sim-hot degradation — while the simulation runs, ONE getPositions
-       * readback refreshes the CPU cache at a capped >=500ms cadence (M0:
-       * tracked readback stalls ~18ms, so the lane NEVER reads back per
-       * frame); (2) O(k) projection of the CURRENT candidate set through
+       * (1) the shared position cache samples at most 10 Hz asynchronously
+       * (2 Hz synchronous fallback), with one copy in flight; (2) O(k) projection of the CURRENT candidate set through
        * spaceToScreen for the positions channel. No re-rank ever happens here.
        */
       onFrame(timeMs) {
@@ -9612,17 +9738,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
           }
           pressureSampler.resetCounters(); // counters are per-sample-period
         }
-        if (store.getState().simulationRunning && labelsEnabled()) {
-          if (
-            lastHotRefreshMs === null ||
-            timeMs - lastHotRefreshMs >= SIM_HOT_REFRESH_MS ||
-            timeMs < lastHotRefreshMs // clock went backwards (fresh adapter)
-          ) {
-            lastHotRefreshMs = timeMs;
-            const pos = s.engine.getPositions();
-            if (pos !== null) bankEnginePositions(pos);
-          }
-        }
+        positionClockMs = timeMs;
+        if (store.getState().simulationRunning) sampleOverlayPositions(timeMs);
         if (positionSubs.size > 0 && currentPlacements.length > 0) {
           projectPlacements(s.engine);
           notifyLabelSubs(positionSubs);
@@ -9714,6 +9831,9 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
         if (!active()) return;
         const status = store.getState().status;
         if (ev.type === 'lost') {
+          positionGeneration += 1;
+          positionFlight = null;
+          lastHotRefreshMs = null;
           // transient loss is a status transition + warning diagnostic,
           // never an 'error' event. Only meaningful from 'ready'.
           if (status !== 'ready') return;
@@ -9795,6 +9915,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       // the replay re-runs stage 3 too (deterministic — same model +
       // resolved groups reproduce the same rewritten scene).
       reconcileScene(replayModel);
+      invalidatePositionCache();
       const replayScene = scene!;
       const phaseProjectStart = performance.now();
       const commit: EngineCommit = {
@@ -9929,6 +10050,9 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     };
     session = s;
     const ownsMount = (): boolean => s.alive && !destroyed && session === s;
+    positionGeneration += 1;
+    positionFlight = null;
+    positionClockMs = 0;
     lastHotRefreshMs = null; // fresh adapter, fresh activity clock
     publish({ status: 'mounting' });
     mountPromise = s.engine
@@ -10098,6 +10222,13 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     cancelRerankTimer();
     candidateSubs.clear();
     positionSubs.clear();
+    overviewSubs.clear();
+    overviewSnapshot = null;
+    notifiedOverviewSnapshot = null;
+    overviewScene = null;
+    labelPositionCache = null;
+    positionGeneration += 1;
+    positionFlight = null;
     listeners.clear();
     publish({ status: 'destroyed' });
   }
@@ -10646,7 +10777,7 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
               // mounting; the next full replay reads this reconciler cache.
               reconciler.noteEnginePositions(next);
               scene = { ...scene, positions: next };
-              labelPositionCache = null;
+              invalidatePositionCache();
               const prevState = store.getState();
               const nextRevisions: Revisions = {
                 ...prevState.revisions,
@@ -11385,7 +11516,23 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
       if (destroyed) return;
       const eng = engineIfReady();
       if (eng === null) return;
+      const wasRunning = store.getState().simulationRunning;
+      // A later visual write can re-arm activity ticks. It must not revive
+      // automatic first-settle camera following after an explicit pause.
+      cancelSettleFollow();
       eng.pause();
+      // Capture a running force simulation's final frame. A fixed/already
+      // paused scene keeps its authoritative CPU positions: onReady can pause
+      // before the first GPU draw, whose readback is not a placed scene yet.
+      if (wasRunning && layout === 'force' && eng.appliedRevision() === store.getState().revisions.render &&
+          (overviewSubs.size > 0 || labelsEnabled())) {
+        const pos = eng.getPositions();
+        if (pos !== null) {
+          bankEnginePositions(pos);
+          projectPlacements(eng);
+          notifyLabelSubs(positionSubs);
+        }
+      }
       if (store.getState().simulationRunning) publish({ simulationRunning: false });
     },
     resumeSimulation: () => {
@@ -11414,6 +11561,8 @@ export function createGraphInstance<N = Record<string, unknown>, E = Record<stri
     redo,
     getScaleInfo,
     getMetricValue,
+    getOverviewScene,
+    subscribeOverview,
     getRevisions: () => store.getState().revisions,
     getDiagnostics: () => store.getState().diagnostics,
     getNode,

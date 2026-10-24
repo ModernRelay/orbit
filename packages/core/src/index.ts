@@ -377,6 +377,7 @@ export {
 } from './overview';
 export type {
   OverviewScene,
+  OverviewSnapshot,
   OverviewControllerOptions,
   OverviewBounds,
   OverviewRaster,
@@ -447,3 +448,7 @@ export type {
   SerializableTransform,
   TypedFieldPath,
 } from './descriptors';
+
+// Canonical synthesized edge identities shared by row and columnar adapters.
+export { nextSynthesizedEdgeId } from './edgeIdentity';
+export type { EdgePairCounters } from './edgeIdentity';

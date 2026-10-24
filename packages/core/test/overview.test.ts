@@ -41,6 +41,21 @@ function pixel(bitmap: Uint8ClampedArray, size: number, px: number, py: number):
 }
 
 describe('OverviewController.rasterize', () => {
+  it('clears the old pan transform when the current scene has no finite positions', () => {
+    let scene: OverviewScene | null = { positions: FIVE_POINTS, count: 5 };
+    const overview = new OverviewController({ getScene: () => scene });
+    expect(overview.rasterize()).not.toBeNull();
+    expect(overview.minimapToWorld(10, 10)).not.toBeNull();
+    scene = { positions: Float32Array.of(NaN, NaN), count: 1 };
+    expect(overview.rasterize()).toBeNull();
+    expect(overview.minimapToWorld(10, 10)).toBeNull();
+    scene = { positions: FIVE_POINTS, count: 5 };
+    expect(overview.rasterize()).not.toBeNull();
+    scene = null;
+    expect(overview.rasterize()).toBeNull();
+    expect(overview.worldToMinimap(10, 10)).toBeNull();
+  });
+
   it('places the 5 known points at exact pixels (5% padding, uniform scale, y flipped)', () => {
     // size 100 → pad 5, inner 90; world span 10 → scale 9.
     // px = 5 + (x - 0) * 9; py = 5 + (10 - y) * 9 (pixel y grows downward).

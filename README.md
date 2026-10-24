@@ -26,6 +26,10 @@ Handles 100K+ node graphs. UI components included: search, tables, histograms, a
 npm install @modernrelay/orbit-react @modernrelay/orbit-core @modernrelay/orbit-engine-cosmos
 ```
 
+Start with [Your first Orbit graph](docs/core/getting-started.md): a complete
+React + TypeScript app with a three-node graph, search, and controlled selection.
+The example is compiled and exercised against the published package shape in CI.
+
 The Cosmos engine and OmniGraph adapter require Node.js 22 or newer.
 
 All five packages release in lockstep. See

@@ -16,6 +16,7 @@
  * else 'csv' if any lane parsed CSV, else 'rows' (or 'json' for documents).
  */
 
+import { PreparationControl } from './control';
 import { buildPrepared } from './builder';
 import { csvTable } from './csv';
 import { documentTables } from './document';
@@ -26,18 +27,31 @@ import type {
   GraphColumnMapping,
   GraphPrepareInput,
   GraphPrepareOptions,
+  GraphPrepareAnyOptions,
+  GraphPrepareColumnarOptions,
+  PreparedColumnarGraph,
   GraphTabularSource,
   PreparedGraph,
 } from './types';
 
+export function prepareGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: GraphPrepareInput, mapping: GraphColumnMapping, options: GraphPrepareColumnarOptions,
+): Promise<PreparedColumnarGraph<N, E>>;
+export function prepareGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: GraphPrepareInput, mapping: GraphColumnMapping, options: GraphPrepareOptions,
+): Promise<PreparedGraph<N, E>>;
+export function prepareGraphData<N = Record<string, unknown>, E = Record<string, unknown>>(
+  input: GraphPrepareInput, mapping: GraphColumnMapping, options: GraphPrepareAnyOptions,
+): Promise<PreparedGraph<N, E> | PreparedColumnarGraph<N, E>>;
 export async function prepareGraphData<
   N = Record<string, unknown>,
   E = Record<string, unknown>,
 >(
   input: GraphPrepareInput,
   mapping: GraphColumnMapping,
-  options: GraphPrepareOptions,
-): Promise<PreparedGraph<N, E>> {
+  options: GraphPrepareAnyOptions,
+): Promise<PreparedGraph<N, E> | PreparedColumnarGraph<N, E>> {
+  const control = new PreparationControl(options);
   const { format, signal } = options;
   if (format === 'arrow' || format === 'parquet') {
     throw new TypeError(
@@ -53,14 +67,15 @@ export async function prepareGraphData<
         `prepareGraphData: a document input is valid only for JSON (got format '${format}')`,
       );
     }
-    const tables = await documentTables(input.document, mapping, signal);
+    const tables = await documentTables(input.document, mapping, signal, control);
     return (await buildPrepared({
       nodeTable: tables.nodes,
       edgeTable: tables.edges,
       mapping,
       format: 'json',
       options,
-    })) as PreparedGraph<N, E>;
+      control,
+    })) as PreparedGraph<N, E> | PreparedColumnarGraph<N, E>;
   }
   if (format === 'json') {
     throw new TypeError(
@@ -75,7 +90,7 @@ export async function prepareGraphData<
     ),
   );
   const lanes = { csv: false, rows: false };
-  const edgeTable = await resolveTabular(input.edges, options, edgeIdentity, 'edge', lanes);
+  const edgeTable = await resolveTabular(input.edges, options, edgeIdentity, 'edge', lanes, control);
   let nodeTable: RowTable | null = null;
   try {
     if (!deriveNodes) {
@@ -85,7 +100,7 @@ export async function prepareGraphData<
         );
       }
       const nodeIdentity = new Set(mapping.nodes === undefined ? [] : [mapping.nodes.id]);
-      nodeTable = await resolveTabular(input.nodes, options, nodeIdentity, 'node', lanes);
+      nodeTable = await resolveTabular(input.nodes, options, nodeIdentity, 'node', lanes, control);
     }
 
     const resolvedFormat = format ?? (lanes.csv ? 'csv' : 'rows');
@@ -95,7 +110,8 @@ export async function prepareGraphData<
       mapping,
       format: resolvedFormat,
       options,
-    })) as PreparedGraph<N, E>;
+      control,
+    })) as PreparedGraph<N, E> | PreparedColumnarGraph<N, E>;
   } catch (cause) {
     // The edge lane is opened first. If node-lane resolution fails before
     // buildPrepared takes ownership, release every already-peeked iterator.
@@ -111,10 +127,11 @@ export async function prepareGraphData<
 
 async function resolveTabular(
   source: GraphTabularSource,
-  options: GraphPrepareOptions,
+  options: GraphPrepareAnyOptions,
   identityColumns: ReadonlySet<string>,
   role: 'node' | 'edge',
   lanes: { csv: boolean; rows: boolean },
+  control: PreparationControl,
 ): Promise<RowTable> {
   const { format, signal } = options;
   if (Array.isArray(source)) {
@@ -133,23 +150,23 @@ async function resolveTabular(
       );
     }
     lanes.csv = true;
-    return csvTable(source, signal, identityColumns);
+    return csvTable(source, signal, identityColumns, control);
   }
   if (isAsyncIterable(source)) {
     if (format === 'csv') {
       lanes.csv = true;
-      return csvTable(source as AsyncIterable<Uint8Array>, signal, identityColumns);
+      return csvTable(source as AsyncIterable<Uint8Array>, signal, identityColumns, control);
     }
     if (format === 'rows') {
       lanes.rows = true;
       return rowsTable(source, signal, role);
     }
     // No format given: peek the first element to tell bytes from rows.
-    const { first, done, rest } = await peekAsyncIterable(source);
+    const { first, done, rest } = await peekAsyncIterable(source, signal);
     if (done) return EMPTY_ROW_TABLE;
     if (first instanceof Uint8Array) {
       lanes.csv = true;
-      return csvTable(rest as AsyncIterable<Uint8Array>, signal, identityColumns);
+      return csvTable(rest as AsyncIterable<Uint8Array>, signal, identityColumns, control);
     }
     lanes.rows = true;
     return rowsTable(rest, signal, role);

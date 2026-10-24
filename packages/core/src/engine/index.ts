@@ -247,6 +247,10 @@ export interface GraphEngine {
 
   // --- event-time readback ---
   getPositions(): Float32Array | null;
+  /** Optional nonblocking snapshot for bounded overlay sampling. Returns an
+   * owned buffer, or null when unavailable/invalidated by engine recovery.
+   * Core stamps the request against its scene and render revision. */
+  getPositionsAsync?(): Promise<Float32Array | null>;
 
   destroy(): void;
 }

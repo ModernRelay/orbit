@@ -6,14 +6,11 @@
  * supplied bytes/streams, never fetches a URL, and remains Node-import-safe
  * without ambient browser globals.
  *
- * v0.9 TRIM (documented): core has no `ColumnarGraphSnapshot` yet — the
- * columnar lane remains separate, so the prepared artifact wraps an OBJECT
- * `GraphSnapshot` plus summaries and fingerprints. The serialized artifact
- * format is versioned (`formatVersion`, see artifact.ts) so the columnar
- * upgrade slots in without breaking stored artifacts.
+ * Object snapshots remain the default and the serialized v1 artifact format.
+ * Opt-in columnar preparation owns its buffers and uses core's columnar lane.
  */
 
-import type { GraphSnapshot } from '@modernrelay/orbit-core';
+import type { ColumnarGraphSnapshot, GraphSnapshot } from '@modernrelay/orbit-core';
 
 // ---------------------------------------------------------------------------
 // Input sources.
@@ -49,6 +46,34 @@ export interface GraphPrepareOptions {
   sourceRevision: string | number;
   format?: GraphPrepareFormat;
   signal?: AbortSignal;
+  /** Input bytes across byte sources; rows and existing Arrow tables have no wire bytes. */
+  maxBytes?: number;
+  /** Admitted rows, including derived unique nodes; duplicates count as rows. */
+  maxNodes?: number;
+  maxEdges?: number;
+  /** At most one notification per 100ms, plus the final completion. */
+  onProgress?: (progress: GraphPrepareProgress) => void;
+  output?: 'object';
+}
+
+export interface GraphPrepareProgress {
+  phase: 'reading' | 'preparing' | 'complete';
+  bytes: number;
+  nodes: number;
+  edges: number;
+}
+
+export interface GraphPrepareColumnarOptions extends Omit<GraphPrepareOptions, 'output'> {
+  output: 'columnar';
+}
+
+export type GraphPrepareAnyOptions = GraphPrepareOptions | GraphPrepareColumnarOptions;
+
+export interface PreparedColumnarGraph<N = Record<string, unknown>, E = Record<string, unknown>> {
+  /** Fresh owned buffers, marked borrowed for repeatable admission; inputs are never detached. */
+  snapshot: ColumnarGraphSnapshot<N, E>;
+  summaries: PreparedGraphSummaries;
+  mappingFingerprint: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +118,7 @@ export interface PreparedGraph<
   N = Record<string, unknown>,
   E = Record<string, unknown>,
 > {
-  /** v0.9 object-lane snapshot (see the trim note at the top of this file). */
+  /** Default object snapshot; accepted by the v1 artifact serializer. */
   snapshot: GraphSnapshot<N, E>;
   summaries: PreparedGraphSummaries;
   /** fnv-1a-64 hex over canonical-JSON(mapping) + format + the ADMITTED
