@@ -7,6 +7,7 @@ test('CSV exploration connects search, paths, table filtering, and checkpoint re
     name: 'suppliers.csv', mimeType: 'text/csv',
     buffer: Buffer.from('source,target,type,evidence\nAcme,Beta,SUPPLIES,Contract\nBeta,Cedar,SUPPLIES,Invoice\n'),
   });
+  await page.getByRole('button', { name: 'Import graph', exact: true }).click();
   await expect(page.getByTestId('node-count')).toHaveText('3');
   await page.getByTestId('explorer-toggle').click();
   const explorer = page.getByRole('region', { name: 'Graph exploration' });

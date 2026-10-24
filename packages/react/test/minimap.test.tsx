@@ -110,6 +110,7 @@ function referenceController(size: number): OverviewController {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   for (const instance of instances) instance.destroy();
@@ -142,7 +143,8 @@ describe('<GraphMinimap> thumbnail blit', () => {
     expect(ctx2d.putImageData.mock.calls[0]![2]).toBe(0);
   });
 
-  it('renders an empty thumbnail (no blit) when no node declares a position', async () => {
+  it('rasterizes live force positions when no node declares coordinates', async () => {
+    vi.useFakeTimers();
     const engine = new FakeEngine();
     const instance = createGraphInstance({ engine: () => engine });
     instances.push(instance);
@@ -163,8 +165,40 @@ describe('<GraphMinimap> thumbnail blit', () => {
         <GraphMinimap />
       </GraphProvider>,
     );
-    expect(ctx2d.putImageData).not.toHaveBeenCalled();
-    expect(ctx2d.clearRect).toHaveBeenCalled();
+    // The engine seeds/layouts the unpositioned roster; core shares its
+    // live positions even when labels are not configured.
+    engine.nudgePositions(50, 60);
+    engine.injectSimulationEnd();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(ctx2d.putImageData).toHaveBeenCalled();
+    expect([...instance.getOverviewScene()!.positions]).toEqual([50, 60, 60, 60]);
+    const image = ctx2d.putImageData.mock.lastCall![0] as ImageData;
+    expect(image.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true);
+  });
+
+  it('refreshes fixed-layout bounds after same-roster coordinate edits', async () => {
+    vi.useFakeTimers();
+    const rasterize = vi.spyOn(OverviewController.prototype, 'rasterize');
+    const { instance } = await setup(40);
+    act(() => { instance.applyHostUpdate({ layout: 'fixed', data: {
+      ...positionedSnapshot,
+      sourceRevision: 2,
+      nodes: positionedSnapshot.nodes.map((node) => ({ ...node, x: node.x! + 100, y: node.y! + 200 })),
+    } }); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(rasterize.mock.results.at(-1)?.value?.bounds).toEqual({ minX: 100, maxX: 110, minY: 200, maxY: 210 });
+  });
+
+  it('refreshes settled bounds after a drag without a render revision', async () => {
+    vi.useFakeTimers();
+    const rasterize = vi.spyOn(OverviewController.prototype, 'rasterize');
+    const { instance, engine } = await setup(40);
+    act(() => { engine.injectSimulationEnd(); });
+    const render = instance.getRevisions().render;
+    act(() => { engine.injectDragEnd(0, -50, -60); });
+    expect(instance.getRevisions().render).toBe(render);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(rasterize.mock.results.at(-1)?.value?.bounds).toEqual({ minX: -50, maxX: 10, minY: -60, maxY: 10 });
   });
 });
 

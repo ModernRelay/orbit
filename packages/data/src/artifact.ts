@@ -37,6 +37,9 @@ interface PreparedArtifactEnvelopeV1 {
 
 export function serializePrepared(prepared: PreparedGraph<unknown, unknown>): Uint8Array {
   const snapshot = prepared.snapshot as GraphSnapshot;
+  if ((snapshot as { kind?: unknown }).kind === 'columnar') {
+    throw new TypeError("serializePrepared: v1 artifacts require output:'object'; columnar buffers are not a v1 JSON artifact");
+  }
   const envelope: PreparedArtifactEnvelopeV1 = {
     formatVersion: PREPARED_ARTIFACT_FORMAT_VERSION,
     datasetKey: snapshot.datasetKey,

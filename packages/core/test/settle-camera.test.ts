@@ -110,6 +110,18 @@ describe('settle camera', () => {
     expect(fitCalls(engine.cameraCalls).length).toBe(atCap);
   });
 
+  it('explicit pause cancels automatic follow even when a later config write re-arms frames', async () => {
+    const { h, engine } = await mounted();
+    for (let i = 0; i < 54; i++) engine.emitFrame();
+    const initialFits = fitCalls(engine.cameraCalls).length;
+    h.instance.pauseSimulation();
+    h.instance.applyHostUpdate({ simulation: { gravity: 0.26 } });
+    for (let i = 0; i < 100; i++) engine.emitFrame();
+    engine.injectSimulationEnd();
+    expect(fitCalls(engine.cameraCalls)).toHaveLength(initialFits);
+    h.instance.destroy();
+  });
+
   it('user camera input cancels the follow (public setViewport)', async () => {
     const { h, engine } = await mounted();
     const initialFits = fitCalls(engine.cameraCalls).length;

@@ -15,6 +15,7 @@
  * (i) `.smoke/report.json` summarizing every gate
  * (j) the packed inline worker asset is self-contained
  * (k) inferred consumer declarations use publicly accessible package types
+ * (l) the documented quickstart compiles, bundles, and runs as a consumer
  */
 import { execFileSync } from 'node:child_process';
 import {
@@ -31,6 +32,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
+import { verifyQuickstart } from '../fixtures/quickstart/verify.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SMOKE = path.join(ROOT, '.smoke');
@@ -175,6 +177,8 @@ try {
       'react',
       'react-dom',
       `@types/react@${pkgs.find((p) => p.name === '@modernrelay/orbit-react').manifest.devDependencies['@types/react']}`,
+      `@types/react-dom@${pkgs.find((p) => p.name === '@modernrelay/orbit-react').manifest.devDependencies['@types/react-dom']}`,
+      `jsdom@${pkgs.find((p) => p.name === '@modernrelay/orbit-react').manifest.devDependencies.jsdom}`,
     ],
     { cwd: consumerDir },
   );
@@ -221,6 +225,18 @@ try {
   pass('declarations:public-inferred-types');
 } catch (err) {
   fail('declarations:public-inferred-types', errText(err));
+}
+
+// ---------------------------------------------------- (l) documented quickstart
+try {
+  const detail = await verifyQuickstart({
+    root: ROOT,
+    consumerDir,
+    outdir: path.join(SMOKE, 'bundles', 'quickstart'),
+  });
+  pass('quickstart:documented-consumer', detail);
+} catch (err) {
+  fail('quickstart:documented-consumer', errText(err));
 }
 
 // ---------------------------------------------------------------- (f) publint

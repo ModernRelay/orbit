@@ -13,6 +13,8 @@
  */
 
 export { prepareGraphData } from './prepare';
+export { previewCsv } from './preview';
+export type { CsvPreview, CsvPreviewOptions } from './preview';
 export {
   serializePrepared,
   loadPrepared,
@@ -28,7 +30,11 @@ export type {
   GraphColumnMapping,
   GraphPrepareFormat,
   GraphPrepareOptions,
+  GraphPrepareColumnarOptions,
+  GraphPrepareAnyOptions,
+  GraphPrepareProgress,
   ColumnSummary,
   PreparedGraph,
+  PreparedColumnarGraph,
   PreparedGraphSummaries,
 } from './types';

@@ -99,6 +99,9 @@ const h = vi.hoisted(() => {
     pointPositions: number[] = [1, 2, 3, 4];
     getPointPositions(): number[] { return this.pointPositions; }
     getPointPositionsArray(): Float32Array { return Float32Array.from(this.pointPositions); }
+    getPointPositionsAsync(): Promise<Float32Array> {
+      return Promise.resolve(Float32Array.from(this.pointPositions));
+    }
     /** Native fit uses destination positions while a position transition runs. */
     fitViewPositions: number[] | null = null;
     getFitViewPositions(): Float32Array {
@@ -1200,6 +1203,35 @@ describe('CosmosEngine', () => {
     expect(engine.getPositions()).toEqual(Float32Array.of(10, 20));
     expect(first).toEqual(Float32Array.of(99, 2, NaN, NaN, 5, 6));
     expect(legacyRead).not.toHaveBeenCalled();
+  });
+
+  it('delegates async snapshots without a synchronous read and retires disposed copies', async () => {
+    const { engine, graph } = await mounted();
+    const sync = vi.spyOn(graph, 'getPointPositionsArray');
+    expect(await engine.getPositionsAsync()).toEqual(Float32Array.of(1, 2, 3, 4));
+    expect(sync).not.toHaveBeenCalled();
+    let resolve!: (positions: Float32Array) => void;
+    vi.spyOn(graph, 'getPointPositionsAsync').mockReturnValue(new Promise((r) => { resolve = r; }));
+    const pending = engine.getPositionsAsync();
+    engine.destroy();
+    resolve(Float32Array.of(9, 8, 7, 6));
+    expect(await pending).toBeNull();
+    expect(await engine.getPositionsAsync()).toBeNull();
+  });
+
+  it('treats rejected or invalidated async GPU copies as unavailable', async () => {
+    const { engine, graph } = await mounted();
+    const read = vi.spyOn(graph, 'getPointPositionsAsync');
+    read.mockRejectedValueOnce(new Error('lost context'));
+    expect(await engine.getPositionsAsync()).toBeNull();
+    read.mockResolvedValueOnce(new Float32Array());
+    expect(await engine.getPositionsAsync()).toBeNull();
+    let resolve!: (positions: Float32Array) => void;
+    read.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    const pending = engine.getPositionsAsync();
+    graph.canvas!.dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+    resolve(Float32Array.of(9, 8, 7, 6));
+    expect(await pending).toBeNull();
   });
 
   // Real setViewport pan via setZoomTransformByPointPositions. The

@@ -1,0 +1,276 @@
+{
+  "benchmark": "Live overlay position cache / L-tier frame-time comparison",
+  "baselineRevision": "d186a1f3f46dd907e1d2644d1c5df141bbbaf524",
+  "command": "node scripts/perf-lite.mjs --tier L --runs 3 --enforce",
+  "decision": "Keep 2 Hz synchronous full-buffer reads above 10,000 nodes; use async up to 10 Hz for labels at smaller sizes (2 Hz overview-only).",
+  "qualification": "Each listed run set is headful, real Apple M5 Pro GPU, 3 fresh browser contexts, variance-qualified. Headline p95 is the median of per-run p95s. This is one machine and one clustered fixture, not a universal speed guarantee.",
+  "verdict": "The existing 33 ms L-tier p95 budget fails on the baseline and every experiment. The selected large-scene policy avoids the marked async-transfer regression; it does not resolve the pre-existing frame-time budget failure.",
+  "variants": [
+    {
+      "name": "baseline",
+      "description": "Clean HEAD d186a1f; prior label-only 2 Hz synchronous sampling.",
+      "date": "2026-10-24T17:05:18.485Z",
+      "frameMs": {
+        "p50": 9.7,
+        "p95": 41.81,
+        "cvPct": 2.4,
+        "perRunP95": [
+          43.49,
+          41.7,
+          41.81
+        ]
+      },
+      "brushLatencyMsP95": 50.33,
+      "idleRafRegistrationsMax": 309,
+      "reArmedAllRuns": true,
+      "gate": {
+        "qualifying": true,
+        "disqualifiers": [],
+        "overall": "fail",
+        "verdicts": [
+          {
+            "metric": "frameMs.p95",
+            "target": 33,
+            "measured": 41.81,
+            "samples": 505,
+            "pass": false,
+            "note": null
+          },
+          {
+            "metric": "brushLatencyMs.p95",
+            "target": null,
+            "measured": 50.33,
+            "samples": 120,
+            "pass": null,
+            "note": "reported-only: names no numeric budget for this metric (no release gate yet)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "current",
+      "description": "Initial shared cache: asynchronous reads at 10 Hz with labels on all scene sizes.",
+      "date": "2026-10-24T17:01:39.104Z",
+      "frameMs": {
+        "p50": 8.5,
+        "p95": 56.56,
+        "cvPct": 6.6,
+        "perRunP95": [
+          56.56,
+          58.1,
+          51.2
+        ]
+      },
+      "brushLatencyMsP95": 64.87,
+      "idleRafRegistrationsMax": 0,
+      "reArmedAllRuns": true,
+      "gate": {
+        "qualifying": true,
+        "disqualifiers": [],
+        "overall": "fail",
+        "verdicts": [
+          {
+            "metric": "frameMs.p95",
+            "target": 33,
+            "measured": 56.56,
+            "samples": 699,
+            "pass": false,
+            "note": null
+          },
+          {
+            "metric": "brushLatencyMs.p95",
+            "target": null,
+            "measured": 64.87,
+            "samples": 120,
+            "pass": null,
+            "note": "reported-only: names no numeric budget for this metric (no release gate yet)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "nosampler",
+      "description": "Isolation only: current changes with periodic sampling disabled; event snapshots remain.",
+      "date": "2026-10-24T17:05:57.971Z",
+      "frameMs": {
+        "p50": 9.8,
+        "p95": 42.39,
+        "cvPct": 1.3,
+        "perRunP95": [
+          42.72,
+          41.67,
+          42.39
+        ]
+      },
+      "brushLatencyMsP95": 48.74,
+      "idleRafRegistrationsMax": 0,
+      "reArmedAllRuns": true,
+      "gate": {
+        "qualifying": true,
+        "disqualifiers": [],
+        "overall": "fail",
+        "verdicts": [
+          {
+            "metric": "frameMs.p95",
+            "target": 33,
+            "measured": 42.39,
+            "samples": 450,
+            "pass": false,
+            "note": null
+          },
+          {
+            "metric": "brushLatencyMs.p95",
+            "target": null,
+            "measured": 48.74,
+            "samples": 120,
+            "pass": null,
+            "note": "reported-only: names no numeric budget for this metric (no release gate yet)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "adaptive",
+      "description": "Isolation only: async 10 Hz up to 10K nodes, async 2 Hz above 10K.",
+      "date": "2026-10-24T17:06:39.398Z",
+      "frameMs": {
+        "p50": 9.1,
+        "p95": 50.23,
+        "cvPct": 11.7,
+        "perRunP95": [
+          53.2,
+          50.23,
+          42.18
+        ]
+      },
+      "brushLatencyMsP95": 60.13,
+      "idleRafRegistrationsMax": 0,
+      "reArmedAllRuns": true,
+      "gate": {
+        "qualifying": true,
+        "disqualifiers": [],
+        "overall": "fail",
+        "verdicts": [
+          {
+            "metric": "frameMs.p95",
+            "target": 33,
+            "measured": 50.23,
+            "samples": 517,
+            "pass": false,
+            "note": null
+          },
+          {
+            "metric": "brushLatencyMs.p95",
+            "target": null,
+            "measured": 60.13,
+            "samples": 120,
+            "pass": null,
+            "note": "reported-only: names no numeric budget for this metric (no release gate yet)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sync",
+      "description": "Selected policy in isolated checkout: async up to 10K nodes, synchronous 2 Hz above 10K.",
+      "date": "2026-10-24T17:07:36.929Z",
+      "frameMs": {
+        "p50": 9.65,
+        "p95": 42.89,
+        "cvPct": 1.7,
+        "perRunP95": [
+          41.79,
+          43.15,
+          42.89
+        ]
+      },
+      "brushLatencyMsP95": 51.14,
+      "idleRafRegistrationsMax": 8,
+      "reArmedAllRuns": true,
+      "gate": {
+        "qualifying": true,
+        "disqualifiers": [],
+        "overall": "fail",
+        "verdicts": [
+          {
+            "metric": "frameMs.p95",
+            "target": 33,
+            "measured": 42.89,
+            "samples": 475,
+            "pass": false,
+            "note": null
+          },
+          {
+            "metric": "brushLatencyMs.p95",
+            "target": null,
+            "measured": 51.14,
+            "samples": 120,
+            "pass": null,
+            "note": "reported-only: names no numeric budget for this metric (no release gate yet)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "final",
+      "description": "Final production source: async up to 10K nodes, synchronous 2 Hz above 10K.",
+      "date": "2026-10-24T18:57:27.125Z",
+      "frameMs": {
+        "p50": 9.6,
+        "p95": 42.11,
+        "cvPct": 1,
+        "perRunP95": [
+          42.61,
+          42.11,
+          41.8
+        ]
+      },
+      "brushLatencyMsP95": 50.13,
+      "idleRafRegistrationsMax": 0,
+      "reArmedAllRuns": true,
+      "gate": {
+        "qualifying": true,
+        "disqualifiers": [],
+        "overall": "fail",
+        "verdicts": [
+          {
+            "metric": "frameMs.p95",
+            "target": 33,
+            "measured": 42.11,
+            "samples": 471,
+            "pass": false,
+            "note": null
+          },
+          {
+            "metric": "brushLatencyMs.p95",
+            "target": null,
+            "measured": 50.13,
+            "samples": 120,
+            "pass": null,
+            "note": "reported-only: names no numeric budget for this metric (no release gate yet)"
+          }
+        ]
+      }
+    }
+  ],
+  "environment": {
+    "os": "darwin 25.5.0",
+    "arch": "arm64",
+    "machineClass": "Apple M5 Pro",
+    "node": "v24.15.0",
+    "browser": "chromium 156.0.8078.4",
+    "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+    "headful": true,
+    "simulation": "running",
+    "runs": 3
+  },
+  "scenario": {
+    "tier": "L",
+    "family": "clustered",
+    "seed": 2026,
+    "nodes": 100000,
+    "edges": 250000,
+    "scrubSteps": 40
+  },
+  "idleObservation": "The isolated sync experiment observed at most 8 rAF registrations in the 2s parked window; the final production run observed 0 in each of its 3 runs. All runs re-armed after resume. No sampling timer or extra rAF scheduler was introduced."
+}

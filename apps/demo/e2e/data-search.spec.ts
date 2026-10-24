@@ -1,5 +1,5 @@
 /**
- * Data + search smoke for the v0.9 surface.
+ * Data, search and live minimap integration checks.
  *
  * Drives the packaged <GraphSearch>, the <GraphMinimap>, the
  * <GraphTooltip>, and the CSV prepared-data lane through the demo
@@ -10,15 +10,15 @@
  * - a host-filtered target activates to 'unavailable/filtered', surfaced by
  * the demo's status-bar `search-unavailable` line (the result
  * contract: search NEVER mutates scope/filters itself);
- * - the minimap rasterizes (the demo declares seeded node positions — the
- * documented v0.9 CPU-fallback scene source) and a corner click issues a
- * REAL `setViewport` pan, asserted via the status bar's data-viewport-x/y;
+ * - the minimap rasterizes both seeded data and unpositioned CSV nodes from
+ * the shared live position cache; a corner click pans the real viewport,
+ * asserted via the status bar's data-viewport-x/y;
  * - hovering a node (grid hunt around the center — the same strategy as the
  * ingestion spec's right-click, hit-testing exact centers is flaky) shows
  * the hover card with label + attr rows;
  * - `setInputFiles` on the CSV panel's hidden input feeds a 50-row edges
- * fixture through `prepareGraphData` (deriveNodes) — the header counts
- * swap to the derived 51/50 and the summaries line renders.
+ * fixture through preview/confirmation and `prepareGraphData` (deriveNodes):
+ * counts swap to 51/50, summaries render and live force positions paint.
  *
  * CI note (repo pattern): the force simulation is paused before interaction
  * phases — cosmos free-runs its rAF while data is present and on
@@ -127,9 +127,8 @@ test('minimap: canvas rasterizes and a corner click pans the real viewport', asy
 
   const canvas = page.locator(MINIMAP_CANVAS);
   await expect(canvas).toBeVisible();
-  // The viewport RECTANGLE only displays once a frame has rasterized (the
-  // demo's seeded declared positions are the v0.9 CPU-fallback scene source)
-  // AND the store has a live viewport — so its visibility proves the blit.
+  // The viewport rectangle displays only after a position snapshot has
+  // rasterized and the store has a live viewport.
   await expect(page.locator(MINIMAP_RECT)).toBeVisible({ timeout: 10_000 });
 
   const zoom = page.locator(ZOOM_VALUE);
@@ -155,6 +154,9 @@ test('minimap: canvas rasterizes and a corner click pans the real viewport', asy
 test('tooltip: hovering a node shows the hover card with label and attr rows', async ({
   page,
 }) => {
+  // Pausing physics does not cancel the mount camera fit. Freeze the camera
+  // as well so the picked node remains under the pointer through the delay.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await gotoReady(page);
   await pauseSimulation(page);
 
@@ -212,6 +214,7 @@ test('csv drop: a 50-row edges fixture derives nodes and swaps the dataset', asy
 
   // The drop-zone's hidden input is the testability seam for DnD.
   await page.setInputFiles('[data-testid="csv-file-input"]', fixture);
+  await page.getByRole('button', { name: 'Import graph', exact: true }).click();
 
   // prepared snapshot applied on a fresh instance (key remount) → new counts.
   await expect(page.getByTestId('node-count')).toHaveText('51', { timeout: 20_000 });
@@ -226,6 +229,19 @@ test('csv drop: a 50-row edges fixture derives nodes and swaps the dataset', asy
   await expect(summary).toContainText('weight');
   await expect(page.getByTestId('csv-error')).toHaveCount(0);
 
+  // Derived CSV nodes have no declared x/y. Their force layout must still
+  // produce a nonempty live minimap and a usable world-space pan mapping.
+  await pauseSimulation(page);
+  await expect(page.locator(MINIMAP_RECT)).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => page.locator(MINIMAP_CANVAS).evaluate((el) => {
+    const canvas = el as HTMLCanvasElement;
+    const pixels = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data;
+    return pixels?.some((value, i) => i % 4 === 3 && value > 0) ?? false;
+  }), { message: 'unpositioned force nodes should paint the live overview' }).toBe(true);
+  const centerBefore = await page.locator(ZOOM_VALUE).getAttribute('data-viewport-x');
+  await page.locator(MINIMAP_CANVAS).click({ position: { x: 18, y: 18 } });
+  await expect.poll(() => page.locator(ZOOM_VALUE).getAttribute('data-viewport-x')).not.toBe(centerBefore);
+
   // The CSV dataset is searchable by id (derived nodes carry no attrs, so
   // the index is id-only here).
   await pauseSimulation(page);
@@ -234,7 +250,7 @@ test('csv drop: a 50-row edges fixture derives nodes and swaps the dataset', asy
   await expect(page.locator(SEARCH_LABEL).first()).toHaveText(/^c17/);
 });
 
-test('a newer data-mode choice supersedes an in-flight CSV preparation', async ({
+test('cancelling an in-flight CSV preparation permits choosing another data mode', async ({
   page,
 }, testInfo) => {
   // Make the otherwise-small fixture deterministically asynchronous. Orbit's
@@ -261,6 +277,7 @@ test('a newer data-mode choice supersedes an in-flight CSV preparation', async (
           } else controller.enqueue(next.value);
         },
         cancel(reason) {
+          state.__orbitCsvStreamFinished = true;
           return reader.cancel(reason);
         },
       });
@@ -272,12 +289,15 @@ test('a newer data-mode choice supersedes an in-flight CSV preparation', async (
   await gotoReady(page);
 
   await page.setInputFiles('[data-testid="csv-file-input"]', fixture);
+  await page.getByRole('button', { name: 'Import graph', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.getByTestId('semantic-mode').click();
   await expect(page.getByTestId('m5-panel')).toBeVisible({ timeout: 15_000 });
 
-  // Wait for EOF rather than a wall-clock approximation, then give the
-  // preparation promise and React commit a chance to drain. Its completion
-  // must not replace the newer semantic mode or publish a CSV summary.
+  // Wait for EOF/cancellation rather than a wall-clock approximation, then
+  // give preparation and React a chance to drain. A cancelled import must
+  // not replace the newer mode or publish a CSV summary.
   await page.waitForFunction(
     () =>
       (window as typeof window & { __orbitCsvStreamFinished?: boolean })

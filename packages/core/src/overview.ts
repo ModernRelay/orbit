@@ -31,6 +31,13 @@ export interface OverviewScene {
   count: number;
 }
 
+/** Borrowed read-only view of the current scene's cached positions. The
+ * revision changes when the roster or positions change, including settling
+ * and dragging without a render revision. Do not mutate the position buffer. */
+export interface OverviewSnapshot extends OverviewScene {
+  readonly revision: number;
+}
+
 export interface OverviewControllerOptions {
   /** Latest scene snapshot, or null when nothing is loaded yet. */
   getScene: () => OverviewScene | null;
@@ -128,7 +135,10 @@ export class OverviewController {
    */
   rasterize(): OverviewRaster | null {
     const scene = this.getScene();
-    if (!scene || scene.count <= 0) return null;
+    if (!scene || scene.count <= 0) {
+      this.frame = null;
+      return null;
+    }
     const { positions, count } = scene;
     const pairs = Math.min(count, Math.floor(positions.length / 2));
 
@@ -145,7 +155,10 @@ export class OverviewController {
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }
-    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null; // all NaN
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      this.frame = null;
+      return null; // all NaN
+    }
 
     const size = this.size;
     const pad = size * PADDING_FRACTION;

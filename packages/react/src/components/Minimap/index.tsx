@@ -1,44 +1,14 @@
 /**
- * `@modernrelay/orbit-react/components/Minimap` — `<GraphMinimap>`, the
- * whole-graph thumbnail + viewport rectangle.
- *
- * v0.9 is CPU-fallback-only (no engine exposes `capabilities.overviewPass`
- * cosmos matrix): the component owns an {@link OverviewController} and
- * blits its `rasterize` output into a small canvas via `putImageData`. The
- * three lanes stay strictly decoupled:
- *
- * 1. **Thumbnail refresh** — a 500 ms `setInterval` probes the controller's
- * `shouldRefresh(now, simulationRunning, epoch)` gate, so the effective
- * cadence is the controller's spec budget (≤ 2 Hz hot, ≤ 1 Hz idle, zero
- * work idle-with-unchanged-epoch) and each `true` is followed by exactly
- * one `rasterize` + blit. The interval — not a per-frame engine lane —
- * is the documented v0.9 cadence: the `onFrame` fan-out only reaches
- * React through the label lane, which is gated on labels being enabled,
- * so a plain timer is the correct always-on ≤ 2 Hz driver. The epoch is
- * `revisions.render` (a positions-bearing superset — over-approximate but
- * bounded by the same throttle).
- * 2. **Viewport rectangle** — an imperative store subscription writes the
- * rect's transform/size O(1) per `store.viewport` publication (CSS
- * transform on a ref; no React re-render, no re-rasterize).
- * 3. **Pan** — pointer down/drag maps minimap px → world via the
- * controller's `minimapToWorld` (exact inverse over the last rasterized
- * frame) and calls `instance.setViewport({x, y})` — real camera pans.
- *
- * Scene source (documented v0.9 trim): the instance does not yet expose the
- * posBuf mirror (reserved for the columnar lane), so the
- * component probes a pinned structural seam `getOverviewScene` first
- * (optional access — picked up automatically once core lands
- * it) and falls back to the DECLARED node positions (`GraphNode.x/y`) of the
- * current scene roster — exact for prepared/fixed-position datasets from
- * orbit-data, and empty for force layouts without a position mirror.
- * Position-less nodes rasterize as NaN tombstones (skipped); mask-hidden nodes draw dimmed
- * via `getVisible`.
+ * Whole-graph thumbnail + viewport rectangle. Core owns the shared live
+ * position cache; the CPU rasterizer paints at most 2 Hz hot / 1 Hz idle
+ * after a change. Cache notifications and a bounded timer drive thumbnail
+ * refresh; viewport changes move only the rectangle. No per-frame readback.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { OverviewController, OVERVIEW_HOT_INTERVAL_MS } from '@modernrelay/orbit-core';
-import type { NodeId, OverviewScene, ViewportState } from '@modernrelay/orbit-core';
+import type { NodeId, ViewportState } from '@modernrelay/orbit-core';
 import type { AnyGraphInstance } from '../../GraphProvider';
 import { cornerStyle, mergeStyle, useResolvedInstance } from '../shared';
 import type { GraphCorner } from '../shared';
@@ -50,13 +20,6 @@ const SIZE_DEFAULT = 200;
 /** Minimum rendered viewport-rect edge so a tiny/degenerate viewport stays
  * visible as a marker. */
 const MIN_RECT_PX = 6;
-
-/** Pinned structural seam: the instance-side
- * posBuf mirror read. Optional access until core lands it — this view
- * stays signature-compatible when the member becomes required. */
-interface OverviewSceneSurface {
-  getOverviewScene?(): OverviewScene | null;
-}
 
 export interface GraphMinimapProps {
   /** Explicit instance (multi-instance pages); ambient context otherwise. */
@@ -103,13 +66,6 @@ const RECT_STYLE: CSSProperties = {
   boxSizing: 'border-box',
 };
 
-/** Declared-position scene over the current roster, cached by the roster's
- * identity (`scene.idByIndex` is a stable reference per reconciled scene). */
-interface DeclaredSceneCache {
-  ids: readonly NodeId[];
-  scene: OverviewScene | null;
-}
-
 export function GraphMinimap(props: GraphMinimapProps): ReactElement {
   const instance = useResolvedInstance(props.instance, '<GraphMinimap>');
   const size = props.size ?? SIZE_DEFAULT;
@@ -120,7 +76,6 @@ export function GraphMinimap(props: GraphMinimapProps): ReactElement {
   /** Pointer that owns the current pan gesture. Other simultaneous pointers
    * cannot move or terminate it. */
   const draggingPointerRef = useRef<number | null>(null);
-  const declaredSceneRef = useRef<DeclaredSceneCache>({ ids: [], scene: null });
   /** mask lane for `getVisible`, recomputed once per refresh tick. */
   const visibleRef = useRef<{ ids: readonly NodeId[]; set: ReadonlySet<NodeId> | null }>({
     ids: [],
@@ -128,41 +83,13 @@ export function GraphMinimap(props: GraphMinimapProps): ReactElement {
   });
 
   const controller = useMemo(() => {
-    const getScene = (): OverviewScene | null => {
-      // 1. Pinned core seam: the posBuf mirror, once it lands.
-      const mirrored = (instance as unknown as OverviewSceneSurface).getOverviewScene?.();
-      if (mirrored !== undefined) return mirrored;
-      // 2. v0.9 fallback: declared node positions over the scene roster.
-      const ids = instance.getSceneNodeIds();
-      if (ids.length === 0) return null;
-      const cache = declaredSceneRef.current;
-      if (cache.ids === ids) return cache.scene;
-      const positions = new Float32Array(2 * ids.length);
-      let known = 0;
-      for (let i = 0; i < ids.length; i++) {
-        const node = instance.getNode(ids[i]!);
-        const x = node?.x;
-        const y = node?.y;
-        if (typeof x === 'number' && typeof y === 'number') {
-          positions[2 * i] = x;
-          positions[2 * i + 1] = y;
-          known++;
-        } else {
-          positions[2 * i] = NaN;
-          positions[2 * i + 1] = NaN;
-        }
-      }
-      const scene: OverviewScene | null = known > 0 ? { positions, count: ids.length } : null;
-      declaredSceneRef.current = { ids, scene };
-      return scene;
-    };
     const getVisible = (index: number): boolean => {
       const v = visibleRef.current;
       if (v.set === null) return true;
       const id = v.ids[index];
       return id === undefined ? true : v.set.has(id);
     };
-    return new OverviewController({ getScene, getVisible, size });
+    return new OverviewController({ getScene: () => instance.getOverviewScene(), getVisible, size });
   }, [instance, size]);
 
   /** O(1) rect update from the store viewport over the LAST rasterized frame.
@@ -227,19 +154,31 @@ export function GraphMinimap(props: GraphMinimapProps): ReactElement {
       // A fresh frame can move the world→minimap mapping: re-derive the rect.
       updateRect(instance.store.getState().viewport);
     };
+    let lastSnapshot = instance.getOverviewScene();
+    let lastRender = instance.store.getState().revisions.render;
+    let epoch = 0;
     const tick = (): void => {
       const state = instance.store.getState();
-      // `revisions.render` is the v0.9 positions epoch (see module JSDoc):
-      // idle with an unchanged render revision is provably position-stable.
-      if (!controller.shouldRefresh(Date.now(), state.simulationRunning, state.revisions.render)) {
+      const snapshot = instance.getOverviewScene();
+      // Position samples have their own epoch: a settle/drag need not commit
+      // a new render revision. Render changes also invalidate mask shading.
+      if (snapshot !== lastSnapshot || state.revisions.render !== lastRender) {
+        lastSnapshot = snapshot;
+        lastRender = state.revisions.render;
+        epoch += 1;
+      }
+      if (!controller.shouldRefresh(Date.now(), state.simulationRunning, epoch)) {
         return;
       }
       blit();
     };
-    tick(); // first paint without waiting a full interval
+    const unsubscribePositions = instance.subscribeOverview(tick); // includes first paint
+    const unsubscribeStore = instance.store.subscribe(tick);
     const timer = setInterval(tick, OVERVIEW_HOT_INTERVAL_MS);
     return () => {
       clearInterval(timer);
+      unsubscribePositions();
+      unsubscribeStore();
     };
     // updateRect is stable for each (instance, controller) pair — refs + controller
     // only — so it is deliberately not a dependency (this repo does not

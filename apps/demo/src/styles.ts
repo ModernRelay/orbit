@@ -755,6 +755,19 @@ export const csvPanel: CSSProperties = {
   maxWidth: 280,
 };
 
+export const csvDialog: CSSProperties = {
+  ...panelBase,
+  background: 'var(--app-bg)',
+  width: 'min(720px, calc(100vw - 32px))',
+  maxWidth: 'calc(100vw - 32px)',
+  maxHeight: 'calc(100dvh - 32px)',
+  boxSizing: 'border-box',
+  overflow: 'auto',
+  padding: 24,
+  margin: 'auto',
+  fontSize: 13,
+};
+
 export const csvHint: CSSProperties = {
   color: 'var(--fg-muted)',
   fontSize: 11.5,

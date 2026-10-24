@@ -1,0 +1,114 @@
+{
+  "benchmark": "CPU-only prepared row streams",
+  "node": "v24.15.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "nodes": 100000,
+  "edges": 250000,
+  "runs": 3,
+  "qualification": "Not a GPU/render benchmark; core may materialize columnar output later.",
+  "verdict": {
+    "retainedMemoryLower": true,
+    "preparationFaster": false
+  },
+  "summary": {
+    "object": {
+      "elapsedMs": {
+        "min": 565.7480830000001,
+        "median": 627.672042,
+        "max": 636.950583
+      },
+      "peakRssBytes": {
+        "min": 289849344,
+        "median": 290406400,
+        "max": 290963456
+      },
+      "retainedHeapAndBuffersDelta": {
+        "min": 73319920,
+        "median": 73570200,
+        "max": 73613064
+      }
+    },
+    "columnar": {
+      "elapsedMs": {
+        "min": 691.352125,
+        "median": 701.807917,
+        "max": 914.170625
+      },
+      "peakRssBytes": {
+        "min": 294109184,
+        "median": 295567360,
+        "max": 297517056
+      },
+      "retainedHeapAndBuffersDelta": {
+        "min": 19174240,
+        "median": 19386640,
+        "max": 19388096
+      }
+    }
+  },
+  "samples": [
+    {
+      "output": "object",
+      "elapsedMs": 627.672042,
+      "peakRssBytes": 289849344,
+      "retainedHeapAndBuffersDelta": 73570200,
+      "baselineRssBytes": 55738368,
+      "nodes": 100000,
+      "edges": 250000,
+      "mappingFingerprint": "c10747e64218745a"
+    },
+    {
+      "output": "columnar",
+      "elapsedMs": 701.807917,
+      "peakRssBytes": 295567360,
+      "retainedHeapAndBuffersDelta": 19388096,
+      "baselineRssBytes": 56066048,
+      "nodes": 100000,
+      "edges": 250000,
+      "mappingFingerprint": "c10747e64218745a"
+    },
+    {
+      "output": "object",
+      "elapsedMs": 565.7480830000001,
+      "peakRssBytes": 290963456,
+      "retainedHeapAndBuffersDelta": 73319920,
+      "baselineRssBytes": 55787520,
+      "nodes": 100000,
+      "edges": 250000,
+      "mappingFingerprint": "c10747e64218745a"
+    },
+    {
+      "output": "columnar",
+      "elapsedMs": 691.352125,
+      "peakRssBytes": 294109184,
+      "retainedHeapAndBuffersDelta": 19386640,
+      "baselineRssBytes": 55640064,
+      "nodes": 100000,
+      "edges": 250000,
+      "mappingFingerprint": "c10747e64218745a"
+    },
+    {
+      "output": "object",
+      "elapsedMs": 636.950583,
+      "peakRssBytes": 290406400,
+      "retainedHeapAndBuffersDelta": 73613064,
+      "baselineRssBytes": 55803904,
+      "nodes": 100000,
+      "edges": 250000,
+      "mappingFingerprint": "c10747e64218745a"
+    },
+    {
+      "output": "columnar",
+      "elapsedMs": 914.170625,
+      "peakRssBytes": 297517056,
+      "retainedHeapAndBuffersDelta": 19174240,
+      "baselineRssBytes": 56262656,
+      "nodes": 100000,
+      "edges": 250000,
+      "mappingFingerprint": "c10747e64218745a"
+    }
+  ],
+  "measuredAt": "2026-10-24T16:45:58.023Z",
+  "cpu": "Apple M5 Pro"
+}

@@ -40,7 +40,7 @@ readback timings are diagnostic, not a qualified performance comparison:
 | `link-picking` | ✅ pass | Native `onLinkClick`/`onLinkMouseOver` deliver correct link indices; ~4 px perpendicular tolerance on a 2 px link. **Flipped:** the adapter now reports `capabilities.linkPicking: true` and wires `onLinkClick`/`onLinkMouseOver`/`onLinkMouseOut` to the host events, backed by the headful probe. |
 | `nan-tombstones` | ✅ pass | NaN'd points escape hit-testing, incident links vanish, `fitView` ignores tombstoned slots. |
 | `native-pinning` | ✅ pass | `setPinnedPoints` excludes points from force integration; `[]`/repeat calls are idempotent. |
-| `tracked-positions` | ✅ semantics; ⚠️ timing diagnostic | Packing order and last-call-replaces semantics pass. The diagnostic run exceeded the probe's synchronous readback budget; no new performance claim is made without repeated, variance-qualified runs. Orbit keeps its existing label cadence and does not opt into the new nonblocking tracked-map API. |
+| `tracked-positions` | ✅ semantics; ⚠️ timing diagnostic | Packing order and last-call-replaces semantics pass. The diagnostic run exceeded the probe's synchronous readback budget; no new performance claim is made without repeated, variance-qualified runs. Orbit now uses the asynchronous full-position snapshot API for its bounded shared overlay cache; this does not change the synchronous tracked-map probe result. |
 | `position-snapshots` | ✅ pass | Flat `Float32Array` reads preserve NaN tombstones and remain independent across caller mutations, subsequent reads and roster replacement. |
 | `quiescence` | ✅ pass | On-demand rendering: 0 idle frames AND 0 rAF registrations per 750 ms at rest. Picking remains live at rest, drag release renders its final frame, and a `render()` + same-tick capture reads valid pixels (the stale-wake micro-cases). |
 | `context-loss` | ⚠️ fail (by design) | `lost`/`restored` events surface, but no combination of buffer/config replay revives rendering after `restoreContext()` — only a full `Graph` destroy + re-create recovers. This validates the adapter's recreate-on-restore protocol: `CosmosEngine` rebuilds the Graph in the same container and the core replays the scene. |
@@ -75,8 +75,31 @@ the intermediate boxed `number[]` and conversion back to `Float32Array`.
 Callers may overlay pinned coordinates without changing subsequent reads;
 later reads and roster updates leave earlier snapshots intact, and NaN
 tombstones remain NaN. The `position-snapshots` GPU probe checks that ownership
-contract against the real engine. The GPU read remains synchronous; this
-change does not introduce asynchronous readback or a new overlay scheduler.
+contract against the real engine. Event-time reads remain synchronous.
+
+`getPositionsAsync()` uses Cosmos 3.5.1's `getPointPositionsAsync()` without
+an output buffer and discards copies from a retired Graph or lost context.
+Core shares these snapshots between labels and the minimap. Scenes of at most
+10,000 nodes use async copies at most 10 Hz with labels enabled (2 Hz for an
+overview-only consumer), with one copy in flight while the simulation runs.
+Larger scenes retain the existing 2 Hz synchronous read path: repeated local
+L-tier profiling found the async staging/copy path added frame-time overhead,
+even at 2 Hz. The node threshold is a conservative readback budget, not a
+claim that the async path is faster on every smaller graph or GPU.
+Core checks the mount session, scene,
+desired/applied render revision, pins and position generation before admission;
+settle/drag/pause snapshots supersede older copies. Engines without the async
+method retain the bounded 2 Hz synchronous fallback. No sampling loop runs at
+rest, and no additional rAF scheduler is introduced. This is a cadence bound,
+not a measured frame-rate improvement; full readback still transfers O(n)
+positions and the CPU minimap raster remains O(n).
+
+The [2026-10-24 L-tier comparison](./benchmarks/position-cache-2026-10-24.json)
+records three headful runs per variant on Apple M5 Pro / Chromium 156. The
+final policy measured 42.11 ms frame p95 (1.0% CV), versus 41.81 ms on the
+previous commit; **both fail the existing 33 ms budget**. Async full-buffer
+reads at 10 Hz measured 56.56 ms, so that policy was rejected for large scenes.
+The final run recorded zero idle rAF registrations in all three parked windows.
 
 ## Overlay & toolbar surface
 

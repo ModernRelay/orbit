@@ -596,6 +596,20 @@ export class CosmosEngine implements GraphEngine {
     return graph ? graph.getPointPositionsArray() : null;
   }
 
+  async getPositionsAsync(): Promise<Float32Array | null> {
+    const graph = this.activeGraph;
+    if (graph === null) return null;
+    try {
+      // No output reuse: each read owns its snapshot, including overlapping
+      // lifecycle generations. Cosmos may return an empty array on rebuild.
+      const positions = await graph.getPointPositionsAsync();
+      return this.activeGraph === graph && positions.length > 0 ? positions : null;
+    } catch {
+      // Context loss/disposal can reject an in-flight GPU copy.
+      return null;
+    }
+  }
+
   /**
    * Captures the cosmos canvas via the same-tick method (see module
    * header): one rAF is scheduled and, inside that tick, the WebGL canvas is

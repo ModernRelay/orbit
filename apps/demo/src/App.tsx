@@ -55,8 +55,8 @@
  * live sim positions in the reconciler, so force layouts keep drifting).
  * - <GraphTooltip> always mounted; <GraphInspector> right dock behind a
  * toolbar toggle (it replaces the workbench sidebar while open).
- * - CSV drop (csvDrop.tsx): one edges CSV → `prepareGraphData`
- * edges-only/deriveNodes → applied as a declarative snapshot on a
+ * - CSV import (csvDrop.tsx): preview and map edges/optional nodes → `prepareGraphData`
+ * → applied as a declarative snapshot on a
  * fresh instance (`key` remount — the previous mode may have been a
  * replace-session stream), summaries as a panel line.
  *
@@ -139,7 +139,7 @@ import { GraphTimeline } from '@modernrelay/orbit-react/components/Timeline';
 import { GraphToolbar } from '@modernrelay/orbit-react/components/Toolbar';
 import { GraphTooltip } from '@modernrelay/orbit-react/components/Tooltip';
 
-import { CsvDropZone, loadCsvEdgesFile } from './csvDrop';
+import { CsvDropZone } from './csvDrop';
 import type { CsvDropResult } from './csvDrop';
 import { DEFAULT_GENERATE, clusterName, generateGraph, nextSeed } from './generate';
 import type { DemoEdgeAttrs, DemoNodeAttrs } from './generate';
@@ -179,10 +179,10 @@ import type { StreamFamily, StreamProgress } from './streamFeed';
 import * as S from './styles';
 import { BACKGROUND, LIGHT_BACKGROUND, clusterColor, typeColor } from './styles';
 
-/** Union attrs: generated demo shapes or Omnigraph-loaded shapes, discriminated
- * by the adapter-injected type field that demo attrs lack. */
-type AppNodeAttrs = DemoNodeAttrs | OmnigraphDisplayNodeAttrs;
-type AppEdgeAttrs = DemoEdgeAttrs | OmnigraphDisplayEdgeAttrs;
+/** Generated, Omnigraph, or imported CSV attributes. Narrow caller fields
+ * before applying demo-specific rendering. */
+type AppNodeAttrs = DemoNodeAttrs | OmnigraphDisplayNodeAttrs | Record<string, unknown>;
+type AppEdgeAttrs = DemoEdgeAttrs | OmnigraphDisplayEdgeAttrs | Record<string, unknown>;
 
 type NodeMap = ReadonlyMap<NodeId, GraphNode<AppNodeAttrs>>;
 
@@ -213,15 +213,15 @@ const SIMULATION: SimulationConfig = { repulsion: 0.6, gravity: 0.25 };
 const nodeColor = (node: GraphNode<AppNodeAttrs>): string => {
   const a = node.attrs;
   if (a === undefined) return clusterColor(0);
-  if (ORBIT_TYPE_KEY in a) return typeColor(a[ORBIT_TYPE_KEY]);
-  return clusterColor(a.cluster);
+  if (ORBIT_TYPE_KEY in a && typeof a[ORBIT_TYPE_KEY] === 'string') return typeColor(a[ORBIT_TYPE_KEY]);
+  return clusterColor('cluster' in a && typeof a.cluster === 'number' && Number.isFinite(a.cluster) ? a.cluster : 0);
 };
 
 /** Degree-scaled size; omnigraph degree is host-computed during ingest and
  * absent attrs fall back to the base size. */
 const nodeSize = (node: GraphNode<AppNodeAttrs>): number => {
   const a = node.attrs;
-  const degree = a !== undefined && 'degree' in a ? a.degree ?? 0 : 0;
+  const degree = a !== undefined && 'degree' in a && typeof a.degree === 'number' && Number.isFinite(a.degree) ? Math.max(0, a.degree) : 0;
   return 2 + Math.sqrt(degree);
 };
 
@@ -278,10 +278,10 @@ const CLUSTER_COLOR_SCALE: Scale<string, AppNodeAttrs> = {
 const labelOf = (node: GraphNode<AppNodeAttrs>): string => {
   const a = node.attrs;
   if (a === undefined) return node.id;
-  if (ORBIT_TYPE_KEY in a) {
-    return `${a[ORBIT_TYPE_KEY]} · ${'title' in a ? a.title : a.name}`;
-  }
-  return a.label;
+  const label = 'label' in a && typeof a.label === 'string' ? a.label
+    : 'title' in a && typeof a.title === 'string' ? a.title
+      : 'name' in a && typeof a.name === 'string' ? a.name : node.id;
+  return ORBIT_TYPE_KEY in a && typeof a[ORBIT_TYPE_KEY] === 'string' ? `${a[ORBIT_TYPE_KEY]} · ${label}` : label;
 };
 
 /** Hover-card title for an EDGE. Omnigraph edges carry the relationship name
@@ -358,14 +358,15 @@ const ACCESSIBILITY: AccessibilityConfig<AppNodeAttrs> = {
 // below takes effect on every mode switch. The default local service indexes
 // node ids ALWAYS plus exactly these attr fields — it never guesses attr names.
 
-/** Generated data (declarative/stream/CSV): the `label` attr. CSV-derived
- * nodes carry no attrs at all, so search degrades to id-only there. */
+/** Generated data indexes labels. Imported nodes can also name a person or
+ * title a document; edge-only CSV imports remain searchable by node ID. */
 const SEARCH_INDEX: readonly string[] = ['label'];
+const CSV_SEARCH_INDEX: readonly string[] = ['label', 'name', 'title'];
 
 /** Omnigraph mode: the intel-fixture content fields. */
 const OG_SEARCH_INDEX: readonly string[] = ['name', 'title', 'brief'];
 
-// --- minimap seed positions --------------------------------------------------
+// --- generated graph seed positions -----------------------------------------
 
 const GOLDEN_ANGLE = 2.399963229728653;
 /** Cosmos space is [0, 4096] with unknown-position ring seeding at r=1024
@@ -374,9 +375,9 @@ const SEED_CENTER = 2048;
 const SEED_RADIUS_STEP = 17; // r = 17·√i → ≈1005 at i=3500
 
 /**
- * v0.9 minimap trim: the CPU fallback rasterizes DECLARED node
- * positions, so the demo declares a deterministic golden-angle sunflower
- * seed for every position-less node. Seeds depend ONLY on the node's array
+ * Give generated graphs deterministic golden-angle sunflower positions.
+ * Imported graphs use the engine's default seeds and the live minimap cache.
+ * These seeds depend only on the node's array
  * index — stable across the Add-500 superset — and the reconciler defers
  * UNCHANGED declarations to live sim positions, so the force layout still
  * owns motion; the declaration doubles as the sim's initial placement.
@@ -626,11 +627,9 @@ export function App() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   /** Last unavailable activation ("<label>: <reason>") — sticky. */
   const [searchNote, setSearchNote] = useState<string | null>(null);
-  const [csvError, setCsvError] = useState<string | null>(null);
-  /** Invalidates an in-flight CSV preparation when a newer data-mode action
-   * wins. Preparation intentionally runs before the graph mode changes. */
+  /** A newer data action remounts the importer and aborts pending preparation.
+   * Successful preparation is the only CSV action that replaces the graph. */
   const csvLoadEpochRef = useRef(0);
-  const csvBusyRef = useRef(false);
 
   // --- M5 semantic-exploration state (see semantic.tsx) ---
   const [m5Grouping, setM5Grouping] = useState<M5Grouping>('none');
@@ -680,16 +679,12 @@ export function App() {
     [snapshot],
   );
 
-  /** CSV mode: the prepared snapshot under the app's attr generics
-   * safe because derived nodes carry NO attrs and edge attrs are never field-
-   * accessed here; every accessor handles `attrs === undefined`. Seeded like
-   * the generated data so the minimap rasterizes it. */
+  /** CSV attributes are arbitrary caller data. Display accessors above narrow
+   * values before using them; the original fields remain available in the inspector. */
   const csvSnapshot = useMemo<GraphSnapshot<AppNodeAttrs, AppEdgeAttrs> | null>(
     () =>
       mode.kind === 'csv'
-        ? seedSnapshotPositions(
-            mode.result.prepared.snapshot as unknown as GraphSnapshot<AppNodeAttrs, AppEdgeAttrs>,
-          )
+        ? mode.result.prepared.snapshot
         : null,
     [mode],
   );
@@ -859,7 +854,6 @@ export function App() {
     setMode(DECLARATIVE);
     setMeter(null);
     resetOmnigraphState();
-    setCsvError(null);
     setSelection([]);
     setPendingIsolate(false);
     setDragNote(null);
@@ -980,35 +974,17 @@ export function App() {
   // mode change remounts <Graph> (`key`) — the previous mode may have been a
   // replace-session stream, and a fresh instance takes the declarative
   // prepared snapshot without racing it.
-  const onCsvFile = useCallback(
-    (file: File) => {
-      if (csvBusyRef.current) return; // one prepare at a time
-      csvBusyRef.current = true;
-      const requestEpoch = ++csvLoadEpochRef.current;
-      setCsvError(null);
-      loadCsvEdgesFile(file)
-        .then((result) => {
-          if (csvLoadEpochRef.current !== requestEpoch) return;
-          setSelection([]);
-          setPendingIsolate(false);
-          setDragNote(null);
-          setError(null);
-          setMeter(null);
-          resetOmnigraphState();
-          setExcludedClusters(EMPTY_CLUSTER_SET);
-          setExcludedTypes(EMPTY_TYPE_SET);
-          setMode((m) => ({ kind: 'csv', runId: m.kind === 'csv' ? m.runId + 1 : 1, result }));
-        })
-        .catch((err: unknown) => {
-          if (csvLoadEpochRef.current !== requestEpoch) return;
-          setCsvError(err instanceof Error ? err.message : String(err));
-        })
-        .finally(() => {
-          csvBusyRef.current = false;
-        });
-    },
-    [resetOmnigraphState],
-  );
+  const onCsvPrepared = useCallback((result: CsvDropResult) => {
+    setSelection([]);
+    setPendingIsolate(false);
+    setDragNote(null);
+    setError(null);
+    setMeter(null);
+    resetOmnigraphState();
+    setExcludedClusters(EMPTY_CLUSTER_SET);
+    setExcludedTypes(EMPTY_TYPE_SET);
+    setMode((current) => ({ kind: 'csv', runId: current.kind === 'csv' ? current.runId + 1 : 1, result }));
+  }, [resetOmnigraphState]);
 
   // --- M5 semantic mode -----------------------------------------------
   // Same remount discipline as every other mode switch (`graphKey`): the M5
@@ -1023,7 +999,6 @@ export function App() {
       setError(null);
       setMeter(null);
       resetOmnigraphState();
-      setCsvError(null);
       setExcludedClusters(EMPTY_CLUSTER_SET);
       setExcludedTypes(EMPTY_TYPE_SET);
       setM5Groups(M5_MANUAL_GROUPS);
@@ -1493,7 +1468,7 @@ export function App() {
         onGroupClick={onGroupClick}
         onMetaEdgeClick={onMetaEdgeClick}
         accessibility={ACCESSIBILITY}
-        searchIndex={mode.kind === 'omnigraph' ? OG_SEARCH_INDEX : SEARCH_INDEX}
+        searchIndex={mode.kind === 'omnigraph' ? OG_SEARCH_INDEX : mode.kind === 'csv' ? CSV_SEARCH_INDEX : SEARCH_INDEX}
         onSearchResultUnavailable={onSearchUnavailable}
         // The FIXED M5 layout states its own camera (M5_HOME_VIEW) once the
         // engine is live, so the mount-time fit — a heuristic over whatever the
@@ -1603,9 +1578,9 @@ export function App() {
               )}
               {/* CSV drop lane: drop overlay + hidden-input seam. */}
               <CsvDropZone
+                key={csvLoadEpochRef.current}
                 summary={mode.kind === 'csv' ? mode.result.summaryLine : null}
-                error={csvError}
-                onFile={onCsvFile}
+                onPrepared={onCsvPrepared}
               />
             </div>
             <div style={S.toolbarColumn}>
